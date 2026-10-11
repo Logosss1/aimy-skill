@@ -69,7 +69,6 @@ result = checker.check(
 
 
 ## ✨ 联系方式
-
 - **X (Twitter)**：[@Fakerrf5](https://x.com/Fakerrf5)
 - **Telegram**：[@Prohao42](https://t.me/Prohao42)
 - **抖音**：[炸炸酥~](https://www.douyin.com/user/MS4wLjABAAAAfgxDFsrK3Fgf_PnJRcPeFdjjKnqtLNTR_q4KKKZKHyGlzYz8T3mZf3V4qax05lFb)
@@ -78,7 +77,7 @@ result = checker.check(
 - 更多渗透技能的闭源skill，在知识星球、渗透教程和更多的渗透技能知识点。
 - **微信公众号**:[炸炸酥渗透测试](https://yangdada873.ggff.net/file/1790961747832_扫码_搜索联合传播样式-标准色版.png)
   ![图片](https://yangdada873.ggff.net/file/1790961747832_扫码_搜索联合传播样式-标准色版.png)
-  - 可以远程部署，技术支持。公众号有博主微信号。
+  - 远程部署，技术支持。公众号有微信号。
 
 ### 🚀 AI智能体聊天，从零到报告
 
