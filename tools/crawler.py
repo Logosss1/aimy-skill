@@ -3,7 +3,7 @@ import re
 import threading
 import time
 import urllib.parse
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -169,7 +169,7 @@ class Crawler:
                     apis.add(route)
         return apis
 
-    def _hit_common_api(self) -> Set[str]:
+    def _hit_common_api(self) -> Set[Tuple[str, int, str, str]]:
         found = set()
         http = self._get_http()
         for path in COMMON_API_PATHS:
@@ -178,7 +178,6 @@ class Crawler:
                              verify=settings.verify_ssl)
                 ct = r.headers.get("Content-Type", "")
                 if r.status_code not in (404, 0) and (len(r.text) < 7000 or "text/html" not in ct):
-                    "%s [%d] %s" % (path, r.status_code, ct.split(";")[0])
                     found.add((path, r.status_code, ct, r.text[:200]))
             except Exception as e:
                 logger.debug("common api %s: %s", path, e)

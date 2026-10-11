@@ -277,6 +277,17 @@ class LFIScanner:
         if result["findings"]:
             result["vulnerable"] = True
             voter.add_vote("has_findings", 0.3)
+            # Surface structured findings as evidence strings: the FPF
+            # requires >= min_evidence (2) items and otherwise drops the
+            # finding for "insufficient_evidence" even at high confidence.
+            result["evidence"] = [
+                ("lfi: %s %s" % (
+                    f.get("label") or f.get("type") or "path_traversal",
+                    str(f.get("payload") or f.get("path") or f.get("fd")
+                        or f.get("session_path") or "")[:40],
+                )).strip()
+                for f in result["findings"][:6]
+            ]
 
         result["confidence_score"] = round(voter.score, 2)
         result["confidence"] = voter.level.value

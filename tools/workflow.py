@@ -2,7 +2,7 @@ import json
 import os
 import re
 import time
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from tools.log_utils import get_logger
 from tools.settings import settings
@@ -135,7 +135,7 @@ class Workflow:
         return cls(data.get("name", "workflow"), steps)
 
 
-SAMPLE_WORKFLOWS = {
+SAMPLE_WORKFLOWS: Dict[str, Dict[str, Any]] = {
     "login_and_extract": {
         "name": "login_and_extract",
         "steps": [

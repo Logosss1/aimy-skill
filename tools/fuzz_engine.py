@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
+import requests
+
 from tools.log_utils import get_logger
 
 logger = get_logger("fuzz_engine")
@@ -134,6 +136,11 @@ class FuzzEngine:
             seeds = []
             for tpl in grammar.get("template", []):
                 parts = re.findall(r"\{(\w+)\}", tpl)
+                # 占位符必须有对应语法池; 否则会静默填 "1" 生成垃圾载荷
+                # (如 "1 1 1"), 直接跳过该模板.
+                if any(p not in grammar for p in parts):
+                    logger.debug("fuzz: skip template %s (unknown placeholder)", tpl)
+                    continue
                 try:
                     filled = tpl
                     for p in parts:
@@ -152,7 +159,9 @@ class FuzzEngine:
                  intensity: float = 0.5) -> List[str]:
         seeds = self.seed_pool.get(vuln_type, [])
         if not seeds:
-            seeds = [s for pool in self.seed_pool.values() for s in pool]
+            # 未知类型不再回退全语法池 (会把 SQL 载荷当 open_redirect 等使用).
+            logger.debug("fuzz: no seeds for type %s", vuln_type)
+            return []
         results = []
         for _ in range(count):
             if seeds:
@@ -216,6 +225,8 @@ class FuzzEngine:
             baseline = {"status": r.status_code, "size": len(r.text), "time": r.elapsed.total_seconds()}
         except Exception:
             baseline = {"status": 0, "size": 0, "time": 0}
+        baseline_ok = baseline["status"] != 0
+        base_status = baseline["status"] if baseline_ok else baseline_status
 
         for payload in payloads:
             try:
@@ -225,14 +236,15 @@ class FuzzEngine:
                     "status": r.status_code,
                     "size": len(r.text),
                     "time": r.elapsed.total_seconds(),
-                    "diff_status": r.status_code != baseline["status"],
+                    "diff_status": r.status_code != base_status,
                     "size_ratio": len(r.text) / max(baseline["size"], 1),
                     "time_ratio": r.elapsed.total_seconds() / max(baseline["time"], 0.01),
                 }
                 is_interesting = False
-                if resp["diff_status"] and r.status_code in (500, 302, 200):
+                # baseline 请求失败时不做 diff/size 判定, 否则所有载荷都会命中.
+                if baseline_ok and resp["diff_status"] and r.status_code in (500, 302, 200):
                     is_interesting = True
-                if resp["size_ratio"] > 3.0 or resp["size_ratio"] < 0.3:
+                if baseline_ok and (resp["size_ratio"] > 3.0 or resp["size_ratio"] < 0.3):
                     is_interesting = True
                 if resp["time_ratio"] > 5.0 and r.elapsed.total_seconds() > 3:
                     is_interesting = True
@@ -242,8 +254,17 @@ class FuzzEngine:
                     with self._lock:
                         self.interesting_inputs.append(resp)
                 results.append(resp)
-            except Exception:
-                pass
+            except requests.Timeout:
+                # 超时载荷不能静默丢弃: 可能是 time-based 注入信号.
+                resp = {"payload": payload[:80], "status": 0, "size": 0,
+                        "time": self.timeout, "interesting": True,
+                        "note": "timeout (possible time-based)"}
+                with self._lock:
+                    self.interesting_inputs.append(resp)
+                results.append(resp)
+            except Exception as e:
+                results.append({"payload": payload[:80], "error": str(e)[:60],
+                                "interesting": False})
         return results
 
     def fuzz_endpoint(self, url: str, param: str, response_hints: List[str] = None) -> Dict:

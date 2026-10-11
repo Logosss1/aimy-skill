@@ -1,5 +1,165 @@
 # Changelog
 
+## [Unreleased] - 质量收尾 (mypy 清零 · 覆盖率 49%→72% · 缺陷修复)
+
+全量 `1955 passed` (本机 Python 3.14), `ruff`/`mypy`/`bandit` 全绿。
+
+### 静态与质量
+- **mypy: 27 errors → 0** (163 文件)。修复 `Orchestrator.sess` 非空保证、`OPSECSession.request` 签名兼容 (补 `*args` 转发)、`len(object)` / `str|None` 推断等。
+- **覆盖率: 49% → 72%** (23529 行, 未覆盖 12066 → 6682)。新增 ~980 条离线 mock 测试: orchestrator 35→99%, second_order_verifier 39→100%, robust_verifier 11→100%, ssrf_pwn/ssrf_chain 12/18→100%, workflow_tracer 32→100%, crawler/binary_search/attack_tree/constraint_graph/spa_crawler →100%, 9 个 0% 模块 (kali_toolset/mitm_proxy/domain_hunt 等) →94-100%。
+- **bandit High: 2 → 0** (`dir_fuzzer` MD5 指纹按仓库惯例标注 `# nosec B324`)。
+
+### 缺陷修复 (新增测试覆盖中发现, 全部带复现)
+- **`orchestrator`**: 干净目标 (无 finding/无 auth bypass) `run()` 抛 `UnboundLocalError: exploits`; attack_plan 的 `sql_injection` 映射到不存在的检测器名 (→ `sqlcheck`); fast 模式 critical 判断用错名字 (`vtype` 是注册名) 导致 SQLi 不触发低价值检测器禁用; 删除 `found_critical` 死代码。
+- **`second_order_verifier`**: XSS html_context 成功正则 `<aimy[0-9]+>` 与探测载荷 `<aimy_xss_%d>` 永不匹配 (死方法) → 对齐; LFI `known_file` "任意非空 body 即成功" → 负对照 (不存在文件) + 反射守卫; NoSQLi `is_post=True` 无 data 时载荷被丢弃 → `url_nosql` 两分支均赋值。
+- **`robust_verifier._lfi_encode_path`**: 恒返回 `encodings[0]`, `%2f`/`..;/`/`php://filter` 等编码绕过全是死代码 → 返回全部变体并逐变体探测。
+- **`context_memory._php_wrappers`**: 版本比较 `major>=7 and minor>=4` 把 PHP 8.0 当 <7.4 → 改 `(major, minor)` 元组比较。
+- **`sqli_blind.run(queries=...)`**: 调用方查询被静默忽略 → 注入提取项 (`custom_queries`)。
+- **`ssrf_chain._chain_docker`**: `DOCKER_PAYLOADS` 键值反解包 (`for path, desc`) 拼出畸形 URL (`:2375containers`), Docker 链永不成功 → `(name, path)` 正确解包。
+- **`attack_tree`**: 模板第 4 元素为子节点列表时被误存到 `chain_name` 且孙节点永不展开 (递归分支死代码); 5 元组路径 ID 双前缀 → 递归展开 + 单前缀。
+- **`constraint_graph`**: `limit_like` 死代码 (limit/max/min 参数无约束) → `limit_manipulation` 约束 + 变异建议; 删除空循环。
+- **`binary_analyzer`**: 4 个崩溃点 —— `_calc_entropy` 对 float 调 `bit_length()` (任何二进制分析恒空)、packer 名 str/bytes 比较 TypeError、ELF `e_phoff` 切片长度错误 (任何 ELF 解析失败)、截断可选头 `magic` 未赋值 → Shannon 熵 / bytes 比较 / 按 32/64 位规范偏移 / 长度守卫。
+- **`domain_hunt`**: import 不存在的 `run_kali_cmd` (域审计主流程 ImportError) → `get_kali()`; kerberoast 缺 `servicePrincipalName` 属性时整段枚举中断 → try/except 跳过。
+- **`cloud_pwn`**: AWS 正则不消费分隔符 (`AccessKeyId: AKIA` → `":"`)、GCP/Azure 懒量词只取 1 字符、Azure 凭据 (JWT/tenant) 误路由到 GCP 分支 → 正则重写 + 按 project_id/tenant_id/`eyJ` 前缀路由。
+- **`kali_toolset`**: `sqlmap_extract(queries=...)` 参数未接线 (静默无操作) → 真正拼入命令; dump 解析正则 `\[(\d+)\]` 与 sqlmap 输出 `[N entries]` 不匹配 → 修正; nmap `443/open|filtered/tcp` 永不识别 → 逐 token 正则补齐组合状态。
+- **`mitm_proxy`**: `CalledProcessError.stderr` 为 None 时 `.decode()` 崩溃 → 类型守卫。
+
+### 挖洞能力强化 II: 检测/利用缺陷批量修复 (覆盖率 72% → 85%, 60+ 项)
+最终验证: **2833 tests passed** (CI 等价 `--timeout=30`), 覆盖率 85% (23691 行), `ruff`/`mypy` (163 文件 0 错误) 全绿, bandit 无 High; 加固靶场 19 端点 15/15 检出 + 4/4 无误报, bench Precision/Recall/F1 = 100%/100%/1.000。
+在 5 个并行覆盖+缺陷挖掘任务中对剩余低覆盖模块补离线测试 (~1050 条), 并修复其中暴露的检测/利用缺陷 (全部有最小复现, 测试同步更新为修复后行为):
+- **核心检测**: `active_prober` body 探针读错键 (`probe["regex"]` vs `["body"]`) 导致 WordPress/Drupal/Spring 等全部 body 指纹失效 → 修正; `_probe_banner` 从空 stub 实现为真实 socket banner 抓取 (SSH/Redis/MySQL, redis 先发 `INFO`); 404/5xx 页不再参与版本指纹 (0.85 置信误报); 探针异常不再静默吞。
+- **SSRF**: 云元数据证据移除泛化 `<Name>/<Contents>/<Key>` (普通 XML 误报); `172.*` 按 RFC1918 收窄到 172.16-31 (172.217 公网不再算内网); `internal_reachable` 增加不可达端口负对照; OOB 重试不再降级丢失 payload/confirmed。
+- **语义/响应分析**: 空文本相似度恒 1.0 修复; ≤5 字符载荷反射漏检修复; 深层 `<script>` 上下文误判修复; `structure_hash` 改用 md5 (内建 hash 跨进程随机化); python 错误正则收紧 (散文误报); Content-Type/header 键大小写不敏感; `datetime` 分支不可达修复; 500 页 SQL 正文归类修复; `message:` 误判错误页修复; `_infer_resource` 字符类笔误修复。
+- **自动渗透/fuzz**: `auto_pwn` learn 丢弃 `success=True` 导致循环误停修复; CVE 探测 success 收紧 (503/401/302 不算成功) 且未实现向量显式标注不再误导性通用探测; fuzz 模板缺占位符不再生成垃圾载荷 ("1 1 1"); 未知类型不再回退全语法池; 超时载荷不再丢弃 (time-based 信号); baseline 失败不再全量误报 interesting; 参数挖掘仅记录真实差异 (恒 200 站点不再全量误报 61 个参数); POST 挖掘用 POST baseline; adaptive avoid 命中直接排除。
+- **利用链/横向/JWT/类型混淆**: `chain_engine` 凭据去重对 dict 崩溃 (恰在窃到凭据时) 修复; 内网探测/gopher RCE 不再把 404 计为成功; `db_lateral` sqsh/sqlcmd 改用 shlex 保留引号, cmdshell 增加 sqsh 回退 + 单引号转义; `jwt_attacker` 畸形 `alg` 头不再中断扫描; `type_confusion` 无 `param=` 的 URL 不再丢弃 payload, prototype_pollution 需服务端证据 (不再仅凭载荷判成功)。
+- **认证/会话/CSRF/竞态**: `session_matrix` 登录判定收紧到 200 (302/500 不算成功), basic 认证凭据显式持久化, `authz_gap` 要求真实差异 (相同 body 不再误报); `csrf_scanner` meta token 正则修复 (`<meta name="csrf-token">` 可匹配), 无 action 表单可解析, 表单级 token 精确匹配, 任意 POST 表单不再直接判漏洞, bypass 需正文无失败标记; `race_profiler` `_analyze_window` 参数错位修复 (基线体比对恢复), `cross_validator` 二阶确认 URL 不再子串改写相似参数。
+- **HTTP 客户端/WAF**: `http_client` 注入的 Session 现在真正用于请求且 `params/json/cookies` 不再静默丢弃 (二阶验证假阴性根因之一), 挑战标记窗口与全文正则对齐; `waf_bypass.is_blocked` 的 threshold 参数接线生效。
+- 说明: 各挖掘任务另报告了约 40 项设计级问题 (如 deviation_oracle 的约束伪造、jwt alg-none 仅检测不发包、race_profiler 幂等端点判定等), 属重构级改动, 未在本轮处理。
+
+### 挖洞能力强化: 加固靶场 (10 → 19 端点) + 检测修复
+- **靶场加固**: 新增 `sqli_post`/`xss_post` (POST 契约)、`xss_attr`/`xss_js` (属性/脚本上下文)、`ssti_alt` (仅 `${7*7}` 的备用引擎)、`lfi_hardened` (仅 `....//`/`%2f` 编码可绕过)、`nosqli_get` (GET 操作符注入) 与 `clean_attr`/`clean_ssti` 两个误报护栏; `bench/profiles/lab.yml` 与 `lab_audit.py` 同步扩到 19 例。
+- **量化结果**: 加固首轮 13/15 检出 (暴露 2 个真实假阴性) → 修复后 **15/15 TP + 4/4 TN, 0 FP/FN, Precision/Recall 100%, F1=1.000** (bench harness 同分)。
+- **`xss_detector` 假阴性+误报根因**: `_payload_reflected_unescaped` 对不含尖括号的载荷 (属性/事件处理器类) 因 `escaped == payload` 恒判"已转义", attr 上下文确认路径整体失效 (xss_attr 漏报); 修复后新增 `_attr_breakout_ok` 按引号风格校验突破字符 (双引号属性里的裸单引号不算 XSS), 同时消除 clean_attr 误报。
+- **`nosqli_detector` GET 操作符注入**: boolean 种子全是 `$where` 风格, 不含 `$ne/$gt`, 差分确认分支永不触发 → 新增 `_confirm_operator_blind` (基线锚定 + `$ne/$gt` 双族 + 重复稳定性, 抗通用特殊字符/错误页/WAF 403 误报) 与廉价探针接入; 检出类型 `operator`。
+- 新增回归单测: `_payload_reflected_unescaped`/`_attr_breakout_ok` 矩阵与操作符差分确认 (含拒绝路径)。
+
+### 已知限制 (未修复, 见评审)
+- `deser_weaponizer` 的 Java/.NET/Ruby 生成器为骨架式载荷: 接受 `cmd` 但不嵌入 (产物与命令无关), 需针对真实运行时实现完整序列化链, 本轮不动。
+- `robust_verifier` 时间盲注 `confirmed >= 2` (置信度 0.8) 分支在延迟证据路径上极难触发, 属设计气味, 保持原逻辑。
+- `weaponize_engine.py:209-210` 不可达 `except` (被 `_run_aws` 吞异常), 保留。
+
+## [Unreleased] - 检测能力专项修复 (编排器 0 检出 → 8/8, 0 误报)
+### 能力修复: 编排器端到端检测 (10 端点靶场量化)
+基线: `auto http://target/page?id=1` 产出 **0 测试点、0 检出**; 逐个检测器直调 8/8。
+最终: **编排器 8/8 检出 (类型全对)、0 误报** (开验证层)。靶场审计 8/8 TP / 2/2 TN / 0 FP / 0 FN。
+
+- **`sql_injection._detect_error_sqli` 不设置信度** (根因):
+  返回 dict 无 `confidence_score`, 且 `check()` 在首个命中处 `break`, 导致
+  `vulnerable=True, confidence_score=0.0`, 被 FPF 以 `low_confidence` 丢弃.
+  → 补充 confidence (2+ 错误模式=0.85 high, 单条+DBMS 泄漏=0.65 medium),
+  并让 `check()` 保留**最高置信度**结果而非盲信首个命中.
+- **`sql_injection._detect_union_sqli` 同样不设置信度** → 补 0.85/0.6
+- **`sql_injection._detect_union_sqli` 反射误判**:
+  端点原样回显 payload 时, UNION marker 全部"出现" → 误报 UNION 注入.
+  → 加反射守卫: payload 被回显则不计反射 (真 UNION 结果含求值后 marker 但不含 payload 原文).
+- **`ssti_detector` 反射误判** (两处):
+  - 主循环 `indicator in r.text`: `{{config}}` 回显时 indicator "config" 作为子串出现 → 误报.
+    → 加 `_is_reflected()` 守卫 (payload 被回显则不计).
+  - 布尔盲注 `r_true.text != r_false.text`: 回显时 payload 文本不同即判命中.
+    → 改用长度差判据 (真求值 20 vs 1 字符=19 差; 纯回显仅差 1).
+- **`lfi_scanner` 不填 `evidence`**: 有 `findings` 但无 `evidence`, 被 FPF
+  `insufficient_evidence` 丢弃 → 从 findings 派生 evidence 字符串.
+- **`auth_bypass` 无 catch-all 检测**: `/admin` 等路径全 200 时产出 63 条假绕过
+  → 加 `_catchall_signature` 随机路径探测 + 长度容差过滤 (与 dir_fuzzer 同套).
+- **`SKIP_PARAMS` 误含 `file`**: `?file=` 是最常见 LFI/文件读取参数, 被跳过
+  → 移除 (orchestrator 此前永远测不到 `?file=` 端点).
+- **`sqli_blind._measure_baseline` 可返回 0.0**: mock/缓存响应低于时钟精度时
+  返回 0, 破坏下游 ratio 计算 → 下限 0.001.
+
+### 能力修复: 编排器测试面 (真实检测能力, 用 10 端点靶场量化验证)
+- **`dir_fuzzer` 增加 catch-all 检测** (`tools/recon/dir_fuzzer.py`):
+  之前 `status_code != 404` 即视为"发现"; SPA / 自定义错误页 / WAF 对任意
+  路径返回同一 200 页面时, 200 个假路径全部入选, 把真正端点挤出时间预算.
+  现在先用两个随机路径探测 catch-all 签名 (md5), 命中则按 body 去重过滤.
+  靶场实测: `catchall_skipped=218`, `interesting=0` (之前 200 个假路径).
+  新增返回字段 `catchall_detected` / `catchall_skipped`.
+- **`_build_test_points` 纳入种子 URL 自身参数** (`tools/orchestrator.py`):
+  `auto http://target/page?id=1` 是最自然用法, 但旧实现只从 crawl/dirfuzz/
+  js_api/attack_plan 取点, 完全忽略 URL 里已写明的 `id` 参数 → **0 测试点**.
+  新增 `_seed_points_from_target()`, 靶场实测: 测试点 0 → 1, `auto` 命令
+  终于能在带参 URL 上工作.
+- **修复 `base_target` 路径拼接** (`tools/orchestrator.py`):
+  `self.target` 含 query 时, `self.target + "/path"` 会产生畸形 URL
+  (`/page?id=1/x`), 靶场实测导致 70 个垃圾误报. 新增 query-stripped 的
+  `self.base_target` 专供路径拼接, 误报 70 → 1.
+- 新增测试: `tests/test_dir_fuzzer.py` (7), `test_orchestrator.py` +6
+
+### 已解决的前轮缺口
+- **验证层"过度过滤"实为检测器置信度为 0**: oracle/FPF 正确地丢弃了
+  `confidence_score=0.0` 的结果; 真因在 `_detect_error_sqli` / `_detect_union_sqli`
+  未设置信度. 补齐后真 SQLi 正常通过验证层.
+- **`nosqli` 在 SQLi 端点误报**: 改为 TRUE/FALSE 差分 oracle (见下).
+
+### 新增
+- **AI-Agent 契约模块** `engine/contract.py`: `CheckResult` dataclass + `check_return_shape()` + `is_vulnerable()`, 为所有 `check()` 返回值提供软校验 (REQUIRED: `vulnerable: bool`)
+- **orchestrator test runner** `tools/orchestrator_engine/test_runner.py`: 从 `Orchestrator` 类抽出无状态 helper (`run_detector` / `cross_verify`), 允许脱离实例单测
+- **orchestrator chains** `tools/orchestrator_engine/chains.py`: 利用链调度表单一真相源 (by_vtype / by_name 两个视图派生自同一张表, 消灭 backtrack / pivot 路径的分叉)
+- **orchestrator weaponizer** `tools/orchestrator_engine/weaponizer.py`: 按 vtype 分派的武器化 (`weaponize_sqli/ssrf/lfi/xss/jwt/one`), 替代 phase_weaponize 内嵌 105 行 `_weaponize_one`
+- **JWT common** `tools/jwt_common.py`: `b64url_encode/decode` + `parse_jwt` 单一真相源, jwt_exploiter/jwt_attacker/jwt_detector 统一委托
+- **测试**: `tests/test_contract.py` (24), `tests/test_test_runner.py` (8), `tests/test_weaponizer.py` (7), `tests/test_jwt_common.py` (15), `tests/test_orchestrator.py` (+5 phase_detect helper 单测)
+
+### 修复 (bug, 不只是 lint)
+- **check() 契约坏味道** (4 个检测器):
+  - `tools/leak_scanner.py`: 缺 `vulnerable` 顶层字段
+  - `tools/waf_bypass.py`: 缺 `vulnerable` 顶层字段 (AI agent 会默认判 False)
+
+### 修复 (bug, 不只是 lint)
+- **check() 契约坏味道** (4 个检测器):
+  - `tools/leak_scanner.py`: 缺 `vulnerable` 顶层字段
+  - `tools/waf_bypass.py`: 缺 `vulnerable` 顶层字段 (AI agent 会默认判 False)
+  - `tools/weakpass.py`: 缺 `vulnerable` 顶层字段
+  - `tools/unauth_scan.py`: `vulnerable` 字段是 int 计数而非 bool, 严重误导 agent 分支; 改为 bool, 计数改名为 `_vulnerable_count`
+- **同名类冲突**: `tools/vuln_context.ContextMemory` 与 `tools.context_memory.ContextMemory` 重名, 重命名为 `VulnContextStore`
+
+### 清理
+- **死代码删除** (4 个文件, 287 行):
+  - `tools/_context.py` (90 行, 0 外部引用)
+  - `tools/orchestrator_engine/detect/detect_engine.py` (160 行, 已被 helpers 替代)
+  - `tools/orchestrator_engine/__init__.py` (9 行, 空)
+  - `payload_seeds/oracle_extra.yml` (28 行, 缺 `seeds:` 顶层键, 运行时静默丢弃)
+- **orchestrator 上帝模块瘦身**: 1934 → 1696 行 (-12%):
+  - 提取 `_run_detector` / `_cross_verify` 到 `test_runner.py`
+  - `phase_detect` (224 行) → 5 个私有方法 (`_fingerprint_waf_cached`, `_phase_detect_scan`, `_phase_detect_semantic`, `_phase_detect_second_order`, `_phase_detect_type_confusion`, `_phase_detect_bayes`), 主方法压到 ~40 行编排骨架
+  - `phase_weaponize` 内部 `_weaponize_one` (105 行) 抽出为模块函数 `weaponizer.py`
+  - chain 表两处重复合并为单一真相源 `chains.py`
+  - `phase_pivot` (155 行) → 1 个 40 行编排骨架 + 8 个 pivot handler 方法 + dispatch table
+  - `phase_report` (100 行) → 1 个编排 + `_report_group` / `_report_summary` / `_report_recon` / `_report_persist` 四个静态/实例方法
+
+### 死代码 / 重复清理
+- **JWT base64 重复**: `jwt_exploiter.b64_encode/decode` 与 `jwt_attacker.b64url_encode/decode` 实现等价但命名误导; 抽到 `tools/jwt_common.py`, 三模块统一委托
+- **`jwt_detector._b64_pad`**: 删除, 改用 `b64url_decode`
+
+### 文档
+- `tools/biz_logic_scanner.py` / `tools/biz_logic_v2.py`: 顶部 docstring 明确两者关系 (classic 单体 vs v2 模块化聚合器), 消除"v1/v2 哪个是当前用"的歧义
+
+### 检测器级修复
+- **`nosqli_detector` 布尔误报**: 旧实现只看"响应长度与基线差 >30"即判命中,
+  SQL 错误页会让每个特殊字符 payload 产生恒定长度差 → `/sqli_error` 被误报为 nosqli.
+  → 改为 **TRUE/FALSE 差分 oracle**: TRUE 与 FALSE 条件必须产生**彼此不同且稳定**
+  的响应; 恒定的"与基线不同"被拒绝. 新增 `_confirm_boolean_blind()`.
+  真 NoSQL (JSON `$where` 分支) 仍正常检出.
+
+### 测试基线 (从假 100% 修正为真实数字)
+- 修复前: 845/875 通过 (CHANGELOG 误报 100%)
+- 第二轮: 907/907; 第三轮: 933/933; 第四轮: 939/939; 第五轮: 952/952
+- **当前: 972/972 通过** (真正零失败)
+- ruff: 27 → **0** (持续守住)
+- mypy: 29 → 23 (剩余多为动态类型推断噪音, 非行为问题)
+- 靶场 `lab_audit.py`: 8/8 TP, 2/2 TN, 0 FP, 0 FN (100% 准确率)
+- 编排器端到端 (开验证层): **8/8 检出, 0 误报**
+
+## [3.7.5] - 未提交重构修复 + 全量静态清零
+
 ## [3.7.5] - 未提交重构修复 + 全量静态清零
 ### 修复（阻塞级）
 - **CLI 启动即崩**：file-upload / saml-sso 子命令重复注册 `--param`（argparse 冲突），全部命令不可用 → 删除重复注册

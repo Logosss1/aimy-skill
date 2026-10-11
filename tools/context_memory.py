@@ -14,7 +14,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from tools.log_utils import get_logger
 
@@ -24,7 +24,7 @@ logger = get_logger("context_memory")
 @dataclass
 class MemoryEntry:
     key: str
-    value: any
+    value: Any
     source: str
     confidence: float
     timestamp: float
@@ -110,9 +110,9 @@ class ContextMemory:
                     continue
                 self._store[key] = entry
 
-    def set(self, key: str, value: any, source: str = "unknown",
+    def set(self, key: str, value: Any, source: str = "unknown",
             confidence: float = 0.80, ttl: float = 3600.0,
-            tags: List[str] = None) -> None:
+            tags: Optional[List[str]] = None) -> None:
         with self._lock:
             entry = MemoryEntry(
                 key=key, value=value, source=source,
@@ -138,7 +138,7 @@ class ContextMemory:
                     logger.debug("storage save: %s", e)
             logger.debug("Memory: set %s = %s (source=%s, conf=%.2f)", key, str(value)[:80], source, confidence)
 
-    def get(self, key: str, default: any = None) -> any:
+    def get(self, key: str, default: Any = None) -> Any:
         with self._lock:
             entry = self._store.get(key)
             if entry and not entry.is_expired():
@@ -179,14 +179,14 @@ class ContextMemory:
         with self._lock:
             return [k for k, v in self._store.items() if not v.is_expired()]
 
-    def snapshot(self) -> Dict[str, any]:
+    def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             return {
                 k: v.to_dict() for k, v in self._store.items()
                 if not v.is_expired()
             }
 
-    def get_suggestions(self, module_type: str) -> Dict[str, any]:
+    def get_suggestions(self, module_type: str) -> Dict[str, Any]:
         with self._lock:
             suggestions = {}
 
@@ -260,7 +260,7 @@ class ContextMemory:
 
             return suggestions
 
-    def _auto_learn(self, key: str, value: any, source: str, confidence: float) -> None:
+    def _auto_learn(self, key: str, value: Any, source: str, confidence: float) -> None:
         if key == "dbms" and isinstance(value, str):
             self._learnt_rules["sqli_dialect"].append({
                 "trigger": value, "action": "use_dialect",
@@ -361,14 +361,16 @@ class ContextMemory:
             "php://stdin",
         ]
         try:
-            major = int(version.split(".")[0])
-            minor = int(version.split(".")[1]) if len(version.split(".")) > 1 else 0
-            if major >= 7 and minor >= 4:
-                wrappers.append("php://temp")
-            if major >= 7 and minor >= 2:
-                wrappers.append("php://fd/3")
-        except (ValueError, IndexError):
-            pass
+            parts = [int(p) for p in version.split(".")[:2]]
+        except ValueError:
+            return wrappers
+        if len(parts) == 1:
+            parts.append(0)
+        version_tuple = (parts[0], parts[1])
+        if version_tuple >= (7, 4):
+            wrappers.append("php://temp")
+        if version_tuple >= (7, 2):
+            wrappers.append("php://fd/3")
         return wrappers
 
     def get_stats(self) -> Dict:

@@ -117,9 +117,23 @@ def cmd_csrf(args):
     _output(r)
 
 
+def _read_endpoints(args):
+    """读取 --endpoints 文件为行列表 (空/注释行保留给 orchestrator 过滤)."""
+    path = getattr(args, "endpoints", "") or ""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return f.read().splitlines()
+    except Exception as e:
+        logger.warning("cannot read endpoints file %s: %s", path, e)
+        return None
+
+
 def cmd_deepscan(args):
     from tools.orchestrator import Orchestrator
-    engine = Orchestrator(args.target, _sess(args), args.timeout)
+    engine = Orchestrator(args.target, _sess(args), args.timeout,
+                          endpoints=_read_endpoints(args))
     engine.init_storage(resume=getattr(args, "resume", False),
                         name=getattr(args, "session", "default"))
     report = engine.run()
@@ -154,7 +168,8 @@ def cmd_autohunt(args):
     engine = Orchestrator(args.target, _sess(args), args.timeout, args.threads,
                            high_value=getattr(args, "high_value", False),
                            turbo=getattr(args, "turbo", False),
-                           skip_verify=getattr(args, "skip_verify", False))
+                           skip_verify=getattr(args, "skip_verify", False),
+                           endpoints=_read_endpoints(args))
     engine.init_storage(resume=getattr(args, "resume", False),
                         name=getattr(args, "session", "default"))
     report = engine.run()
@@ -168,7 +183,8 @@ def cmd_auto(args):
                            fast_recon=not getattr(args, "no_fast_recon", False),
                            high_value=getattr(args, "high_value", False),
                            turbo=getattr(args, "turbo", False),
-                           skip_verify=getattr(args, "skip_verify", False))
+                           skip_verify=getattr(args, "skip_verify", False),
+                           endpoints=_read_endpoints(args))
     engine.init_storage(resume=getattr(args, "resume", False),
                         name=getattr(args, "session", "default"))
     report = engine.run()

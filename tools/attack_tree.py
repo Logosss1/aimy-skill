@@ -322,11 +322,15 @@ class AttackTree:
             return
         for spec in children_spec:
             if len(spec) == 4:
-                child_id, desc, trans_prob, chain = spec
-                grand_children = []
+                child_id, desc, trans_prob, chain_or_children = spec
+                if isinstance(chain_or_children, (list, tuple)):
+                    chain = None
+                    grand_children = list(chain_or_children)
+                else:
+                    chain = chain_or_children
+                    grand_children = []
             elif len(spec) == 5:
                 child_id, desc, trans_prob, chain, grand_children = spec
-                child_id = "%s_%s" % (parent.id, child_id)
             else:
                 continue
 

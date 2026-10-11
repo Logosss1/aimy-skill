@@ -222,6 +222,41 @@ LOGIN_ENDPOINTS = [
 ]
 
 
+def _catchall_signature(base: str, sess: requests.Session,
+                        timeout: float):
+    """探测 catch-all 服务器: 两个随机路径返回同一 (status, 长度) => 该签名.
+
+    SPA / 自定义错误处理器 / WAF 对任意路径都返回同一个 200 页面. 若不识别,
+    admin 端点与 path bypass 会把每个候选路径都当成"存在", 在一个真实目标
+    上产出几十条假绕过 (与 dir_fuzzer 同类问题).
+    """
+    import random
+    import string
+
+    sigs = []
+    for _ in range(2):
+        p = "/" + "".join(random.choices(string.ascii_lowercase + string.digits, k=24))
+        try:
+            r = sess.get(base + p, timeout=timeout)
+        except Exception:
+            continue
+        if r.status_code in (404, 410):
+            return None  # 正常 404 行为, 无 catch-all
+        sigs.append((r.status_code, len(r.text)))
+    if len(sigs) == 2 and sigs[0] == sigs[1]:
+        return sigs[0]
+    return None
+
+
+def _matches_catchall(status: int, length: int, sig) -> bool:
+    if sig is None:
+        return False
+    c_status, c_len = sig
+    if status != c_status:
+        return False
+    return abs(length - c_len) <= max(5, int(c_len * 0.02))
+
+
 def check_admin_endpoints(url: str, sess: Optional[requests.Session] = None,
                           timeout: float = 10.0) -> List[Dict]:
     if sess is None:
@@ -229,10 +264,13 @@ def check_admin_endpoints(url: str, sess: Optional[requests.Session] = None,
     sess.verify = settings.verify_ssl
     results = []
     base = url.rstrip("/")
+    catchall = _catchall_signature(base, sess, timeout)
     for path in ADMIN_PATHS:
         try:
             r = sess.get("%s%s" % (base, path), timeout=timeout)
             if r.status_code in (200, 301, 302, 403):
+                if _matches_catchall(r.status_code, len(r.text), catchall):
+                    continue
                 results.append({"path": path, "status": r.status_code,
                                 "length": len(r.text)})
         except Exception as e:
@@ -246,12 +284,16 @@ def check_path_bypass(url_pattern: str, sess: Optional[requests.Session] = None,
         sess = requests.Session()
     sess.verify = settings.verify_ssl
     results = []
+    base = url_pattern.rstrip("/")
+    catchall = _catchall_signature(base, sess, timeout)
     for bp in PATH_BYPASSES:
         test_url = url_pattern.replace("/admin", bp) if "/admin" in url_pattern else bp
         try:
             r = sess.get(test_url if test_url.startswith("http") else url_pattern.rstrip("/") + bp,
                          timeout=timeout)
             if r.status_code in (200, 301, 302):
+                if _matches_catchall(r.status_code, len(r.text), catchall):
+                    continue
                 results.append({"bypass": bp, "status": r.status_code, "url": r.url})
         except Exception as e:
             logger.debug("path bypass %s: %s", bp, e)

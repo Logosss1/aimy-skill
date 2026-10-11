@@ -394,6 +394,11 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
 
     p = sub.add_parser("deepscan", help="深度扫描(爬虫+检测+报告)")
     p.add_argument("target")
+    p.add_argument(
+        "--endpoints",
+        default="",
+        help="种子端点文件: 每行 'URL' 或 'URL PARAM'",
+    )
     p.add_argument("--session", default="default", help="持久化会话名(可恢复)")
     p.add_argument("--resume", action="store_true", help="恢复上一次会话状态")
     p.set_defaults(func=cmd_deepscan)
@@ -411,6 +416,11 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
     p.add_argument("--high-value", action="store_true", help="高价值模式:跳过低危,聚焦高影响漏洞")
     p.add_argument("--turbo", action="store_true", help="极速模式:最大并发+智能终止")
     p.add_argument("--skip-verify", action="store_true", help="跳过交叉验证/Oracle/误报过滤")
+    p.add_argument(
+        "--endpoints",
+        default="",
+        help="种子端点文件: 每行 'URL' 或 'URL PARAM'",
+    )
     p.add_argument("--session", default="default", help="持久化会话名(可恢复)")
     p.add_argument("--resume", action="store_true", help="恢复上一次会话状态")
     p.set_defaults(func=cmd_autohunt)
@@ -432,6 +442,11 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
         "--skip-verify", action="store_true", help="跳过交叉验证/Oracle/误报过滤(极速模式)"
     )
     p.add_argument("--save-report", default="", help="保存报告目录(自动生成 JSON + HTML)")
+    p.add_argument(
+        "--endpoints",
+        default="",
+        help="种子端点文件: 每行 'URL' 或 'URL PARAM' (喂入 Burp/手工发现的端点)",
+    )
     p.add_argument("--session", default="default", help="持久化会话名(可恢复)")
     p.add_argument("--resume", action="store_true", help="恢复上一次会话状态")
     p.set_defaults(func=cmd_auto)

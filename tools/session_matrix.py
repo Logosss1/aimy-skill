@@ -61,29 +61,32 @@ class SessionMatrix:
                                   data={"username": identity.username,
                                         "password": identity.password},
                                   timeout=timeout)
-                    ok = r.status_code not in (401, 403)
+                    ok = r.status_code == 200
                 elif auth_mode == "json":
                     r = sess.post(login_url,
                                   json={"username": identity.username,
                                         "password": identity.password},
                                   timeout=timeout)
-                    ok = r.status_code not in (401, 403)
+                    ok = r.status_code == 200
                 elif auth_mode == "basic":
                     from requests.auth import HTTPBasicAuth
                     r = sess.get(login_url,
                                  auth=HTTPBasicAuth(identity.username,
                                                     identity.password),
                                  timeout=timeout)
-                    ok = r.status_code not in (401, 403)
+                    ok = r.status_code == 200
                 if ok:
                     for c in sess.cookies:
                         identity.cookies[c.name] = c.value
                     identity.authenticated = True
-                    if "Authorization" in sess.headers:
-                        identity.headers["Authorization"] = sess.headers["Authorization"]
-                    if hasattr(sess, '_auth'):
-                        identity.headers.setdefault("Authorization",
-                                                     str(sess._auth))
+                    if auth_mode == "basic":
+                        # basic 认证不落 cookies/headers, 显式持久化凭据头,
+                        # 否则 make_session 复放的是匿名会话.
+                        import base64
+                        cred = base64.b64encode(
+                            ("%s:%s" % (identity.username, identity.password)).encode()
+                        ).decode()
+                        identity.headers["Authorization"] = "Basic %s" % cred
                 sess.close()
             except Exception as e:
                 logger.debug("auth %s failed: %s", label, e)
@@ -117,17 +120,22 @@ class SessionMatrix:
                               timeout=10, **kwargs)
             target_resp = getattr(target_sess, method.lower())(url,
                                timeout=10, **kwargs)
+            identical = actor_resp.text == target_resp.text
             return {
                 "actor": {"label": actor_label, "status": actor_resp.status_code,
                           "length": len(actor_resp.text)},
                 "target": {"label": target_label, "status": target_resp.status_code,
                            "length": len(target_resp.text)},
-                "body_match": actor_resp.text == target_resp.text,
+                "body_match": identical,
+                # 越权差异必须真实存在: actor 能访问而 target 不能, 且响应体
+                # 不同; 两个身份字节相同 (无隔离差异) 不再误报 critical.
                 "authz_gap": (actor_resp.status_code in (200, 201, 204)
-                              and actor_label != target_label
+                              and target_resp.status_code not in (200, 201, 204)
+                              and not identical
                               and len(actor_resp.text) > 50),
             }
         except Exception as e:
+            logger.debug("cross_session_test failed: %s", e)
             return {"error": str(e)}
 
     def _save(self):

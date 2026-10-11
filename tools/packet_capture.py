@@ -98,7 +98,7 @@ def _run_kali_capture(args, local: bool = False) -> Dict:
         return {"success": False, "error": "Kali backend not available"}
 
     capture = KaliCapture(local=local)
-    interface = getattr(args, "capture_iface", "") or None
+    interface: str = getattr(args, "capture_iface", "") or ""
     count = getattr(args, "capture_count", 1000)
     bpf = getattr(args, "capture_filter", "")
     timeout = getattr(args, "capture_timeout", 60)
@@ -126,7 +126,7 @@ def run_realtime(args):
         return {"success": False, "error": "Kali backend not available"}
     local = getattr(args, "kali_local", False)
     capture = KaliCapture(local=local)
-    interface = getattr(args, "capture_iface", "") or None
+    interface: str = getattr(args, "capture_iface", "") or ""
     max_pkts = getattr(args, "capture_count", 100)
     timeout = getattr(args, "capture_timeout", 30)
 

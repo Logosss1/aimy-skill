@@ -165,5 +165,7 @@ def check(url: str, paths: Optional[List[str]] = None,
 
     leaks.sort(key=lambda x: 0 if x["severity"] == "critical" else
                1 if x["severity"] == "high" else 2)
-    return {"target": url, "leaks": leaks, "count": len(leaks),
-            "catchall_skipped": catchall}
+    return {"target": url, "vulnerable": bool(leaks),
+            "leaks": leaks, "count": len(leaks),
+            "catchall_skipped": catchall,
+            "type": "info_leak" if leaks else None}

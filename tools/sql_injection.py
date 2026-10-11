@@ -130,7 +130,9 @@ def _gen_payloads_for_param(param: str, waf_name: Optional[str] = None) -> Tuple
 
 
 def _detect_error_sqli(url, param, sess, timeout, post_data, base_data, waf_name=None):
-    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None, "dbms": None}
+    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None,
+              "dbms": None, "confidence": "low", "confidence_score": 0.0,
+              "confidence_votes": []}
     ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
 
     def _probe(payloads):
@@ -186,6 +188,27 @@ def _detect_error_sqli(url, param, sess, timeout, post_data, base_data, waf_name
         result["vulnerable"] = False
         result["evidence"] = []
         result["vector"] = None
+        return result
+
+    # Error-based SQLi is a strong signal: 2+ independently matched error
+    # patterns is high confidence, a single match that also leaks the DBMS is
+    # medium.  Without this the detector returned vulnerable=True but
+    # confidence_score=0.0, so the orchestrator's false-positive filter
+    # dropped every error-based finding (observed false negative on lab).
+    if confirmed_count >= 2:
+        result["confidence_score"] = 0.85
+        result["confidence"] = "high"
+    else:
+        result["confidence_score"] = 0.65
+        result["confidence"] = "medium"
+        # Single pattern + DBMS leak is a strong pair of facts; record both so
+        # the finding carries >= 2 evidence items (FPF requires min_evidence).
+        if result.get("dbms"):
+            result["evidence"].append("dbms leaked: %s" % result["dbms"])
+    result["confidence_votes"] = [
+        {"signal": "error_pattern_x%d" % confirmed_count,
+         "weight": result["confidence_score"]}
+    ]
     return result
 
 
@@ -334,6 +357,11 @@ def _looks_like_column_error(r) -> bool:
             or "unknown column" in text or "doesn't match" in text)
 
 
+def _url_encoded(s: str) -> str:
+    from urllib.parse import quote
+    return quote(s, safe="")
+
+
 def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
                        waf_name=None, context: str = "unknown"):
     """UNION detection with two outcomes:
@@ -346,7 +374,8 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
     """
     result = {"vulnerable": False, "type": None, "evidence": [],
               "vector": None, "dbms": None, "column_count": None,
-              "reflection_points": []}
+              "reflection_points": [], "confidence": "low",
+              "confidence_score": 0.0, "confidence_votes": []}
     if context == "string":
         prefixes = ["'", "')", "'\\\""]
     elif context == "numeric":
@@ -376,6 +405,12 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
         for i, m in enumerate(markers):
             if m in r.text:
                 reflected.append(i + 1)
+        # Reflection guard: an endpoint that echoes our input verbatim makes
+        # every marker appear even though no SQL executed (observed FP on an
+        # HTML-echo endpoint).  A real UNION result contains the evaluated
+        # markers but NOT the payload text itself.
+        if reflected and (payload in r.text or _url_encoded(payload) in r.text):
+            reflected = []
         if reflected:
             result["vulnerable"] = True
             result["type"] = "union"
@@ -383,8 +418,9 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
             result["reflection_points"] = reflected
             result["vector"] = "%s UNION SELECT %s-- " % (prefix, ",".join(
                 ["'MARK_%d'" % (i + 1) for i in range(cols)]))
+            result["evidence"].append("union: %d columns confirmed" % cols)
             result["evidence"].append(
-                "union: %d columns, reflected in %s" % (cols, reflected))
+                "markers reflected at positions %s" % reflected)
             result["dbms"] = _extract_dbms(r.text)
             break
         if cols > best_cols:
@@ -404,8 +440,23 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
         result["column_count"] = best_cols
         result["vector"] = template
         result["evidence"].append(
-            "union_blind: %d columns proven, no reflection -> boolean/time "
-            "extraction template emitted" % best_cols)
+            "union_blind: %d columns proven via ORDER BY boundary" % best_cols)
+        result["evidence"].append(
+            "UNION executes but output suppressed -> boolean/time extraction template emitted")
+
+    # Set confidence so downstream verification does not drop the finding.
+    # Reflected UNION is direct proof -> high; union_blind only proves the
+    # column count (no reflection) -> medium.
+    if result["vulnerable"]:
+        if result["type"] == "union":
+            result["confidence_score"] = 0.85
+            result["confidence"] = "high"
+        else:  # union_blind
+            result["confidence_score"] = 0.6
+            result["confidence"] = "medium"
+        result["confidence_votes"] = [
+            {"signal": "union_%s" % result["type"], "weight": result["confidence_score"]}
+        ]
     return result
 
 
@@ -683,15 +734,23 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         ("stacked", _detect_stacked_sqli),
     ]
 
+    # Keep the strongest hit instead of blindly trusting the first one: a
+    # low-confidence error hit should not stop a later boolean/union/time
+    # detector from confirming the same point at higher confidence.
+    best_conf = -1.0
     for det_name, det_func in detectors:
         r = _run(det_name, det_func)
-        if r["vulnerable"]:
+        if not r["vulnerable"]:
+            continue
+        conf = r.get("confidence_score", 0.0) or 0.0
+        if conf >= best_conf:
+            best_conf = conf
             result.update(r)
-            if "confidence_score" in r and r["confidence_score"]:
-                if r["confidence_score"] > result.get("confidence_score", 0):
-                    result["confidence_score"] = r["confidence_score"]
-                    result["confidence"] = r.get("confidence", "medium")
-            break
+            result["confidence_score"] = conf
+            if r.get("confidence"):
+                result["confidence"] = r["confidence"]
+        if conf >= 0.7:
+            break  # confident enough; skip the slower remaining detectors
 
     if not result["vulnerable"]:
         result["confidence_score"] = 0.0

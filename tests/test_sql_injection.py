@@ -7,6 +7,39 @@ from tools.sql_injection import _extract_dbms as guess_dbms
 from tools.sql_injection import check
 
 
+class TestUnionReflectionGuard:
+    """UNION 反射守卫: 回显输入 != SQL 注入."""
+
+    @responses.activate
+    def test_echo_endpoint_is_not_union_sqli(self):
+        """端点原样回显 payload 时, UNION marker 全部"出现"但无 SQL 执行."""
+        from urllib.parse import unquote_plus
+
+        def cb(request):
+            q = unquote_plus(request.url.split("?", 1)[1]) if "?" in request.url else ""
+            val = q.split("=", 1)[1] if "=" in q else ""
+            return (200, {}, "<html><body>%s</body></html>" % val)
+
+        responses.add_callback(
+            responses.GET, re.compile(r"http://test\.com/page\?.*"), callback=cb)
+        result = check("http://test.com/page", "q")
+        assert result["vulnerable"] is False
+
+    @responses.activate
+    def test_error_based_sets_confidence(self):
+        """错误型 SQLi 命中时必须带 confidence_score (>0), 否则下游 FPF 丢弃."""
+        responses.add(
+            responses.GET,
+            re.compile(r"http://test\.com/page\?.*"),
+            body="You have an error in your SQL syntax near '' at line 1",
+            status=200,
+        )
+        result = check("http://test.com/page", "id")
+        assert result["vulnerable"] is True
+        assert result["confidence_score"] > 0
+        assert result["confidence"] in ("medium", "high")
+
+
 class TestBuildUrl:
     def test_basic_url(self):
         result = build_url("http://example.com/page", "id", "1' OR '1'='1")

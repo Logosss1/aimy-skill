@@ -162,7 +162,9 @@ class TestOrchestratorOpsec:
         o = Orchestrator("http://target.test", opsec=True)
         assert isinstance(o.sess, OPSECSession)
 
-    def test_default_no_session_stays_none(self):
+    def test_default_no_session_builds_session(self):
+        # 修复: Orchestrator 保证 self.sess 非空, 无会话时自动构建普通会话
         from tools.orchestrator import Orchestrator
         o = Orchestrator("http://target.test")
-        assert o.sess is None
+        assert isinstance(o.sess, requests.Session)
+        assert not isinstance(o.sess, OPSECSession)

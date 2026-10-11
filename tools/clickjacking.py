@@ -64,17 +64,17 @@ def check(url: str, sess: Optional[requests.Session] = None, timeout: float = 10
             if "'self'" in sources or "'none'" in sources:
                 if "'none'" in sources:
                     result["protected"] = True
-                elif "'self'" in sources:
-                    result["protected"] = True
                 else:
-                    finding = {
-                        "type": "clickjacking",
-                        "endpoint": url,
-                        "issue": f"CSP frame-ancestors allows: {sources}",
-                        "severity": "low",
-                        "confidence": 0.6,
-                    }
-                    result["findings"].append(finding)
-                    result["vulnerable"] = True
+                    result["protected"] = True
+            else:
+                finding = {
+                    "type": "clickjacking",
+                    "endpoint": url,
+                    "issue": f"CSP frame-ancestors allows: {sources}",
+                    "severity": "low",
+                    "confidence": 0.6,
+                }
+                result["findings"].append(finding)
+                result["vulnerable"] = True
 
     return result

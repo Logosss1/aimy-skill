@@ -90,7 +90,7 @@ class DualSessionManager:
             if endpoint_context == "protected":
                 result["bola_detected"] = True
                 result["evidence"].append(
-                    "BOLA: low_priv=%d(%dB) high_priv=%d(%dB) diff=%dB" % (
+                    "BOLA: low_priv=%s(%sB) high_priv=%s(%sB) diff=%sB" % (
                         result["low_status"], result["low_length"],
                         result["high_status"], result["high_length"],
                         length_diff,
@@ -99,13 +99,13 @@ class DualSessionManager:
             if length_diff < 50 and low_ok and high_ok:
                 result["info_disclosure"] = True
                 result["evidence"].append(
-                    "info_disclosure: identical response (%dB)" % result["low_length"]
+                    "info_disclosure: identical response (%sB)" % result["low_length"]
                 )
 
         if low_ok and not high_ok:
             result["access_control_bypass"] = True
             result["evidence"].append(
-                "AC_bypass: low=200 high=%d" % result["high_status"]
+                "AC_bypass: low=200 high=%s" % result["high_status"]
             )
 
         return result

@@ -2,7 +2,7 @@ import json
 from typing import Dict, List
 
 from tools.log_utils import get_logger
-from tools.vuln_context import ContextMemory as VulnCtx
+from tools.vuln_context import VulnContextStore as VulnCtx
 
 logger = get_logger("adaptive_payload")
 
@@ -103,8 +103,9 @@ def select_payloads(vtype: str, ctx: VulnCtx, payload_pool: List[Dict]) -> List[
     hints = adapt_payload(vtype, ctx)
     preferred = hints.get("preferred", [])
     if not preferred:
-        return payload_pool[:5]
+        return payload_pool[:10]
 
+    avoid = [k.lower() for k in hints.get("avoid", [])]
     scored = []
     for p in payload_pool:
         p_text = json.dumps(p).lower()
@@ -112,17 +113,18 @@ def select_payloads(vtype: str, ctx: VulnCtx, payload_pool: List[Dict]) -> List[
         for kw in preferred:
             if kw.lower() in p_text:
                 score += 2
-        for kw in hints.get("avoid", []):
-            if kw.lower() in p_text:
-                score -= 3
+        avoided = any(kw in p_text for kw in avoid)
+        if avoided:
+            score -= 3
         for kw in hints.get("custom", []):
             if kw.lower() in p_text:
                 score += 1
-        scored.append((score, p))
+        scored.append((score, avoided, p))
 
     scored.sort(key=lambda x: -x[0])
-    result = [p for s, p in scored if s > 0]
-    result.extend([p for s, p in scored if s <= 0])
+    # avoid 命中直接排除 (旧逻辑仅降分, 错误 DBMS 的载荷仍会被执行).
+    result = [p for s, av, p in scored if s > 0 and not av]
+    result.extend([p for s, av, p in scored if s <= 0 and not av])
     return result[:10]
 
 
@@ -131,11 +133,12 @@ def suggest_additional_tests(vtype: str, ctx: VulnCtx) -> List[str]:
     vc = ctx.get()
 
     if vtype == "sqli":
+        dbms = (vc.dbms or "").lower()
         if vc.has_debug_mode:
             suggestions.append("try_debug_sqli_stack")
-        if vc.dbms == "mssql":
+        if "mssql" in dbms:
             suggestions.append("enable_xp_cmdshell")
-        if vc.dbms == "mysql":
+        if "mysql" in dbms:
             suggestions.append("try_into_outfile")
 
     elif vtype == "ssrf":

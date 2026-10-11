@@ -25,11 +25,14 @@ ASREP_ENCRYPTION_TYPES = {23: "rc4", 17: "aes128", 18: "aes256"}
 
 def enum_dc(domain: str, dc_ip: Optional[str] = None) -> Dict:
     result = {"domain": domain, "dc_ip": dc_ip, "ldap": {}, "smb": {}, "dns": {}}
-    from tools.kali_executor import run_kali_cmd
-    if dc_ip:
-        dns_r = run_kali_cmd("nslookup -type=SRV _ldap._tcp.dc._msdcs.%s %s" % (domain, dc_ip))
+    from tools.kali_executor import get_kali
+    kali = get_kali()
+    if kali is None:
+        dns_r = {"success": False, "error": "Kali not connected"}
+    elif dc_ip:
+        dns_r = kali.run("nslookup -type=SRV _ldap._tcp.dc._msdcs.%s %s" % (domain, dc_ip))
     else:
-        dns_r = run_kali_cmd("nslookup -type=SRV _ldap._tcp.dc._msdcs.%s" % domain)
+        dns_r = kali.run("nslookup -type=SRV _ldap._tcp.dc._msdcs.%s" % domain)
     if dns_r.get("success"):
         result["dns"]["ldap_srv"] = dns_r.get("stdout", "")[:500]
     else:
@@ -153,8 +156,14 @@ def kerberoast(dc_ip: str, domain: str, username: str, password: str) -> Dict:
                     attributes=['sAMAccountName', 'servicePrincipalName', 'memberOf'],
                     size_limit=100, time_limit=15)
             for entry in c.entries:
-                spns = entry.servicePrincipalName.values if hasattr(entry.servicePrincipalName, 'values') else []
-                sam = str(entry.sAMAccountName.value) if hasattr(entry.sAMAccountName, 'value') else ""
+                try:
+                    spns = entry.servicePrincipalName.values
+                except Exception:
+                    spns = []
+                try:
+                    sam = str(entry.sAMAccountName.value)
+                except Exception:
+                    sam = ""
                 for spn in spns[:5]:
                     if isinstance(spn, bytes):
                         spn = spn.decode('utf-8', errors='replace')
@@ -219,8 +228,12 @@ def bloodhound_collect(dc_ip: str, domain: str, username: str, password: str) ->
 
 def adcs_scan(target_ip: str, domain: str) -> Dict:
     result = {"success": False, "cert_servers": [], "vulnerable_templates": []}
-    from tools.kali_executor import run_kali_cmd
-    r = run_kali_cmd("python3 /usr/share/ldap-scripts/adcs_enum.py -s %s -d %s 2>/dev/null || certipy find -dc-ip %s -target %s 2>/dev/null || echo 'no_adcs_tool'" % (target_ip, domain, target_ip, target_ip))
+    from tools.kali_executor import get_kali
+    kali = get_kali()
+    if kali is None:
+        result["note"] = "Kali not connected"
+        return result
+    r = kali.run("python3 /usr/share/ldap-scripts/adcs_enum.py -s %s -d %s 2>/dev/null || certipy find -dc-ip %s -target %s 2>/dev/null || echo 'no_adcs_tool'" % (target_ip, domain, target_ip, target_ip))
     stdout = r.get("stdout", "") or ""
     if "Certificate Authorities" in stdout or "CA Name" in stdout:
         result["success"] = True

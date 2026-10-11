@@ -10,7 +10,7 @@ the fuzzer behaves deterministically and no wall-clock delay is incurred.
 """
 import random
 import time
-from typing import Callable, Iterable, List, Optional, Tuple, Type
+from typing import Any, Callable, Iterable, List, Optional, Tuple, Type, Union
 
 import requests
 
@@ -102,7 +102,8 @@ class OPSECSession(requests.Session):
         base = min(self._backoff_max, self._backoff * (2.0 ** attempt))
         return base * self._rng.uniform(0.5, 1.5)
 
-    def request(self, method: str, url: str, **kwargs) -> requests.Response:
+    def request(self, method: str, url: Union[str, bytes],
+                *args: Any, **kwargs: Any) -> requests.Response:
         delay = self._jitter()
         if delay > 0:
             self._sleep(delay)
@@ -111,12 +112,13 @@ class OPSECSession(requests.Session):
         if self.throttle is not None:
             self.throttle.acquire()
         try:
-            return self._request_inner(method, url, **kwargs)
+            return self._request_inner(method, url, *args, **kwargs)
         finally:
             if self.throttle is not None:
                 self.throttle.release()
 
-    def _request_inner(self, method: str, url: str, **kwargs) -> requests.Response:
+    def _request_inner(self, method: str, url: Union[str, bytes],
+                       *args: Any, **kwargs: Any) -> requests.Response:
         last_resp: Optional[requests.Response] = None
         last_exc: Optional[BaseException] = None
         for attempt in range(self._retries + 1):
@@ -129,7 +131,7 @@ class OPSECSession(requests.Session):
                     self.stats["proxy_used"] += 1
             started = time.monotonic()
             try:
-                last_resp = super().request(method, url, **kwargs)
+                last_resp = super().request(method, url, *args, **kwargs)
                 self.stats["requests"] += 1
                 if proxy_url:
                     ok = getattr(last_resp, "status_code", 500) < 400

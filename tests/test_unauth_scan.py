@@ -73,5 +73,6 @@ class TestBatch:
         }):
             r = unauth_scan.check(["1.2.3.4", "5.6.7.8"], services=["redis", "mongo"])
         assert r["scanned"] == 4
-        assert r["vulnerable"] == 2
+        assert r["vulnerable"] is True
+        assert r["_vulnerable_count"] == 2
         assert len(r["honeypots"]) == 2

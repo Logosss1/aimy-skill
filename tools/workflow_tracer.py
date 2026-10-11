@@ -29,7 +29,7 @@ class TraceStep:
     index: int
     method: str
     url: str
-    params: Dict[str, str]
+    params: Dict[str, Any]
     body: Optional[str]
     response_status: int
     response_body: str
@@ -85,8 +85,8 @@ class WorkflowTracer:
         self._step_index = 0
 
     def record(self, method: str, url: str,
-               params: Dict[str, str] = None,
-               body: str = None,
+               params: Optional[Dict[str, Any]] = None,
+               body: Optional[str] = None,
                response_status: int = 0,
                response_body: str = "",
                response_headers: Dict[str, str] = None,

@@ -154,6 +154,7 @@ class _RawHttpClient:
 class HttpClient:
     def __init__(self, sess: Optional[Any] = None, timeout: float = 10.0):
         self.timeout = timeout
+        self._sess = sess
         self._cookie: Optional[str] = None
         self._challenge_solved = False
 
@@ -164,7 +165,8 @@ class HttpClient:
     def _auto_solve(self, body: str, url: str) -> Optional[str]:
         if self._challenge_solved:
             return None
-        if "slowAES" not in body or "toNumbers" not in body[:2000]:
+        # 与全文正则窗口一致: 挑战标记可能在正文 2000 字符之后.
+        if "slowAES" not in body or "toNumbers" not in body:
             return None
         cookie_val = _solve_challenge(body, url)
         if cookie_val:
@@ -174,9 +176,29 @@ class HttpClient:
         return None
 
     def request(self, method: str, url: str, **kwargs) -> "FakeResponse":
+        # 注入的已认证 Session 必须真正用于请求 (旧逻辑直接丢弃, 导致二阶
+        # 验证等场景发的是匿名请求 → 假阴性).
+        if self._sess is not None:
+            r = self._sess.request(method, url, **kwargs)
+            return FakeResponse(r.status_code, dict(r.headers), r.text, url)
+
         self._ensure_session()
-        headers = kwargs.pop("headers", {})
+        headers = dict(kwargs.pop("headers", {}) or {})
         body = kwargs.pop("data", None)
+        params = kwargs.pop("params", None)
+        cookies = kwargs.pop("cookies", None)
+        json_body = kwargs.pop("json", None)
+        if params:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + urllib.parse.urlencode(params)
+        if json_body is not None:
+            import json as _json
+            body = _json.dumps(json_body)
+            headers.setdefault("Content-Type", "application/json")
+        if cookies:
+            cookie_str = "; ".join("%s=%s" % (k, v) for k, v in cookies.items())
+            self._cookie = ("%s; %s" % (self._cookie, cookie_str)
+                            if self._cookie else cookie_str)
 
         status, resp_headers, resp_body = self._raw.request(
             method, url, headers=headers, body=body, cookie=self._cookie

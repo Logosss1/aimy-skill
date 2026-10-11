@@ -1,3 +1,4 @@
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
@@ -93,9 +94,44 @@ def _test_path(base_url: str, path: str, sess: requests.Session,
                 "size": size,
                 "content_type": ct.split(";")[0] if ct else "",
                 "location": r.headers.get("Location", "") if r.status_code in (301, 302) else "",
+                "body_hash": hashlib.md5(r.content or b"").hexdigest() if r.content else "",  # nosec B324 - fingerprint only
             }
     except requests.RequestException:
         pass
+    return None
+
+
+def _detect_catchall(base: str, sess: requests.Session,
+                     timeout: float) -> Optional[int]:
+    """返回 catch-all 响应的 md5 (int 化) 或 None.
+
+    很多 SPA / 自定义错误处理器 / WAF 对任何未知路径都返回同样的 200 页面.
+    如果不识别, dirfuzz 会把 200 个假路径全部当作发现, 污染下游测试点,
+    导致真正的注入端点被挤出预算 (真实世界常见).
+
+    探测两个几乎不可能存在的随机路径 + 一个明确的 404 路径:
+    - 若两个随机路径返回同一 body => catch-all, 记录该 hash
+    - 否则返回 None (正常服务器)
+    """
+    import random
+    import string
+
+    def _rand_path():
+        return "/" + "".join(random.choices(string.ascii_lowercase + string.digits, k=24))
+
+    hashes = []
+    for _ in range(2):
+        try:
+            r = sess.get(base + _rand_path(), timeout=timeout, allow_redirects=False)
+        except requests.RequestException:
+            continue
+        if r.status_code in (404, 410):
+            return None  # 正常 404 行为, 无 catch-all
+        if r.status_code == 200 and r.content:
+            hashes.append(hashlib.md5(r.content).hexdigest())  # nosec B324 - catch-all fingerprint
+
+    if len(hashes) == 2 and hashes[0] == hashes[1]:
+        return int(hashes[0], 16)
     return None
 
 
@@ -120,7 +156,10 @@ def fuzz_directories(url: str, wordlist: Optional[List[str]] = None,
             if ext or w not in targets:
                 targets.append(w + ext)
 
+    catchall_hash = _detect_catchall(base, sess, timeout)
+
     found = []
+    skipped_catchall = 0
     with ThreadPoolExecutor(max_workers=threads) as pool:
         futures = {}
         for t in targets:
@@ -130,6 +169,10 @@ def fuzz_directories(url: str, wordlist: Optional[List[str]] = None,
         for f in as_completed(futures):
             r = f.result()
             if r:
+                if catchall_hash is not None and r.get("body_hash"):
+                    if int(r["body_hash"], 16) == catchall_hash:
+                        skipped_catchall += 1
+                        continue
                 found.append(r)
                 if len(found) >= max_results:
                     pool.shutdown(wait=False)
@@ -138,10 +181,18 @@ def fuzz_directories(url: str, wordlist: Optional[List[str]] = None,
     found.sort(key=lambda x: (x["status"], x["path"]))
     interesting = [x for x in found if x["status"] in (200, 401, 403, 301, 302, 500)]
 
+    # body_hash 是内部去重用的, 从对外结果中移除
+    for x in interesting:
+        x.pop("body_hash", None)
+    for x in found[:max_results]:
+        x.pop("body_hash", None)
+
     return {
         "url": url,
         "total_tested": len(targets),
         "total_found": len(found),
         "interesting": interesting,
         "all": found[:max_results],
+        "catchall_detected": catchall_hash is not None,
+        "catchall_skipped": skipped_catchall,
     }

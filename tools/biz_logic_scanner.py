@@ -1,3 +1,19 @@
+"""业务逻辑漏洞检测 (单体实现 / classic 版).
+
+注意: 这是 v1 单体实现, 包含 10 个 inline check 函数 (MFA / 优惠券 /
+IDOR / 工作流 / 限流 / 价格篡改等). 不是 v2 的旧版替代.
+
+差异对比:
+- 本文件 (biz_logic_scanner, "classic"): 682 行单体, 10 个内联 check
+  函数; 通过 tools/__init__.py 暴露为 check_biz_logic; CLI 命令 bizlogic.
+- tools/biz_logic_v2.py: 169 行薄壳, 组合 5 个独立模块
+  (deviation_oracle / constraint_graph / race_profiler /
+  workflow_tracer / session_matrix); CLI 命令 bizlogic-v2.
+
+两个都是当前用, 适用场景不同:
+- classic: 一次性快速扫, 不需要细粒度控制
+- v2: 模块化, 可单独调子模块, 便于接入自定义 pipeline
+"""
 import re
 import urllib.parse
 from typing import Dict, List, Optional

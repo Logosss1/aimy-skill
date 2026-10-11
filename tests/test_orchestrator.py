@@ -623,6 +623,282 @@ class TestOrchestratorIntegration:
         remaining = o._budget_remaining()
         assert 495 < remaining <= 600
 
+    def test_fingerprint_waf_cached_hit(self):
+        """WAF cached in context_memory: 不再调 fingerprint_waf."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", time_budget=600)
+        o.context_memory.set("waf", "cloudflare", "test", 0.9)
+        with patch("tools.orchestrator.waf_bypass.fingerprint_waf") as m:
+            info = o._fingerprint_waf_cached()
+        m.assert_not_called()
+        assert info["name"] == "cloudflare"
+
+    def test_fingerprint_waf_cached_miss(self):
+        """WAF 未缓存: 调 fingerprint_waf 并写入 context_memory."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", time_budget=600)
+        # 清掉可能残留的缓存
+        o.context_memory.delete("waf") if hasattr(o.context_memory, "delete") else None
+        with patch("tools.orchestrator.waf_bypass.fingerprint_waf",
+                   return_value={"name": "akamai"}):
+            info = o._fingerprint_waf_cached()
+        assert info["name"] == "akamai"
+        assert o.context_memory.get("waf") == "akamai"
+
+    def test_phase_detect_bayes_no_findings_is_noop(self):
+        """无 backtrack findings 时 Bayes 不做事."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", time_budget=600)
+        o._backtrack_findings = []
+        # 不应抛异常也不应修改 last_hypotheses
+        before = o.last_hypotheses
+        o._phase_detect_bayes(active=[])
+        assert o.last_hypotheses == before
+
+    def test_phase_detect_semantic_empty_findings(self):
+        """空 findings 不应崩."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", time_budget=600)
+        fake_sess = type("S", (), {"get": staticmethod(lambda *a, **k: (_ for _ in ()).throw(Exception("no")))})()
+        o.sess = fake_sess
+        o._phase_detect_semantic({})  # 不应抛
+
+    def test_phase_detect_second_order_skips_low_confidence(self):
+        """confidence_score < 0.5 的 finding 不做二阶验证."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", time_budget=600)
+        findings = {
+            "sqli|http://x/?id=1|id": {
+                "type": "sqli", "url": "http://x/", "param": "id",
+                "vulnerable": True, "confidence_score": 0.3,
+            },
+        }
+        with patch.object(o.verifier, "verify") as m:
+            o._phase_detect_second_order(findings)
+        m.assert_not_called()
+
+
+class TestSeedPointsFromEndpoints:
+    """--endpoints 文件: 让 agent 喂入外部发现的端点/参数."""
+
+    def test_url_with_param_line(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=[
+            "http://target.test/page id",
+            "http://target.test/api/user uid",
+        ])
+        pts = o._seed_points_from_endpoints(set())
+        got = {(p["url"], p["param"]) for p in pts}
+        assert ("http://target.test/page", "id") in got
+        assert ("http://target.test/api/user", "uid") in got
+        assert all(p["from_endpoints"] for p in pts)
+
+    def test_url_with_query_line(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=[
+            "http://target.test/search?q=1&page=2",
+        ])
+        pts = o._seed_points_from_endpoints(set())
+        params = {p["param"] for p in pts}
+        assert params == {"q", "page"}
+
+    def test_comments_and_blank_lines_skipped(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=[
+            "", "   ", "# comment", "http://target.test/a id",
+        ])
+        pts = o._seed_points_from_endpoints(set())
+        assert len(pts) == 1
+        assert pts[0]["param"] == "id"
+
+    def test_skip_params_excluded(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=[
+            "http://target.test/page submit",
+            "http://target.test/page id",
+        ])
+        pts = o._seed_points_from_endpoints(set())
+        params = {p["param"] for p in pts}
+        assert "submit" not in params
+        assert "id" in params
+
+    def test_non_http_line_ignored(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=["not-a-url id"])
+        assert o._seed_points_from_endpoints(set()) == []
+
+    def test_dedup_against_seen(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=["http://target.test/a id"])
+        seen = {"http://target.test/a|id|GET"}
+        assert o._seed_points_from_endpoints(seen) == []
+
+    def test_build_test_points_includes_endpoints(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test", endpoints=["http://target.test/x?q=1"])
+        o.state["phases"]["crawl"] = {}
+        o.state["phases"]["param_mine"] = {}
+        o.state["phases"]["recon"] = {}
+        o.last_hypotheses = []
+        pts = o._build_test_points()
+        assert any(p.get("from_endpoints") and p["param"] == "q" for p in pts)
+
+    def test_no_endpoints_is_empty(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test")
+        assert o.seed_endpoints == []
+        assert o._seed_points_from_endpoints(set()) == []
+
+    def test_endpoints_combined_with_target_query(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?id=1",
+                         endpoints=["http://target.test/other?x=9"])
+        o.state["phases"]["crawl"] = {}
+        o.state["phases"]["param_mine"] = {}
+        o.state["phases"]["recon"] = {}
+        o.last_hypotheses = []
+        pts = o._build_test_points()
+        params = {p["param"] for p in pts}
+        assert "id" in params   # from target URL
+        assert "x" in params    # from endpoints file
+
+
+class TestSeedPointsFromTarget:
+    """种子 URL 自带的 query 参数必须成为测试点 (auto 最自然的用法)."""
+
+    def test_seed_url_params_are_testable(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?id=1&q=foo")
+        seen = set()
+        pts = o._seed_points_from_target(seen)
+        params = {p["param"] for p in pts}
+        assert params == {"id", "q"}
+        assert all(p["url"] == "http://target.test/page" for p in pts)
+        assert all(p["from_seed"] for p in pts)
+
+    def test_base_target_strips_query(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?id=1")
+        assert o.target == "http://target.test/page?id=1"
+        assert o.base_target == "http://target.test/page"
+
+    def test_no_query_yields_no_seed_points(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page")
+        assert o._seed_points_from_target(set()) == []
+
+    def test_skip_params_excluded_from_seed(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?submit=1&id=2")
+        pts = o._seed_points_from_target(set())
+        params = {p["param"] for p in pts}
+        assert "submit" not in params
+        assert "id" in params
+
+    def test_seed_respects_seen_dedup(self):
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?id=1")
+        seen = {"http://target.test/page|id|GET"}
+        assert o._seed_points_from_target(seen) == []
+
+    def test_build_test_points_includes_seed(self):
+        """_build_test_points 在无 crawl/dirfuzz 时也应产出种子点."""
+        from tools.orchestrator import Orchestrator
+        o = Orchestrator("http://target.test/page?id=1")
+        o.state["phases"]["crawl"] = {}
+        o.state["phases"]["param_mine"] = {}
+        o.state["phases"]["recon"] = {}
+        o.last_hypotheses = []
+        points = o._build_test_points()
+        assert any(p.get("from_seed") and p["param"] == "id" for p in points)
+
+
+class TestReportHelpers:
+    """Pure-function tests for the extracted report helpers."""
+
+    def test_report_group_by_type_and_url(self):
+        from tools.orchestrator import Orchestrator
+        findings = {
+            "k1": {"type": "sqli", "url": "http://x/a", "param": "id"},
+            "k2": {"type": "sqli", "url": "http://x/b", "param": "id"},
+            "k3": {"type": "xss", "url": "http://x/a", "param": "q"},
+        }
+        by_type, by_url = Orchestrator._report_group(findings)
+        assert set(by_type.keys()) == {"sqli", "xss"}
+        assert len(by_type["sqli"]) == 2
+        assert by_url["http://x/a"] == ["sqli", "xss"]
+
+    def test_report_summary_empty(self):
+        from tools.orchestrator import Orchestrator
+        summary = Orchestrator._report_summary({}, {}, {}, {}, {})
+        assert summary["vulnerabilities"] == 0
+        assert summary["critical"] is False
+        assert summary["exploit_ready_details"] == []
+
+    def test_report_summary_critical_via_exploit_ready(self):
+        from tools.orchestrator import Orchestrator
+        exploits = {"sqli|http://x|id": {"exploit_ready": True}}
+        summary = Orchestrator._report_summary(
+            findings={"k": {"type": "sqli", "url": "http://x/", "param": "id"}},
+            by_type={"sqli": []},
+            by_url={"http://x/": []},
+            exploits=exploits,
+            auth_data={},
+        )
+        assert summary["critical"] is True
+        assert summary["exploit_ready_details"] == ["sqli|http://x|id"]
+
+    def test_report_summary_critical_via_rce_flag(self):
+        from tools.orchestrator import Orchestrator
+        findings = {
+            "k": {"type": "sqli", "url": "http://x/", "param": "id",
+                  "result": {"rce_available": True}},
+        }
+        summary = Orchestrator._report_summary(
+            findings=findings,
+            by_type={"sqli": []},
+            by_url={"http://x/": []},
+            exploits={},
+            auth_data={},
+        )
+        assert summary["critical"] is True
+
+    def test_report_summary_param_hits_format(self):
+        from tools.orchestrator import Orchestrator
+        findings = {
+            "k": {"type": "sqli", "url": "http://x/", "param": "id"},
+        }
+        summary = Orchestrator._report_summary(
+            findings=findings, by_type={}, by_url={},
+            exploits={}, auth_data={},
+        )
+        assert summary["param_hits"] == ["http://x/?id [sqli]"]
+
+    def test_report_recon_basic(self):
+        from tools.orchestrator import Orchestrator
+        recon = {
+            "technologies": {"technologies": [{"name": "PHP"}, {"name": "Nginx"}]},
+            "open_ports": {"open_ports": [{"port": 80}, {"port": 443}]},
+            "git_leak": {"git_exposed": True, "sensitive_finds": [{}, {}]},
+            "directories": {"interesting": ["/admin"]},
+        }
+        detection = {"test_points": 42}
+        crawl_summary = {"pages_crawled": 10, "endpoints_found": 5, "is_spa": True}
+        mine_data = {"host1": {"all_params": ["a", "b"]}, "host2": {"all_params": ["c"]}}
+        waf_info = {"name": "cloudflare"}
+
+        r = Orchestrator._report_recon(recon, detection, crawl_summary, mine_data, waf_info)
+        assert r["technologies"] == ["PHP", "Nginx"]
+        assert r["open_ports"] == [80, 443]
+        assert r["git_exposed"] is True
+        assert r["git_sensitive"] == 2
+        assert r["directories"] == 1
+        assert r["pages_crawled"] == 10
+        assert r["params_mined"] == 3
+        assert r["test_points"] == 42
+        assert r["is_spa"] is True
+        assert r["waf"] == "cloudflare"
+
 
 class TestFalsePositiveFilter:
     """Verify FPF integration with orchestrator findings."""

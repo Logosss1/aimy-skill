@@ -1,7 +1,7 @@
 import base64
 import socket
 import threading
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from tools.log_utils import get_logger
 
@@ -289,7 +289,7 @@ class Socks5Proxy:
 # ---------------------------------------------------------------------------
 
 def socks_cascade(proxies: List[Dict]) -> Dict:
-    result = {"success": False, "chain": []}
+    result: Dict[str, Any] = {"success": False, "chain": []}
     for i, proxy in enumerate(proxies):
         entry = {
             "hop": i + 1,
@@ -329,7 +329,7 @@ def ssh_jump_chain(jump_hosts: List[Dict],
 
 
 def socks_cascade_deploy(exec_fn: callable, proxy_list: List[Dict]) -> Dict:
-    result = {"success": False, "deployed": []}
+    result: Dict[str, Any] = {"success": False, "deployed": []}
     for proxy in proxy_list:
         host = proxy.get("host", "127.0.0.1")
         port = proxy.get("port", 1080)

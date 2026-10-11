@@ -38,6 +38,78 @@ NOSQLI_ERROR_PATTERNS = [
 
 _WHERE_FIELDS = ["username", "password", "name", "email", "role", "user", "admin"]
 
+# Boolean-blind NoSQLi MUST be confirmed by a TRUE/FALSE differential:
+# a payload whose condition is TRUE and one whose condition is FALSE must
+# produce DIFFERENT, stable responses.  Merely "differs from baseline" is not
+# evidence — a generic SQL syntax error makes every special-char payload differ
+# from baseline by the same amount, which produced false positives on plain
+# SQLi endpoints (e.g. `/sqli_error?id=1` was reported as nosqli/boolean).
+_BOOL_TRUE_PAYLOAD = "' || '1'=='1' /*"
+_BOOL_FALSE_PAYLOAD = "' || '1'=='2' /*"
+
+
+def _confirm_operator_blind(sess, url: str, param: str, timeout: float):
+    """GET/参数型操作符注入 ($ne/$gt) 的差分确认.
+
+    对每个操作符族比较"操作符载荷"与"去美元化对照" (`$ne` -> `ne`) 的响应:
+    要求两者各自稳定、彼此不同, 且对照响应与基线一致 (差异必须来自操作符
+    而非通用特殊字符/错误页). 两个族都确认才算命中, 降低 WAF 403 等误报.
+    """
+    base = _resp_sig(sess, url, param, "1", timeout)
+    if base is None:
+        return False, []
+    families = [
+        ('{"$ne": ""}', '{"ne": ""}'),
+        ('{"$gt": ""}', '{"gt": ""}'),
+    ]
+    hits = []
+    for op_payload, ctl_payload in families:
+        o1 = _resp_sig(sess, url, param, op_payload, timeout)
+        o2 = _resp_sig(sess, url, param, op_payload, timeout)
+        c1 = _resp_sig(sess, url, param, ctl_payload, timeout)
+        c2 = _resp_sig(sess, url, param, ctl_payload, timeout)
+        if o1 is None or o2 is None or c1 is None or c2 is None:
+            continue
+        if o1 != o2 or c1 != c2:
+            continue
+        if c1 != base or o1 == c1:
+            continue
+        hits.append("operator differential %s: %s vs ctl %s (base %s)"
+                    % (op_payload[:12], o1, c1, base))
+    if len(hits) >= 2:
+        return True, hits
+    return False, []
+
+
+def _resp_sig(sess, url: str, param: str, payload: str, timeout: float):
+    try:
+        r = sess.get(build_url(url, param, payload), timeout=timeout)
+        return (r.status_code, len(r.text))
+    except Exception:
+        return None
+
+
+def _confirm_boolean_blind(sess, url: str, param: str, timeout: float):
+    """TRUE/FALSE differential oracle.
+
+    Returns (confirmed: bool, evidence: list[str]).  Confirmed only when the
+    TRUE and FALSE conditions yield stable responses that differ from each
+    other.  A constant "differs from baseline" (generic error page) is rejected.
+    """
+    sigs = {}
+    for label, payload in (("true", _BOOL_TRUE_PAYLOAD),
+                           ("false", _BOOL_FALSE_PAYLOAD)):
+        a = _resp_sig(sess, url, param, payload, timeout)
+        b = _resp_sig(sess, url, param, payload, timeout)
+        if a is None or b is None or a != b:
+            return False, []  # unreachable or unstable -> cannot confirm
+        sigs[label] = a
+    if sigs["true"] == sigs["false"]:
+        return False, []  # identical responses -> not boolean-blind
+    return True, [
+        "boolean differential: true=%s false=%s" % (sigs["true"], sigs["false"])
+    ]
+
 # Catastrophic-backtracking regexes: polynomial/exponential evaluation time
 # on long strings - a reliable MongoDB $regex timing oracle.
 _REDOS_PATTERNS = [
@@ -162,37 +234,61 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         base_len = 0
         base_status = 0
 
-    bool_hits = 0
+    error_hits = 0
+    diff_candidates = 0
     seeds = generate("nosqli", "boolean", "string", waf_name)
     for entry in seeds:
         payload = entry["payload"]
         try:
             r = sess.get(build_url(url, param, payload),
                          timeout=timeout)
-            diff = abs(len(r.text) - base_len)
-            if diff > 30 or r.status_code != base_status:
-                bool_hits += 1
-                result["evidence"].append("nosqli: %s (%d diff)" % (payload[:25], diff))
-                result["payload"] = payload
-                voter.add_vote("bool_diff", ConfidenceVoter.vote_length_diff(len(r.text), base_len))
+            matched_err = False
             for pat in NOSQLI_ERROR_PATTERNS:
                 if re.search(pat, r.text, re.IGNORECASE):
                     result["evidence"].append("nosqli error: %s" % pat[:25])
                     result["payload"] = payload
                     voter.add_vote("error_%s" % pat[:20], 0.6)
-                    bool_hits += 1
+                    error_hits += 1
+                    matched_err = True
                     break
+            if not matched_err:
+                # A length diff alone is NOT a hit: generic error pages make
+                # every special-char payload differ from baseline identically.
+                # Count only as a candidate, confirm via differential oracle.
+                diff = abs(len(r.text) - base_len)
+                if diff > 30 or r.status_code != base_status:
+                    diff_candidates += 1
         except Exception as e:
             logger.debug("nosqli payload %s: %s", payload[:20], e)
 
-    if bool_hits >= 2:
-        voter.add_vote("multi_bool", 0.8)
+    if error_hits >= 1:
+        # NoSQL-specific error strings (MongoError/BSON/...) are a strong,
+        # dedicated signal.
+        voter.add_vote("nosql_error", 0.8)
         result["vulnerable"] = True
-        result["type"] = "boolean"
-    elif bool_hits == 1:
-        voter.add_vote("single_bool", 0.5)
-        result["vulnerable"] = True
-        result["type"] = "boolean"
+        result["type"] = "error"
+    elif diff_candidates >= 2:
+        confirmed, ev = _confirm_boolean_blind(sess, url, param, timeout)
+        if confirmed:
+            result["evidence"].extend(ev)
+            result["payload"] = _BOOL_TRUE_PAYLOAD
+            voter.add_vote("bool_differential", 0.8)
+            result["vulnerable"] = True
+            result["type"] = "boolean"
+
+    if not result["vulnerable"]:
+        # GET/参数型操作符注入 ($ne/$gt): 先 1 次廉价探针, 命中再走完整差分
+        # 确认 (基线锚定 + 双族 + 稳定性, 抗通用特殊字符/错误页误报).
+        probe = _resp_sig(sess, url, param, '{"$ne": ""}', timeout)
+        base_sig = (base_status, base_len) if base_status else None
+        if probe is not None and base_sig is not None and probe != base_sig:
+            op_confirmed, op_ev = _confirm_operator_blind(sess, url, param, timeout)
+            if op_confirmed:
+                result["evidence"].extend(op_ev)
+                result["payload"] = '{"$ne": ""}'
+                voter.add_vote("operator_differential", 0.8)
+                result["vulnerable"] = True
+                result["type"] = "operator"
 
     if not result["vulnerable"]:
         time_hits = 0

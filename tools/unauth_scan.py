@@ -256,7 +256,8 @@ def check(hosts: List[str], services: List[str] = None,
     honey = [r for r in results if r.get("honey")]
     return {
         "scanned": len(results),
-        "vulnerable": len(vulnerable),
+        "vulnerable": bool(vulnerable),
+        "_vulnerable_count": len(vulnerable),
         "findings": vulnerable,
         "honeypots": honey,
         "all": results,

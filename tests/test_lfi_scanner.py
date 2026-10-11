@@ -19,6 +19,10 @@ class TestLFIScanner:
         result = check("http://test.com/file", "file")
         assert result["vulnerable"] is True
         assert len(result["findings"]) > 0
+        # evidence 必须非空: FPF 要求 >= min_evidence 条, 否则真 LFI 会被
+        # 以 "insufficient_evidence" 丢弃 (曾导致 orchestrator 漏报 LFI).
+        assert len(result.get("evidence") or []) > 0
+        assert any("lfi:" in e for e in result["evidence"])
 
     @responses.activate
     def test_no_lfi(self):

@@ -1,5 +1,5 @@
 import secrets
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -17,7 +17,7 @@ PP_PAYLOADS = [
     "constructor.prototype.%s=true" % PP_MARKER,
 ]
 
-PP_JSON_PAYLOADS = {
+PP_JSON_PAYLOADS: Dict[str, Any] = {
     "__proto__": {PP_MARKER: "true"},
     "constructor": {"prototype": {PP_MARKER: "true"}},
 }

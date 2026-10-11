@@ -56,7 +56,7 @@ class VulnContext:
         return {k: v for k, v in asdict(self).items() if v}
 
 
-class ContextMemory:
+class VulnContextStore:
     _instance = None
     _lock = threading.RLock()
 

@@ -2,17 +2,26 @@ import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
-# 10-endpoint vulnerable lab (DVWA-style)
-# /sqli_error  : error-based SQLi (MySQL)
-# /sqli_bool   : boolean-blind SQLi
-# /sqli_union  : union injectable, 3 cols, reflects col2, tables/cols/rows
-# /xss_reflect : reflected XSS (raw echo)
-# /cmdi        : command injection (id output)
-# /ssti        : SSTI ({{7*7}} -> 49)
-# /lfi         : LFI (etc/passwd)
-# /nosql       : NoSQLi $where oracle
-# /clean_sqli  : parameterized query (NOT injectable)
-# /clean_xss   : HTML-escaped echo (NOT injectable)
+# Hardened lab: 19 endpoints (DVWA-style + obfuscation/context/POST contracts)
+# /sqli_error   : error-based SQLi (MySQL)
+# /sqli_bool    : boolean-blind SQLi
+# /sqli_union   : union injectable, 3 cols, reflects col2, tables/cols/rows
+# /sqli_post    : error-based SQLi in form POST body
+# /xss_reflect  : reflected XSS (raw echo)
+# /xss_attr     : reflected XSS inside HTML attribute value
+# /xss_js       : reflected XSS inside <script> string
+# /xss_post     : reflected XSS in form POST body
+# /cmdi         : command injection (id output)
+# /ssti         : SSTI ({{7*7}} -> 49)
+# /ssti_alt     : SSTI only for ${7*7}/#{7*7} (alt engine, {{ }} blocked)
+# /lfi          : LFI (etc/passwd)
+# /lfi_hardened : plain ../ filtered, only ....// or %2f encoding works
+# /nosql        : NoSQLi $where oracle (JSON POST)
+# /nosqli_get   : NoSQLi operator injection via GET param
+# /clean_sqli   : parameterized query (NOT injectable)
+# /clean_xss    : HTML-escaped echo (NOT injectable)
+# /clean_attr   : attribute context but escaped (NOT injectable)
+# /clean_ssti   : literal echo, never evaluates (NOT injectable)
 
 class H(BaseHTTPRequestHandler):
     def _send(self, code, body):
@@ -64,6 +73,12 @@ class H(BaseHTTPRequestHandler):
         if p == "/xss_reflect":
             return self._send(200, "<html><body>Hello " + v + "</body></html>")
 
+        if p == "/xss_attr":
+            return self._send(200, '<html><input value="' + v + '"></html>')
+
+        if p == "/xss_js":
+            return self._send(200, "<html><script>var a='" + v + "';</script></html>")
+
         if p == "/cmdi":
             if re.search(r"id|whoami", v):
                 return self._send(200, "uid=1000(user) gid=1000(user) groups=1000(user)")
@@ -74,13 +89,32 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, "Result: 49")
             return self._send(200, "Hello")
 
+        if p == "/ssti_alt":
+            if "${7*7}" in v or "#{7*7}" in v:
+                return self._send(200, "Result: 49")
+            if "{{" in v:
+                return self._send(200, "blocked")
+            return self._send(200, "Hello")
+
         if p == "/lfi":
             if "etc/passwd" in v:
                 return self._send(200, "root:x:0:0:root:/root:/bin/bash")
             return self._send(200, "not found")
 
+        if p == "/lfi_hardened":
+            raw_q = urlparse(self.path).query.lower()
+            encoded = ("%2f" in raw_q or "%252f" in raw_q)
+            if "etc/passwd" in v and ("....//" in v or encoded):
+                return self._send(200, "root:x:0:0:root:/root:/bin/bash")
+            return self._send(200, "not found")
+
         if p == "/nosql":
             return self._send(200, "normal")
+
+        if p == "/nosqli_get":
+            if "$ne" in v or "$gt" in v or "$regex" in v:
+                return self._send(200, "x" * 120 + "operator-bypass")
+            return self._send(200, "x")
 
         if p == "/clean_sqli":
             # parameterized: input is data, never SQL
@@ -91,11 +125,32 @@ class H(BaseHTTPRequestHandler):
             esc = v.replace("<", "&lt;").replace(">", "&gt;")
             return self._send(200, "<html><body>" + esc + "</body></html>")
 
+        if p == "/clean_attr":
+            esc = (v.replace("&", "&amp;").replace('"', "&quot;")
+                    .replace("<", "&lt;").replace(">", "&gt;"))
+            return self._send(200, '<html><input value="' + esc + '"></html>')
+
+        if p == "/clean_ssti":
+            return self._send(200, "Literal template text: " + v[:40])
+
         return self._send(200, "ok")
 
     def do_POST(self):
         p = urlparse(self.path).path
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode("utf-8", errors="replace")
+
+        if p == "/sqli_post":
+            q = parse_qs(body)
+            v = q.get("id", [""])[0]
+            if "'" in v:
+                return self._send(500, "You have an error in your SQL syntax near '' at line 1")
+            return self._send(200, "Product page")
+
+        if p == "/xss_post":
+            q = parse_qs(body)
+            v = q.get("q", [""])[0]
+            return self._send(200, "<html><body>Hello " + v + "</body></html>")
+
         if p == "/nosql":
             try:
                 import json

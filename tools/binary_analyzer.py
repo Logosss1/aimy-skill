@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import struct
@@ -91,7 +92,7 @@ class BinaryAnalyzer:
         for x in range(256):
             p_x = data.count(x) / len(data)
             if p_x > 0:
-                entropy += -p_x * (p_x.bit_length() - 1)
+                entropy -= p_x * math.log2(p_x)
         return entropy
 
     def _extract_strings(self, data: bytes, min_len: int = 6) -> List[Dict]:
@@ -161,7 +162,6 @@ class BinaryAnalyzer:
             })
 
         # Imports
-        struct.unpack("<I", data[pe_offset+24+104:pe_offset+24+108])[0] if magic in (0x10b, 0x20b) else 0
         for dll_name, apis in DANGEROUS_IMPORTS.items():
             dll_pattern = dll_name.lower().encode()
             if dll_pattern in data.lower():
@@ -176,7 +176,7 @@ class BinaryAnalyzer:
                     info.strings_found.append({"label": label, "text": s["text"][:100]})
 
         for packer in KNOWN_PACKERS:
-            if packer.lower() in data.lower():
+            if packer.lower().encode() in data.lower():
                 info.is_packed = True
                 info.protections["packer"] = packer
 
@@ -187,16 +187,19 @@ class BinaryAnalyzer:
         info = BinaryInfo(filepath=filepath, file_size=len(data))
         info.format_type = "ELF"
 
+        if len(data) < 64:
+            return info
         elf_class = data[4]
-        data[5]
         arch_map = {1: "x86", 2: "x64"}
         info.arch = arch_map.get(elf_class, "unknown")
         os_map = {0: "System V", 3: "Linux", 97: "ARM"}
         info.os_type = os_map.get(data[7], "unknown")
 
         elf_bits = 32 if elf_class == 1 else 64
-        ei = 36 if elf_bits == 32 else 48
-        phoff = struct.unpack("<I" if elf_bits == 32 else "<Q", data[28:28+ei-28])[0]
+        if elf_bits == 32:
+            phoff = struct.unpack("<I", data[28:32])[0]
+        else:
+            phoff = struct.unpack("<Q", data[32:40])[0]
         phnum = struct.unpack("<H", data[44:46] if elf_bits == 32 else data[56:58])[0]
 
         for i in range(phnum):
@@ -223,9 +226,9 @@ class BinaryAnalyzer:
                     info.strings_found.append({"label": label, "text": s["text"][:100]})
 
         if b"GCC: (" in data:
-            pass
+            info.protections["compiler"] = data.split(b"GCC: (", 1)[1][:32].decode("ascii", errors="replace")
         for packer in KNOWN_PACKERS:
-            if packer.lower() in data.lower():
+            if packer.lower().encode() in data.lower():
                 info.is_packed = True
                 break
 

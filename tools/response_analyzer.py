@@ -64,15 +64,20 @@ class ResponseAnalyzer:
 
     def analyze(self, url: str, status: int, headers: Dict,
                 body: str) -> ResponseAnalysis:
-        ct = headers.get("Content-Type", "")
+        ct = ""
+        for k, v in (headers or {}).items():
+            if k.lower() == "content-type":
+                ct = v
+                break
+        ct_l = ct.lower()
         body_len = len(body)
 
         analysis = ResponseAnalysis(
             status=status,
             content_type=ct,
             body_length=body_len,
-            is_json="json" in ct,
-            is_html="html" in ct,
+            is_json="json" in ct_l,
+            is_html="html" in ct_l,
             is_error=status >= 400,
             error_type=self._classify_error(status, body),
         )
@@ -110,8 +115,8 @@ class ResponseAnalyzer:
             analysis.sensitive_fields = [
                 f.path for f in analysis.fields if f.is_sensitive
             ]
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug("json parse failed for %s: %s", url, e)
 
         return analysis
 
@@ -141,8 +146,10 @@ class ResponseAnalyzer:
 
         analysis.fields = fields
 
+        # 仅 error/exception/failure/warning 才算错误信号; 旧逻辑把任意
+        # "message:"/"alert:" 都当错误页 (200 正常页大量误报).
         error_matches = re.findall(
-            r'(error|warning|alert|message|notice)["\']?\s*[:=]\s*["\']?([^"\'<>{}\[\]|]+)',
+            r'(error|exception|failure|failed|warning)["\']?\s*[:=]\s*["\']?([^"\'<>{}\[\]|]+)',
             body, re.I
         )
         if error_matches:
@@ -194,10 +201,11 @@ class ResponseAnalyzer:
         if isinstance(val, float):
             return "float"
         if isinstance(val, str):
-            if re.match(r"^\d{4}-\d{2}-\d{2}", val):
-                return "date"
+            # datetime 必须先于 date 匹配 (旧顺序 date 吞掉 datetime, 精度丢失).
             if re.match(r"^\d{4}-\d{2}-\d{2}T", val):
                 return "datetime"
+            if re.match(r"^\d{4}-\d{2}-\d{2}", val):
+                return "date"
             if re.match(r"^[\w-]+@[\w-]+\.\w+", val):
                 return "email"
             if len(val) > 100:
@@ -254,36 +262,32 @@ class ResponseAnalyzer:
 
     @staticmethod
     def _classify_error(status: int, body: str) -> str:
-        if status == 401:
-            return "unauthorized"
-        if status == 403:
-            return "forbidden"
-        if status == 404:
-            return "not_found"
-        if status == 405:
-            return "method_not_allowed"
-        if status == 500:
-            return "internal_error"
-        if status == 502:
-            return "bad_gateway"
-        if status == 429:
-            return "rate_limited"
-        if status >= 400:
-            if "sql" in body.lower() or "mysql" in body.lower():
-                return "sql_error"
-            if "stack trace" in body.lower() or "exception" in body.lower():
-                return "exception"
-            if "traceback" in body.lower():
-                return "traceback"
-            return f"http_{status}"
-        return ""
+        if status < 400:
+            return ""
+        # 正文特征优先于状态码: 500 页上的 SQL/异常正文不应被 internal_error 吞掉.
+        low = body.lower()
+        if "sql" in low or "mysql" in low:
+            return "sql_error"
+        if "traceback" in low:
+            return "traceback"
+        if "stack trace" in low or "exception" in low:
+            return "exception"
+        return {
+            401: "unauthorized",
+            403: "forbidden",
+            404: "not_found",
+            405: "method_not_allowed",
+            500: "internal_error",
+            502: "bad_gateway",
+            429: "rate_limited",
+        }.get(status, f"http_{status}")
 
     @staticmethod
     def _infer_resource(url: str) -> str:
         parsed = urlparse(url)
         parts = [p for p in parsed.path.split("/") if p]
         for part in reversed(parts):
-            if not re.match(r"^[\d{8}\-]{2,}$", part) and not part.isdigit():
+            if not re.match(r"^[\d\-]{2,}$", part) and not part.isdigit():
                 return part
             return parts[-2] if len(parts) >= 2 else ""
         return ""

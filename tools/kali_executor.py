@@ -189,27 +189,35 @@ class KaliExecutor:
         return r["success"] and tool in r["stdout"]
 
 
+_SHELL_METACHARS = ("|", "&", ";", ">", "<", "`", "$", "(", ")", "\n")
+
+
+def _needs_shell(command: str) -> bool:
+    """判断命令是否使用了 shell 特性（管道/重定向/命令串联/变量展开）。"""
+    return any(ch in command for ch in _SHELL_METACHARS)
+
+
 def _run_local(command: str, timeout: int = 120) -> Dict:
     try:
         logger.debug("Kali[LOCAL]: %s", command[:120])
-        # 将字符串命令转换为安全的列表形式，避免 shell=True 带来的命令注入风险
-        if isinstance(command, str):
-            # 尝试使用 shlex 分割，如果命令已经是列表则保持不变
-            if not command.startswith(("(", "[", "'", "\"")):
-                cmd_list = shlex.split(command)
-            else:
-                cmd_list = command
-            if not isinstance(cmd_list, list):
-                cmd_list = [command]
+        if isinstance(command, str) and not _needs_shell(command):
+            # 无 shell 特性的简单命令：以列表参数直接执行，避免注入风险
+            r = subprocess.run(
+                shlex.split(command),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         else:
-            cmd_list = command
-
-        r = subprocess.run(
-            cmd_list,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+            # 含管道/重定向/&& 的命令（如 check_tool 的 "which x 2>/dev/null && ..."）
+            # 必须交由 shell 解析，否则这些语法会被当作字面参数传入
+            r = subprocess.run(
+                command,
+                shell=True,  # nosec B602
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         return {
             "success": r.returncode == 0,
             "exit_code": r.returncode,

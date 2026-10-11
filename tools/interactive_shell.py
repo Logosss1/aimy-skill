@@ -139,7 +139,7 @@ class PTYShell:
                 parts = cmd.split()
                 if len(parts) == 4:
                     r = self.port_forward(int(parts[1]), parts[2], int(parts[3]))
-                    print("[+] Port forward: 127.0.0.1:%d -> %s:%s" % (r["local_port"], r["forward_to"], parts[3]))
+                    print("[+] Port forward: 127.0.0.1:%s -> %s:%s" % (r["local_port"], r["forward_to"], parts[3]))
                 continue
             if cmd == "upgrade":
                 r = self.upgrade()

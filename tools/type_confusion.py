@@ -192,9 +192,12 @@ class TypeConfusionDetector:
                 try:
                     obj = json.loads(value)
                     if "__proto__" in str(obj) or "constructor" in str(obj):
-                        result.vuln_type = "prototype_pollution"
-                        result.risk_level = "high"
-                        result.success = True
+                        # 仅凭载荷含 __proto__ 不算成功: 必须有服务端证据
+                        # (状态变化/响应差异/错误泄露), 否则为假阳性.
+                        if result.status_changed or result.response_diff or result.error_leak:
+                            result.vuln_type = "prototype_pollution"
+                            result.risk_level = "high"
+                            result.success = True
                 except json.JSONDecodeError:
                     pass
 
@@ -245,7 +248,14 @@ class TypeConfusionDetector:
                 data[param] = value
                 return self.sess.post(url, data=data, timeout=self.timeout, verify=settings.verify_ssl)
             else:
-                test_url = url.replace(param + "=", param + "=" + requests.utils.quote(value, safe=""))
+                quoted = requests.utils.quote(value, safe="")
+                if param + "=" in url:
+                    test_url = url.replace(param + "=", param + "=" + quoted)
+                else:
+                    # URL 无 param= 时 append, 旧逻辑 replace 无操作导致所有
+                    # payload 静默发往同一 URL.
+                    sep = "&" if "?" in url else "?"
+                    test_url = url + sep + param + "=" + quoted
                 return self.sess.get(test_url, timeout=self.timeout, verify=settings.verify_ssl)
         except Exception:
             return None

@@ -13,7 +13,7 @@ CSRF_TOKEN_NAMES = [
     "csrf", "csrf_token", "csrfmiddlewaretoken", "_csrf", "_csrf_token",
     "token", "authenticity_token", "csrf-token", "xsrf-token",
     "__RequestVerificationToken", "form_token", "security_token",
-    "anticsrf", "anti-csrf", "nonce", "csrftoken",
+    "anticsrf", "anti-csrf", "csrftoken",
 ]
 
 CSRF_HEADER_NAMES = [
@@ -36,7 +36,8 @@ def _find_csrf_token(html: str) -> List[str]:
             r'name=["\']%s["\'][^>]*value=["\']([^"\']+)["\']' % re.escape(name),
             r'value=["\']([^"\']+)["\'][^>]*name=["\']%s["\']' % re.escape(name),
             r'data-%s=["\']([^"\']+)["\']' % re.escape(name),
-            r'<%s[^>]*content=["\']([^"\']+)["\']' % re.escape(name),
+            # <meta name="csrf-token" content="..."> (旧模式 '<csrf-token...' 永不匹配)
+            r'<meta[^>]*name=["\']%s["\'][^>]*content=["\']([^"\']+)["\']' % re.escape(name),
         ]
         for pat in patterns:
             m = re.search(pat, html, re.I)
@@ -56,14 +57,16 @@ def _has_csrf_header(response: requests.Response) -> List[str]:
 
 def _find_forms(html: str, base_url: str) -> List[Dict]:
     forms = []
-    for match in re.finditer(r'<form[^>]*action=["\']([^"\']*)["\'][^>]*>(.*?)</form>', html, re.I | re.S):
-        action = match.group(1)
+    for match in re.finditer(r'<form([^>]*)>(.*?)</form>', html, re.I | re.S):
+        attrs = match.group(1)
         body = match.group(2)
+        action_match = re.search(r'action=["\']([^"\']*)["\']', attrs, re.I)
+        action = action_match.group(1) if action_match else ""
         if not action:
             action = base_url
         elif not action.startswith("http"):
             action = urljoin(base_url, action)
-        method_match = re.search(r'method=["\'](get|post)["\']', match.group(0), re.I)
+        method_match = re.search(r'method=["\'](get|post)["\']', attrs, re.I)
         method = method_match.group(1).upper() if method_match else "GET"
         inputs = []
         for inp in re.finditer(r'<input[^>]*name=["\']([^"\']+)["\']', body, re.I):
@@ -119,7 +122,9 @@ def check(url: str, param: Optional[str] = None, sess: Optional[requests.Session
             continue
         if action.startswith("javascript:"):
             continue
-        form_has_token = any(t["name"] for t in result["token_in_page"] if t["name"] in " ".join(form["inputs"]))
+        # 表单级精确匹配: 页面级 token 不再掩盖具体表单缺失 token 的问题.
+        form_inputs = set(form["inputs"])
+        form_has_token = any(t["name"] in form_inputs for t in result["token_in_page"])
         if not form_has_token and len(form["inputs"]) > 0:
             result["findings"].append({
                 "type": "missing_csrf_token",
@@ -129,13 +134,9 @@ def check(url: str, param: Optional[str] = None, sess: Optional[requests.Session
                 "sensitive": _is_sensitive(action, method),
             })
 
-    if not result["csrf_protected"] and result["forms_analyzed"] > 0:
-        for form in forms:
-            if form["method"] == "POST":
-                result["vulnerable"] = True
-                break
-
-    if result["findings"]:
+    # vulnerable 仅由"敏感表单缺失 token"决定; 旧逻辑对任意 POST 表单直接置真
+    # (无 finding 也报漏洞), 且在 header 已提供 CSRF 保护时仍误报.
+    if result["findings"] and not result["csrf_header"]:
         for f in result["findings"]:
             if f.get("sensitive"):
                 result["vulnerable"] = True
@@ -175,10 +176,17 @@ def bypass_check(url: str, form_action: str, form_data: Dict,
                 r = sess.post(urljoin(url, form_action), data=form_data,
                             headers=headers, timeout=timeout)
             if r.status_code in (200, 302, 403):
+                # 仅状态码不足以判定绕过: 200 的 "CSRF verification failed"
+                # 错误页曾被当成绕过成功.
+                body_low = (r.text or "").lower()
+                failure_markers = ("csrf verification failed", "csrf token missing",
+                                   "invalid csrf", "token mismatch", "csrf check failed")
+                bypassed = (r.status_code in (200, 302)
+                            and not any(m in body_low for m in failure_markers))
                 result["tests"].append({
                     "test": name,
                     "status": r.status_code,
-                    "bypassed": r.status_code in (200, 302),
+                    "bypassed": bypassed,
                     "size": len(r.text),
                 })
         except Exception as e:

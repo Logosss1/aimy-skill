@@ -1,5 +1,5 @@
 import subprocess
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from tools.log_utils import get_logger
 
@@ -28,7 +28,7 @@ def smb_null_session(target: str) -> Dict:
 
 
 def smb_enum_shares(target: str, user: str = "", password: str = "") -> Dict:
-    result = {"success": False, "shares": []}
+    result: Dict[str, Any] = {"success": False, "shares": []}
     try:
         auth = f"-U{user}%{password}" if user else "-N"
         r = subprocess.run(

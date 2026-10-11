@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import requests
 
+from tools.jwt_common import b64url_decode, decode_jwt_header, decode_jwt_payload
 from tools.log_utils import get_logger
 from tools.settings import settings
 
@@ -15,31 +16,7 @@ JWT_REGEX = r'[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+'
 
 JWT_HEADER_KEYS = ["authorization", "x-jwt", "x-auth-token", "token", "bearer"]
 
-
-def _b64_pad(s: str) -> str:
-    return s + "=" * ((4 - len(s) % 4) % 4)
-
-
-def decode_jwt_payload(token: str) -> Optional[Dict]:
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        padded = _b64_pad(parts[1])
-        decoded = base64.urlsafe_b64decode(padded).decode("utf-8")
-        return json.loads(decoded)
-    except Exception:
-        return None
-
-
-def decode_jwt_header(token: str) -> Optional[Dict]:
-    try:
-        parts = token.split(".")
-        padded = _b64_pad(parts[0])
-        decoded = base64.urlsafe_b64decode(padded).decode("utf-8")
-        return json.loads(decoded)
-    except Exception:
-        return None
+__all__ = ["JWT_REGEX", "JWT_HEADER_KEYS", "decode_jwt_header", "decode_jwt_payload", "check"]
 
 
 def check_jwt_none(sess: requests.Session, url: str = None,
@@ -80,8 +57,8 @@ def check_jwt_weak_secret(token: str, wordlist: list = None) -> Dict:
         if len(parts) != 3:
             return result
         message = ("%s.%s" % (parts[0], parts[1])).encode()
-        sig_b64 = _b64_pad(parts[2])
-        target_sig = base64.urlsafe_b64decode(sig_b64)
+        sig_b64 = b64url_decode(parts[2])
+        target_sig = sig_b64
         for secret in wordlist:
             expected = hmac.new(secret.encode(), message, hashlib.sha256).digest()
             if hmac.compare_digest(expected, target_sig):

@@ -131,8 +131,6 @@ class ConstraintGraph:
                     if bv != 0 and abs(av * bv - 1) < 0.01:
                         found.append(Relationship(
                             a_name, b_name, "a*b=1", 0.8))
-                for off in range(1, len(a_vals)):
-                    pass
         self.relationships.extend(found)
         return found
 
@@ -144,7 +142,16 @@ class ConstraintGraph:
 
         found_price = self._param_names & price_like
         found_qty = self._param_names & quantity_like
-        self._param_names & limit_like
+        found_limit = self._param_names & limit_like
+
+        if found_limit:
+            p = list(found_limit)[0]
+            constraints.append(Constraint(
+                type="limit_manipulation",
+                description=f"Parameter '{p}' may control a result/page limit",
+                params=[p],
+                severity="medium"))
+            self._add_mutation_suggestion(p, ["0", "-1", "999999", "100000"])
 
         if found_price:
             p = list(found_price)[0]

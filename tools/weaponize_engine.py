@@ -2,7 +2,7 @@ import base64
 import json
 import os
 import subprocess
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import quote_plus
 
 import requests
@@ -138,7 +138,7 @@ def deploy_webshell_lfi(url: str, param: str, sess: requests.Session,
 def ssrf_to_aws_takeover(access_key: str, secret_key: str,
                           session_token: Optional[str] = None,
                           region: str = "us-east-1") -> Dict:
-    result = {"success": False, "steps": [], "access": {}}
+    result: Dict[str, Any] = {"success": False, "steps": [], "access": {}}
     aws_bin = "aws"
     if os.name == "nt":
         aws_bin = "aws.cmd"

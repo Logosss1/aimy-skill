@@ -212,7 +212,8 @@ def check(url: str, creds: Optional[List[Tuple[str, str]]] = None,
     """
     sess = sess or make_session()
     creds = creds or DEFAULT_CREDS
-    result = {"url": url, "form": None, "attempts": 0, "findings": []}
+    result = {"url": url, "form": None, "attempts": 0, "findings": [],
+              "vulnerable": False, "type": "weak_password"}
 
     if api_url:
         result["form"] = {"kind": "api", "api_url": api_url}
@@ -273,4 +274,5 @@ def check(url: str, creds: Optional[List[Tuple[str, str]]] = None,
         if delay:
             time.sleep(delay)
 
+    result["vulnerable"] = bool(result["findings"])
     return result

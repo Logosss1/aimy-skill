@@ -118,7 +118,8 @@ exclude_dirs = ["tests"]
 skips = ["B101", "B311", "B403", "B405"]
 
 [tool.setuptools.packages.find]
-include = ["tools*", "tools.*", "engine*", "engine.*"]
+# cli/ 承载命令行解析与命令注册 (main.py 直接 import cli.*),必须随包安装
+include = ["tools*", "tools.*", "engine*", "engine.*", "cli*", "cli.*"]
 
 [tool.setuptools]
 # 顶层模块 main.py 承载 CLI 入口 (aimy = "main:main"),必须随包安装

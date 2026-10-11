@@ -17,25 +17,36 @@ from tools._session import make_session
 BASE = "http://127.0.0.1:18774"
 sess = make_session()
 
-# (label, url, param, detector_fn, expected_vulnerable)
+# (label, url, param, detector_fn, expected_vulnerable, kwargs)
 CASES = [
-    ("sqli_error",  BASE + "/sqli_error",  "id", sql_injection.check, True),
-    ("sqli_bool",   BASE + "/sqli_bool",   "id", sql_injection.check, True),
-    ("sqli_union",  BASE + "/sqli_union",  "id", sql_injection.check, True),
-    ("xss_reflect", BASE + "/xss_reflect", "q",  xss_detector.check, True),
-    ("cmdi",        BASE + "/cmdi",        "cmd", cmdi_detector.check, True),
-    ("ssti",        BASE + "/ssti",        "name", ssti_detector.check, True),
-    ("lfi",         BASE + "/lfi",         "file", lfi_scanner.check, True),
-    ("nosql",       BASE + "/nosql",       "id", nosqli_detector.check, True),
-    ("clean_sqli",  BASE + "/clean_sqli",  "q",  sql_injection.check, False),
-    ("clean_xss",   BASE + "/clean_xss",   "q",  xss_detector.check, False),
+    ("sqli_error",  BASE + "/sqli_error",  "id", sql_injection.check, True, {}),
+    ("sqli_bool",   BASE + "/sqli_bool",   "id", sql_injection.check, True, {}),
+    ("sqli_union",  BASE + "/sqli_union",  "id", sql_injection.check, True, {}),
+    ("sqli_post",   BASE + "/sqli_post",   "id", sql_injection.check, True,
+     {"post_body": True, "post_data": {"id": "1"}}),
+    ("xss_reflect", BASE + "/xss_reflect", "q",  xss_detector.check, True, {}),
+    ("xss_attr",    BASE + "/xss_attr",    "q",  xss_detector.check, True, {}),
+    ("xss_js",      BASE + "/xss_js",      "q",  xss_detector.check, True, {}),
+    ("xss_post",    BASE + "/xss_post",    "q",  xss_detector.check, True,
+     {"post_body": True, "post_data": {"q": "1"}}),
+    ("cmdi",        BASE + "/cmdi",        "cmd", cmdi_detector.check, True, {}),
+    ("ssti",        BASE + "/ssti",        "name", ssti_detector.check, True, {}),
+    ("ssti_alt",    BASE + "/ssti_alt",    "name", ssti_detector.check, True, {}),
+    ("lfi",         BASE + "/lfi",         "file", lfi_scanner.check, True, {}),
+    ("lfi_hardened", BASE + "/lfi_hardened", "file", lfi_scanner.check, True, {}),
+    ("nosql",       BASE + "/nosql",       "id", nosqli_detector.check, True, {}),
+    ("nosqli_get",  BASE + "/nosqli_get",  "id", nosqli_detector.check, True, {}),
+    ("clean_sqli",  BASE + "/clean_sqli",  "q",  sql_injection.check, False, {}),
+    ("clean_xss",   BASE + "/clean_xss",   "q",  xss_detector.check, False, {}),
+    ("clean_attr",  BASE + "/clean_attr",  "q",  xss_detector.check, False, {}),
+    ("clean_ssti",  BASE + "/clean_ssti",  "name", ssti_detector.check, False, {}),
 ]
 
 report = []
-for label, url, param, fn, expected in CASES:
+for label, url, param, fn, expected, kwargs in CASES:
     start = time.time()
     try:
-        r = fn(url, param, sess=sess, timeout=5)
+        r = fn(url, param, sess=sess, timeout=5, **kwargs)
         detected = bool(r.get("vulnerable"))
     except Exception as e:
         detected = False
@@ -54,7 +65,7 @@ vuln_total = sum(1 for r in CASES if r[4])
 clean_total = sum(1 for r in CASES if not r[4])
 
 print("=" * 78)
-print("AIMY-SKILL v3.5 QUANTITATIVE ACCEPTANCE (10-endpoint lab)")
+print("AIMY-SKILL QUANTITATIVE ACCEPTANCE (%d-endpoint hardened lab)" % len(CASES))
 print("=" * 78)
 for r in report:
     mark = {"TP": "OK  ", "TN": "OK  ", "FP": "!!  ", "FN": "MISS"}[r["verdict"]]

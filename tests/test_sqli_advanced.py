@@ -152,11 +152,10 @@ class TestTimeControl:
     @responses.activate
     def test_timeout_noise_rejected(self):
         """Network timeouts on both payload and control -> NOT a hit."""
-        import time
+        import requests as _requests
 
         def always_timeout(request):
-            time.sleep(0.2)
-            return (200, {}, "slow-but-ok")
+            raise _requests.Timeout("simulated network timeout")
 
         responses.add_callback(
             responses.GET,

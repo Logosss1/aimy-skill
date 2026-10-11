@@ -2,7 +2,7 @@ import hashlib
 import re
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -32,7 +32,7 @@ class FuzzResult:
     after_length: int = 0
 
 
-ROLE_FUZZ_STRATEGIES = {
+ROLE_FUZZ_STRATEGIES: Dict[str, Dict[str, Any]] = {
     "identifier": {
         "label": "IDOR / BOLA",
         "payloads": [
@@ -368,7 +368,7 @@ class LearningFuzzer:
         return results
 
     def top_params(self, n: int = 5) -> List[str]:
-        return sorted(self._param_scores, key=self._param_scores.get, reverse=True)[:n]
+        return sorted(self._param_scores, key=lambda p: self._param_scores[p], reverse=True)[:n]
 
     def top_findings(self, threshold: float = 3.0) -> List[Dict]:
         return [f for f in self._interesting if f["diff_score"] >= threshold]

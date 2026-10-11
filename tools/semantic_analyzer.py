@@ -1,6 +1,7 @@
+import hashlib
 import html
 import re
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from tools.log_utils import get_logger
 
@@ -37,16 +38,23 @@ class ResponseSignature:
         return changes
 
 
+VOID_TAGS = {"input", "img", "br", "hr", "meta", "link", "area", "base",
+             "col", "embed", "source", "track", "wbr"}
+
+
 def extract_structure(text: str) -> Dict:
     tags = re.findall(r'<(/?)(' + '|'.join(STRUCTURAL_TAGS) + r')([^>]*)>', text, re.I)
     counts = {}
     depth = 0
     max_depth = 0
     for is_close, tag, attrs in tags:
+        t = tag.lower()
         if not is_close:
-            counts[tag.lower()] = counts.get(tag.lower(), 0) + 1
-            depth += 1
-            max_depth = max(max_depth, depth)
+            counts[t] = counts.get(t, 0) + 1
+            # void 标签 (input/img/br...) 不产生嵌套层级, 否则结构深度被噪声污染.
+            if t not in VOID_TAGS:
+                depth += 1
+                max_depth = max(max_depth, depth)
         else:
             depth = max(0, depth - 1)
     form_count = len(re.findall(r'<form[^>]*>', text, re.I))
@@ -65,7 +73,9 @@ def extract_structure(text: str) -> Dict:
 def structure_hash(text: str) -> str:
     s = extract_structure(text)
     tag_str = ";".join(f"{k}:{v}" for k, v in sorted(s["tag_counts"].items()))
-    return str(hash(tag_str + f"|d{s['max_depth']}|f{s['form_count']}|i{s['input_count']}"))
+    payload = (tag_str + f"|d{s['max_depth']}|f{s['form_count']}|i{s['input_count']}").encode()
+    # 用 md5 而非内建 hash(): 后者跨进程随机化, 持久化对比必然失配.
+    return hashlib.md5(payload).hexdigest()  # nosec B324 - structure fingerprint only
 
 
 def extract_error_patterns(text: str) -> List[str]:
@@ -77,7 +87,8 @@ def extract_error_patterns(text: str) -> List[str]:
         (r"Warning.*pg_|PostgreSQL.*ERROR|psql.*ERROR", "postgresql"),
         (r"Unclosed quotation mark|Microsoft OLE DB|SQL Server.*Error", "mssql"),
         (r"Warning.*oci_|ORA-[0-9]{5}|Oracle.*Driver", "oracle"),
-        (r"Traceback.*most recent call|File.*line.*|NameError|TypeError.*", "python"),
+        (r'Traceback \(most recent call last\)|File "[^"]+", line \d+|'
+         r'(?:NameError|TypeError|ValueError|KeyError|AttributeError):', "python"),
         (r"Warning.*SimpleXML|DOMDocument|loadXML.*", "xml_xxe"),
         (r"Parse error|syntax error.*unexpected|unexpected T_", "php_parse"),
         (r"root@|www-data@|ubuntu@", "shell_output"),
@@ -163,18 +174,18 @@ def _score_anomaly(changes: Dict) -> float:
 
 
 def cluster_text_similarity(t1: str, t2: str) -> float:
+    if not t1.strip() or not t2.strip():
+        return 0.0
     lines1 = set(t1.strip().split("\n"))
     lines2 = set(t2.strip().split("\n"))
-    if not lines1 or not lines2:
-        return 0.0
     intersection = lines1 & lines2
     union = lines1 | lines2
     return len(intersection) / len(union) if union else 0.0
 
 
 def detect_content_reflection(original_payload: str, response_body: str) -> Dict:
-    result = {"reflected": False, "context": None, "positions": []}
-    for length in range(min(len(original_payload), 50), 5, -5):
+    result: Dict[str, Any] = {"reflected": False, "context": None, "positions": []}
+    for length in range(min(len(original_payload), 50), 0, -5):
         fragment = original_payload[:length]
         if fragment in response_body:
             escaped_variants = [
@@ -201,7 +212,10 @@ def detect_content_reflection(original_payload: str, response_body: str) -> Dict
 
 def _detect_html_context(html_text: str, offset: int) -> str:
     before = html_text[max(0, offset - 100):offset]
-    if "<script" in before[-50:]:
+    lower_before = html_text[:offset].lower()
+    # 未闭合的 <script 跨越窗口边界也要识别 (旧逻辑只看 50 字符, 深层
+    # script 内反射被误标 html).
+    if lower_before.rfind("<script") > lower_before.rfind("</script"):
         return "js"
     if 'onerror=' in before[-50:] or 'onload=' in before[-50:] or 'onfocus=' in before[-50:]:
         return "event_handler"

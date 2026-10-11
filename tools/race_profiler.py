@@ -71,8 +71,8 @@ class RaceProfiler:
         for concurrency in (5, 10, 20, 50):
             for _ in range(3):
                 responses = self._race_round(url, method, body, concurrency)
-                window = self._analyze_window(responses, bl_status, bl_len,
-                                               bl_body, concurrency)
+                window = self._analyze_window(responses, bl_status,
+                                               bl_body, bl_len, concurrency)
                 if (window.duplicate_success or window.state_mismatch
                         or window.integrity_violated
                         or window.resource_created_twice):
@@ -82,7 +82,7 @@ class RaceProfiler:
         return result
 
     def _single_request(self, url: str, method: str,
-                        body: Dict = None) -> Optional[Dict]:
+                        body: Optional[Dict] = None) -> Optional[Dict]:
         try:
             start = time.time()
             r = getattr(self.sess, method.lower())(url, json=body,
@@ -139,7 +139,9 @@ class RaceProfiler:
             unique_bodies = set(tuple(b) for b in bodies)
             window.state_mismatch = len(unique_bodies) > 1
             all_equal = all(b == bodies[0] for b in bodies)
-            if not all_equal and bl_body and bl_body != bodies[0]:
+            # 顺序无关: 响应集合内部不一致且至少一个偏离基线即算完整性破坏
+            # (旧逻辑依赖 bodies[0], 而 _race_round 用 as_completed 乱序返回).
+            if not all_equal and bl_body and any(b != bl_body for b in bodies):
                 window.integrity_violated = True
 
         if len(responses) >= 2:

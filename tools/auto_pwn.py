@@ -126,11 +126,18 @@ class HypothesisDrivenAgent:
                         r = self.sess.post(self.target,
                                            data="""<?xml version="1.0" encoding="UTF-8"?><root><test/></root>""",
                                            timeout=self.timeout)
-                    result["success"] = r.status_code not in (403, 404, 500)
+                    result["success"] = 200 <= r.status_code < 400
                     result["detail"] = {"status": r.status_code, "cve": h.detail.get("cve")}
                 except Exception as e:
                     result["detail"] = {"error": str(e)}
                 return result
+            # 未实现的利用向量 (如 ajp_protocol / http_post) 不做误导性通用探测,
+            # 显式标注跳过原因.
+            result["detail"] = {
+                "note": "cve_vector_%s_not_implemented" % (exploit_type or "unknown"),
+                "cve": h.detail.get("cve"),
+            }
+            return result
 
         param = h.param or "id"
         try:
@@ -161,7 +168,7 @@ class HypothesisDrivenAgent:
             elif vt in ("auth_bypass", "auth-bypass"):
                 from tools.auth_bypass import check as auth
                 result = auth(self.target, self.sess, self.timeout)
-                result = enrich_generic(result, detector_type="auth")
+                result = enrich_generic(result, self.target, param, detector_type="auth")
             elif vt == "jwt":
                 from tools.jwt_detector import check as jwt
                 result = jwt(self.target, param, self.sess, self.timeout)
@@ -190,7 +197,7 @@ class HypothesisDrivenAgent:
             "timestamp": time.time(),
             "hypothesis": vt,
             "confidence": hypothesis.confidence,
-            "result": result.get("vulnerable", False),
+            "result": bool(result.get("vulnerable") or result.get("success")),
             "detail": result.get("evidence", str(result)[:100]),
         })
         if result.get("vulnerable") or result.get("success"):

@@ -67,7 +67,8 @@ def generate_ca() -> bool:
         logger.info("MITM CA generated: %s", CA_CERT)
         return True
     except subprocess.CalledProcessError as e:
-        logger.error("CA generation failed: %s", e.stderr.decode()[:200])
+        err = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr or "")
+        logger.error("CA generation failed: %s", err[:200])
         return False
 
 
@@ -104,7 +105,8 @@ def _generate_host_cert(hostname: str) -> Optional[str]:
             except Exception: pass
         return cert_path
     except subprocess.CalledProcessError as e:
-        logger.debug("Cert gen failed for %s: %s", hostname, e.stderr.decode()[:100])
+        err = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr or "")
+        logger.debug("Cert gen failed for %s: %s", hostname, err[:100])
         return None
 
 

@@ -33,7 +33,7 @@ class TestBatchRecon:
         hosts = tmp_path / "hosts.txt"
         hosts.write_text("1.2.3.4\n")
         fake_unauth = mock.Mock(return_value={
-            "scanned": 1, "vulnerable": 1,
+            "scanned": 1, "vulnerable": True, "_vulnerable_count": 1,
             "findings": [{"ip": "1.2.3.4", "port": 6379, "unauth": True, "version": "8.0"}],
             "honeypots": [],
         })
@@ -41,5 +41,6 @@ class TestBatchRecon:
             with mock.patch.object(batch_recon, "_probe_web", return_value=[]):
                 with mock.patch.object(batch_recon, "unauth_check", fake_unauth):
                     r = batch_recon.run(str(hosts), ports="6379", unauth=True)
-        assert r["unauth"]["vulnerable"] == 1
+        assert r["unauth"]["vulnerable"] is True
+        assert r["unauth"]["_vulnerable_count"] == 1
         fake_unauth.assert_called_once()

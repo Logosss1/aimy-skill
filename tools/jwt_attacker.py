@@ -23,6 +23,8 @@ from urllib.parse import urljoin
 import requests
 
 from tools.http_client import HttpClient
+from tools.jwt_common import b64url_decode, b64url_encode, parse_jwt
+from tools.jwt_common import b64url_decode as b64url_decode_impl  # canonical impl
 from tools.log_utils import get_logger
 from tools.settings import settings
 
@@ -69,26 +71,8 @@ CLAIM_MANIPULATIONS = [
 ]
 
 
-def b64url_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b'=').decode('utf-8')
-
-
-def b64url_decode(s: str) -> bytes:
-    s += '=' * (4 - len(s) % 4)
-    return base64.urlsafe_b64decode(s)
-
-
-def parse_jwt(token: str) -> Tuple[Optional[Dict], Optional[Dict], Optional[str]]:
-    try:
-        parts = token.split('.')
-        if len(parts) != 3:
-            return None, None, None
-        header = json.loads(b64url_decode(parts[0]))
-        payload = json.loads(b64url_decode(parts[1]))
-        signature = parts[2]
-        return header, payload, signature
-    except Exception:
-        return None, None, None
+# b64url_encode / b64url_decode / parse_jwt 直接从 tools.jwt_common 导入 (见顶部),
+# 无需本地副本. jwt_common 是单一真相源.
 
 
 class JWTAttacker:
@@ -116,7 +100,7 @@ class JWTAttacker:
                 token = auth_header.split("Bearer")[-1].strip()
 
             for cookie in resp.cookies.values():
-                if len(cookie) > 50 and cookie.count('.') == 2:
+                if isinstance(cookie, str) and len(cookie) > 50 and cookie.count('.') == 2:
                     token = cookie
                     break
 
@@ -234,13 +218,18 @@ class JWTAttacker:
                 "confused_alg": hs_alg,
             })
 
-        if alg.startswith("HS") and int(alg[2:]) >= 384:
-            findings.append({
-                "method": "strong_hmac",
-                "confidence": 0.30,
-                "confirmed": False,
-                "description": "Strong HMAC algorithm in use, brute-force harder",
-            })
+        if alg.startswith("HS"):
+            try:
+                hmac_bits = int(alg[2:])
+            except (ValueError, TypeError):
+                hmac_bits = 0  # 畸形 alg 头 ("HS") 不中断整个扫描
+            if hmac_bits >= 384:
+                findings.append({
+                    "method": "strong_hmac",
+                    "confidence": 0.30,
+                    "confirmed": False,
+                    "description": "Strong HMAC algorithm in use, brute-force harder",
+                })
 
         return findings
 

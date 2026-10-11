@@ -53,11 +53,14 @@ class ParamMiner:
             self._http.headers["User-Agent"] = "Mozilla/5.0"
         return self._http
 
-    def _baseline(self, url: str) -> Dict:
+    def _baseline(self, url: str, method: str = "GET") -> Dict:
         http = self._get_http()
         try:
             start = time.time()
-            r = http.get(url, timeout=self.timeout)
+            if method == "POST":
+                r = http.post(url, data={}, timeout=self.timeout)
+            else:
+                r = http.get(url, timeout=self.timeout)
             elapsed = time.time() - start
             return {"status": r.status_code, "length": len(r.text),
                     "body": r.text[:500], "time": elapsed, "url": r.url}
@@ -88,7 +91,7 @@ class ParamMiner:
                 "url": r.url,
             }
             if r.status_code != 0 and r.text:
-                if test_value in r.text[:2000]:
+                if test_value in r.text:
                     result["reflected"] = True
                     result["preview"] = r.text[:200]
                 elif len(r.text) > 10:
@@ -103,7 +106,7 @@ class ParamMiner:
                     "status": 0, "length": 0, "time": 0}
 
     def _batch_test(self, base_url: str, params: List[str], method: str) -> List[Dict]:
-        baseline = self._baseline(base_url)
+        baseline = self._baseline(base_url, method)
         results = []
         lock = threading.Lock()
         baseline_len = baseline["length"] if baseline["length"] > 0 else 1
@@ -115,7 +118,9 @@ class ParamMiner:
                 r["different"] = True
             else:
                 r["different"] = False
-            if r.get("reflected") or r.get("different") or r["status"] not in (404, 400, 0):
+            # 只有"反射"或"与基线有差异"才算发现; 之前对恒 200 的站点所有
+            # 默认参数都会被记为 found (全量误报).
+            if r.get("reflected") or r.get("different"):
                 with lock:
                     results.append(r)
             if self.delay > 0:

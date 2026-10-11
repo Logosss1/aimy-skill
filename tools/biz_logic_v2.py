@@ -1,3 +1,19 @@
+"""业务逻辑漏洞检测 v2 (模块化聚合器).
+
+不是 biz_logic_scanner.py 的替代品, 而是组合 5 个独立模块的预制套餐:
+  - deviation_oracle: 响应差异分析 (相对基线)
+  - constraint_graph: 状态机/约束图 (绕过防护)
+  - race_profiler:    竞态窗口检测 (TOCTOU)
+  - workflow_tracer:  多步工作流追踪
+  - session_matrix:   多身份矩阵 (BOLA/越权)
+
+适用场景: 需要细粒度控制或自定义 pipeline 时. 一次性扫描建议用
+biz_logic_scanner.check_biz_logic (单体更紧凑).
+
+两者 CLI 命令不同:
+  - bizlogic    -> tools.biz_logic_scanner
+  - bizlogic-v2 -> tools.biz_logic_v2
+"""
 from typing import Dict, List
 
 from tools.log_utils import get_logger

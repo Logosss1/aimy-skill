@@ -62,7 +62,7 @@ class SecondOrderVerifier:
             # High-confidence finding
     """
 
-    def __init__(self, sess: 'requests.Session' = None, timeout: float = 10.0):
+    def __init__(self, sess: Optional['requests.Session'] = None, timeout: float = 10.0):
         self.sess = sess or HttpClient()
         self.timeout = timeout
         self._lock = None
@@ -313,7 +313,6 @@ class SecondOrderVerifier:
         all_evidence = []
         post_data = kwargs.get("data")
         is_post = kwargs.get("is_post", False)
-        evidence.get("context", "html")
         method = "POST" if is_post else "GET"
         marker = "aimy_%s" % self._random_suffix(6)
 
@@ -348,7 +347,7 @@ class SecondOrderVerifier:
                 url_html = self._inject_param(url, param, html_payload)
                 data_html = None
             _, body_html, _ = self._make_request(url_html, method, data_html)
-            if body_html and re.search(r'<aimy[0-9]+>', body_html):
+            if body_html and re.search(r'<aimy_xss_[0-9]+>', body_html):
                 methods_succeeded.append("html_context")
                 all_evidence.append({"method": "html_context", "unescaped": True})
         except Exception as e:
@@ -571,9 +570,22 @@ class SecondOrderVerifier:
         method = "POST" if is_post else "GET"
 
         # Method 1: Known file content verification
+        # 负对照: 先请求一个不存在的文件. 若 LFI payload 与"不存在文件"返回同一
+        # 响应 (自定义错误页 / SPA 兜底页), 说明非空响应来自站点兜底而非文件
+        # 读取, 不记成功 —— 杜绝"任意非空 body 即 known_file"的假阳性.
         methods_tried.append("known_file")
+        control_body = None
+        control_payload = "/etc/aimy_nonexistent_%s" % self._random_suffix(6)
         try:
-            "aimy_lfi_%s" % self._random_suffix(6)
+            if is_post and post_data:
+                _, control_body, _ = self._make_request(
+                    url, method, self._inject_body(post_data, param, control_payload))
+            else:
+                _, control_body, _ = self._make_request(
+                    self._inject_param(url, param, control_payload), method, None)
+        except Exception as e:
+            logger.debug("LFI control request failed: %s", e)
+        try:
             lfi_payloads = [
                 "php://filter/convert.base64-encode/resource=/etc/hostname",
                 "....//....//....//....//etc/hostname",
@@ -587,10 +599,15 @@ class SecondOrderVerifier:
                     url_lfi = self._inject_param(url, param, payload)
                     data_lfi = None
                 _, body_lfi, _ = self._make_request(url_lfi, method, data_lfi)
-                if body_lfi and len(body_lfi.strip()) > 0:
-                    methods_succeeded.append("known_file")
-                    all_evidence.append({"method": "known_file", "content_preview": body_lfi[:100]})
-                    break
+                if not body_lfi or not body_lfi.strip():
+                    continue
+                if payload in body_lfi:
+                    continue
+                if control_body is not None and body_lfi == control_body:
+                    continue
+                methods_succeeded.append("known_file")
+                all_evidence.append({"method": "known_file", "content_preview": body_lfi[:100]})
+                break
         except Exception as e:
             logger.debug("Known file verification failed: %s", e)
 
@@ -682,14 +699,14 @@ class SecondOrderVerifier:
             for payload in payloads:
                 if is_post and post_data:
                     import json
+                    url_nosql = url
                     data_nosql = self._inject_body(post_data, param, json.dumps(payload))
                     headers = {"Content-Type": "application/json"}
                 else:
                     url_nosql = self._inject_param(url, param, str(payload))
                     data_nosql = None
                     headers = None
-                _, body_nosql, _ = self._make_request(
-                    url_nosql if not is_post else url, method, data_nosql, headers)
+                _, body_nosql, _ = self._make_request(url_nosql, method, data_nosql, headers)
                 if body_nosql and len(body_nosql) > 10:
                     methods_succeeded.append("operator_injection")
                     all_evidence.append({"method": "operator_injection", "payload": str(payload)})

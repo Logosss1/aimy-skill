@@ -102,11 +102,13 @@ def validate_sqli_with_second_order(url: str, param: str, sess, timeout: float =
         except Exception:
             continue
 
-    confirm_urls = [
-        url,
-        url + "/" + marker,
-        url.replace(param + "=", param + "=" + marker),
-    ]
+    confirm_urls = [url, url + "/" + marker]
+    # param 感知的替换: 子串替换会改写 userid= 等相似参数, marker 永远注入不到
+    # 目标参数.
+    if param + "=" in url:
+        confirm_urls.append(url.replace(param + "=", param + "=" + marker))
+    else:
+        confirm_urls.append(url + ("&" if "?" in url else "?") + param + "=" + marker)
     for confirm_url in confirm_urls:
         try:
             r = sess.get(confirm_url, timeout=timeout)

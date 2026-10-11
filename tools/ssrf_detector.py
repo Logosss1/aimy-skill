@@ -38,9 +38,6 @@ SSRF_EVIDENCE_PATTERNS = [
     r"user-data",
     r"<html><head><title>Bucket: ",
     r"ListBucketResult",
-    r"<Name>",
-    r"<Contents>",
-    r"<Key>",
     r"project-id",
     r"user-id",
 ]
@@ -135,8 +132,16 @@ def _is_local_target(url: str) -> bool:
     host = parsed.hostname or ""
     if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
         return True
-    if host.startswith("10.") or host.startswith("172.") or host.startswith("192.168."):
+    if host.startswith("10.") or host.startswith("192.168."):
         return True
+    # 172.16.0.0/12 才是内网; 172.217.x.x 等公网段不能被当作内网.
+    if host.startswith("172."):
+        try:
+            second = int(host.split(".")[1])
+            if 16 <= second <= 31:
+                return True
+        except (IndexError, ValueError):
+            pass
     return False
 
 
@@ -357,11 +362,20 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
             return result
 
     if not result["vulnerable"]:
+        # 负对照: 不可达端口 (9/discard). 若内部探针响应与对照一致, 说明是
+        # 站点通用兜底页而非内部服务可达 (修复"任意长页面即 internal_reachable").
+        control_body = None
+        try:
+            rc = sess.get(build_url(url, param, "http://127.0.0.1:9/"), timeout=timeout)
+            control_body = rc.text
+        except Exception:
+            pass
         for internal_url in INTERNAL_PROBES:
             try:
                 r = sess.get(build_url(url, param, internal_url),
                              timeout=timeout)
-                if r.status_code not in (404, 502, 503) and len(r.text) > 10:
+                if (r.status_code not in (404, 502, 503) and len(r.text) > 10
+                        and (control_body is None or r.text != control_body)):
                     result["vulnerable"] = True
                     result["type"] = "internal_reachable"
                     result["confidence"] = "medium"
@@ -400,8 +414,10 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 if oob_retry.get("vulnerable"):
                     result["vulnerable"] = True
                     result["type"] = oob_retry.get("type", "oob_callback_retry")
-                    result["confidence"] = "medium"
+                    result["confidence"] = "high"
+                    result["confirmed"] = True
                     result["evidence"] = oob_retry["evidence"]
+                    result["payload"] = oob_retry.get("payload")
                     result["oob_methods"] = oob_retry.get("oob_methods", [])
             except Exception as e:
                 logger.debug("ssrf oob retry: %s", e)

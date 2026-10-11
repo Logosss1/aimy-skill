@@ -64,8 +64,6 @@ class ConfidenceVoter:
             return 0.0
         if resp.status_code in (500, 502, 503):
             return 0.5
-        if baseline_status == 200 and resp.status_code == 200:
-            return 0.1
         return 0.3
 
     @staticmethod

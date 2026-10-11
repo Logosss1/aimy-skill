@@ -71,12 +71,16 @@ except Exception:
 
 
 def _payload_reflected_unescaped(html: str, payload: str) -> bool:
-    if not payload:
+    if not payload or payload not in html:
         return False
-    if payload not in html:
-        return False
-    escaped = payload.replace("<", "&lt;").replace(">", "&gt;")
-    return escaped not in html
+    # 含尖括号的载荷需确认未被 HTML 实体转义; 无尖括号载荷 (属性/事件处理器类,
+    # 如 '" autofocus onfocus=alert(1) x="') 原样出现即视为未转义 —— 旧逻辑在
+    # escaped == payload 时恒判"已转义", 导致 attr 上下文确认路径整体失效.
+    if "<" in payload or ">" in payload:
+        escaped = payload.replace("<", "&lt;").replace(">", "&gt;")
+        if escaped != payload and escaped in html:
+            return False
+    return True
 
 
 def _has_unescaped_trigger(html: str) -> bool:
@@ -97,6 +101,21 @@ def _is_in_html_context(html: str, marker: str, payload: str) -> bool:
     in_html_tag = '<' in before.split('>')[-1] if '>' in before else '<' in before
     if in_script and not in_html_tag:
         return False
+    return True
+
+
+def _attr_breakout_ok(payload: str, detected_ctx: str) -> bool:
+    """属性上下文要求突破字符与引号风格一致.
+
+    双引号属性里的裸单引号/事件处理器文本无法突破, 原样回显也不算 XSS;
+    属性上下文误报的主要来源 (clean_attr 类站点).
+    """
+    if detected_ctx == "attr_double":
+        return '"' in payload
+    if detected_ctx == "attr_single":
+        return "'" in payload
+    if detected_ctx == "attr_value_unquoted":
+        return any(c in payload for c in " >/`")
     return True
 
 
@@ -171,7 +190,9 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 else:
                     r = sess.get(build_url(url, param, test_payload), timeout=timeout)
 
-                if marker in r.text and _payload_reflected_unescaped(r.text, payload):
+                if (marker in r.text
+                        and _payload_reflected_unescaped(r.text, payload)
+                        and _attr_breakout_ok(payload, detected_ctx)):
                     confirmed_count += 1
                     result["vulnerable"] = True
                     result["type"] = "reflected_%s" % ctx

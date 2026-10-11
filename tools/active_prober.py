@@ -12,10 +12,14 @@ probing sends targeted requests to extract version information via:
 
 import hashlib
 import re
+import socket
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from tools.log_utils import get_logger
 from tools.settings import settings
+
+logger = get_logger("active_prober")
 
 
 @dataclass
@@ -107,7 +111,8 @@ TECH_PROBES = {
          "purpose": "MySQL handshake detection"},
     ],
     "redis": [
-        {"path": None, "banner": True, "regex": r"-ERR|NOAUTH|redis_version",
+        {"path": None, "banner": True, "send": "INFO\r\n",
+         "regex": r"-ERR|NOAUTH|redis_version",
          "purpose": "Redis server detection"},
     ],
 }
@@ -162,8 +167,8 @@ class ActiveProber:
                     if result.confidence > 0.5:
                         if tech not in results or result.confidence > results[tech].confidence:
                             results[tech] = result
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("probe %s/%s failed: %s", tech, probe.get("path"), e)
 
         for port_info in open_ports:
             port = port_info.get("port", 0)
@@ -202,6 +207,11 @@ class ActiveProber:
         except Exception:
             return ProbeResult(tech=tech, confidence=0.0)
 
+        # 404/5xx 兜底页不参与版本解析 (旧逻辑会把错误页里的 banner 串
+        # 误判成 0.85 置信版本).
+        if resp.status_code >= 400:
+            return ProbeResult(tech=tech, confidence=0.0)
+
         version = None
         evidence = ""
 
@@ -224,7 +234,7 @@ class ActiveProber:
                         method = "header"
 
         if not version and probe.get("body"):
-            m = re.search(probe["regex"], resp.text, re.IGNORECASE)
+            m = re.search(probe["body"], resp.text, re.IGNORECASE)
             if m:
                 version = m.group(1) if m.lastindex and m.group(1) else "present"
                 evidence = "body match: %s" % m.group(0)[:80]
@@ -248,7 +258,29 @@ class ActiveProber:
         for probe in probe_list:
             if not probe.get("banner"):
                 continue
-
+            try:
+                with socket.create_connection((host, port), timeout=self.timeout) as sock:
+                    sock.settimeout(self.timeout)
+                    if probe.get("send"):
+                        sock.sendall(probe["send"].encode())
+                    try:
+                        data = sock.recv(512)
+                    except socket.timeout:
+                        data = b""
+            except Exception as e:
+                logger.debug("banner %s:%d failed: %s", host, port, e)
+                continue
+            text = data.decode("utf-8", errors="replace")
+            m = re.search(probe["regex"], text, re.IGNORECASE)
+            if m:
+                version = m.group(1) if (m.lastindex and m.group(1)) else "present"
+                return ProbeResult(
+                    tech=tech, version=version,
+                    confidence=0.85 if version != "present" else 0.60,
+                    method="banner", evidence=text[:80].strip(),
+                    cve_hits=self._match_cves(tech, version),
+                    exact_match=version != "present",
+                )
         return None
 
     def _match_version_hash(self, tech: str, body_hash: str) -> Optional[str]:

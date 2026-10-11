@@ -43,8 +43,6 @@ def binary_search_sqli_blind(url: str, param: str, sess, timeout: float = 10.0,
             payload = prefix % condition
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
-                if r.status_code == 200 and len(r.text) > 50:
-                    return True
                 if r.status_code == 200:
                     return True
             except Exception:

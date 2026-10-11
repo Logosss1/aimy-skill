@@ -1,7 +1,7 @@
 import random
 import re
 import urllib.parse
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
@@ -253,11 +253,16 @@ def classify_block(resp) -> str:
     return ""
 
 
-def is_blocked(resp, threshold: int = 403) -> bool:
-    """True if the response looks like a WAF block page (status or signature)."""
+def is_blocked(resp, threshold: int = 0) -> bool:
+    """True if the response looks like a WAF block page (status or signature).
+
+    threshold > 0 时, 状态码 >= threshold 也视为被拦截 (旧逻辑参数被忽略).
+    """
     if resp is None:
         return False
     if resp.status_code in (403, 429, 406):
+        return True
+    if threshold and resp.status_code >= threshold:
         return True
     return bool(classify_block(resp))
 
@@ -334,6 +339,8 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
         "waf": fingerprint_waf(url, sess, timeout),
         "bypasses": {},
     }
+    result["vulnerable"] = bool(result["waf"].get("detected"))
+    result["type"] = "waf_detected" if result["vulnerable"] else None
 
     for vtype, payloads in BYPASS_PAYLOADS.items():
         if param:
@@ -688,7 +695,7 @@ def adaptive_bypass(url: str, param: str, payload: str,
     return {"success": False, "strategies_tried": len(strategies)}
 
 
-WAF_BYPASS_STRATEGIES: Dict[str, Dict] = {
+WAF_BYPASS_STRATEGIES: Dict[Optional[str], Dict] = {
     "cloudflare": {
         "priority": ["double_url", "inline_comment", "null_bytes", "hpp",
                       "tab_injection", "case_random", "newline_injection"],
@@ -917,7 +924,7 @@ def _indicates_injection(r, baseline) -> bool:
 
 def test_sqli_bypass(url: str, param: str, sess: requests.Session,
                      waf_name: Optional[str], timeout: float) -> Dict:
-    result = {"vulnerable": False, "bypasses": [], "best_payload": None}
+    result: Dict[str, Any] = {"vulnerable": False, "bypasses": [], "best_payload": None}
 
     baseline = None
     try:
@@ -956,7 +963,7 @@ def test_sqli_bypass(url: str, param: str, sess: requests.Session,
 
 def test_xss_bypass(url: str, param: str, sess: requests.Session,
                     timeout: float) -> Dict:
-    result = {"vulnerable": False, "bypasses": []}
+    result: Dict[str, Any] = {"vulnerable": False, "bypasses": []}
 
     for payload in XSS_BYPASS_PAYLOADS:
         try:
@@ -980,7 +987,7 @@ def test_xss_bypass(url: str, param: str, sess: requests.Session,
 
 def test_http_bypass(url: str, param: str, sess: requests.Session,
                      waf_name: Optional[str], timeout: float) -> Dict:
-    result = {"vulnerable": False, "bypasses": []}
+    result: Dict[str, Any] = {"vulnerable": False, "bypasses": []}
 
     test_payload = "' OR '1'='1"
 

@@ -1,6 +1,6 @@
 <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00FF88&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;147+Modules+%C2%B7+93+CLI+Commands">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00A67E&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;147+Modules+%C2%B7+93+CLI+Commands" alt="aimy-skill typing banner">
+    <source media="(prefers-color-scheme: light)" srcset="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00FF88&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+87+CLI+Commands">
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00A67E&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+87+CLI+Commands" alt="aimy-skill typing banner">
   </picture>
 
 <h1 align="center">🚀 aimy-skill</h1>
@@ -25,10 +25,10 @@
 <div align="center">
     <img src="https://img.shields.io/badge/version-3.7.5-00A67E?style=for-the-badge&logo=semver&logoColor=white" alt="version">
     <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="python">
-    <img src="https://img.shields.io/badge/modules-147-orange?style=for-the-badge" alt="modules">
-    <img src="https://img.shields.io/badge/skills-80%2B-8B5CF6?style=for-the-badge" alt="skills">
+    <img src="https://img.shields.io/badge/modules-149-orange?style=for-the-badge" alt="modules">
+    <img src="https://img.shields.io/badge/skills-103-8B5CF6?style=for-the-badge" alt="skills">
     <img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge" alt="license">
-    <img src="https://img.shields.io/badge/tests-663-22C55E?style=for-the-badge" alt="tests">
+    <img src="https://img.shields.io/badge/tests-2833-22C55E?style=for-the-badge" alt="tests">
     <img src="https://img.shields.io/badge/OS-Windows%20%7C%20Linux%20%7C%20macOS-64748B?style=for-the-badge" alt="os">
   </div>
 
@@ -67,30 +67,20 @@ result = checker.check(
 | 🛡️**WAF 绕过** | 14 种 WAF 指纹 · 11 编码器 · HTTP 协议绕过                                                            |
 | ✅**验证**       | **5+ payload 交叉验证** · Oracle 验证 · 误报过滤 · 鲁棒验证                                    |
 
+
 ## ✨ 联系方式
 
-推特：https://x.com/Fakerrf5
-飞机：https://t.me/Prohao42
+- **X (Twitter)**：[@Fakerrf5](https://x.com/Fakerrf5)
+- **Telegram**：[@Prohao42](https://t.me/Prohao42)
+- **抖音**：[炸炸酥~](https://www.douyin.com/user/MS4wLjABAAAAfgxDFsrK3Fgf_PnJRcPeFdjjKnqtLNTR_q4KKKZKHyGlzYz8T3mZf3V4qax05lFb)
+- **知识星球**：[@炸炸酥](https://t.zsxq.com/FGUeq)
+  ![图片](https://yangdada873.ggff.net/file/1790961984947_7e6b8fe85a9a6c7c6040b281f049902d.jpg)
+- 更多渗透技能的闭源skill，在知识星球、渗透教程和更多的渗透技能知识点。
+- **微信公众号**:[炸炸酥渗透测试](https://yangdada873.ggff.net/file/1790961747832_扫码_搜索联合传播样式-标准色版.png)
+  ![图片](https://yangdada873.ggff.net/file/1790961747832_扫码_搜索联合传播样式-标准色版.png)
+  - 可以远程部署，技术支持。公众号有博主微信号。
 
-抖音：https://www.douyin.com/user/self?from_tab_name=main&showSubTab=video&showTab=post
-
-知识星球：https://t.zsxq.com/FGUeq
-
-知识星球有更强版本，更多渗透技能的skill
-
-### 🚀 三行命令，从零到报告
-
-```bash
-# 全自动渗透（爬虫 → 检测 → 武器化 → 报告）
-python main.py auto -u http://target.com
-
-# 带认证的深度扫描
-python main.py deepscan -u http://target.com/admin \
-  --auth-type form --auth-user admin --auth-pass secret
-
-# 单点快速检测
-python main.py sqlcheck -u "http://target.com/page?id=1"
-```
+### 🚀 AI智能体聊天，从零到报告
 
 ---
 
@@ -98,29 +88,19 @@ python main.py sqlcheck -u "http://target.com/page?id=1"
 
 ### 1️⃣ 安装
 
-```bash
-pip install -r requirements.txt
-playwright install chromium        # 可选：SPA 爬虫 & XSS 浏览器验证
-```
+让AI智能体给你安装技能
 
 ### 2️⃣ 安装 AI Agent 提示词
 
 ```bash
-# 80+ Attack Skill，即插即用
+# 103 Attack Skill，即插即用
 https://github.com/Prohao42/aimy-skill  完整安装项目
 ```
 
 ### 3️⃣ 跑一个全自动扫描
 
 ```bash
-python main.py auto -u http://target.com
-```
-
-### 4️⃣ 极速模式（跳过验证层）
-
-```bash
-# 跳过所有验证层，极速扫描
-python main.py auto -u http://target.com --skip-verify
+目标网络地址   信息收集 （输入到AI智能体中）
 ```
 
 ### 环境要求
@@ -227,8 +207,8 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
 
 | 模式                    | 适用场景                      | 输出特点                                                                                                                                                                          |
 | ----------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **rookie** (默认) | 入门学习、首次审计、详细报告  | - 为每个漏洞添加详细解释和修复建议<br>- 不过滤低信号漏洞，全部展示<br>- 启动时显示 "aimy-skill 菜鸟模式 (Rookie)" Banner                                                          |
-| **veteran**       | 专业渗透测试、快速报告、CI/CD | - 自动过滤低风险漏洞（XSS反射、Open Redirect、信息泄露）<br>- 省略冗余解释，仅保留高价值发现<br>- 启动时显示 "aimy-skill 老鸟模式 (Veteran)" Banner<br>- 输出更精简，聚焦核心风险 |
+| **rookie** (默认) | 入门学习、首次审计、详细报告  | - 为每个漏洞添加详细解释和修复建议- 不过滤低信号漏洞，全部展示- 启动时显示 "aimy-skill 菜鸟模式 (Rookie)" Banner                                                          |
+| **veteran**       | 专业渗透测试、快速报告、CI/CD | - 自动过滤低风险漏洞（XSS反射、Open Redirect、信息泄露）- 省略冗余解释，仅保留高价值发现- 启动时显示 "aimy-skill 老鸟模式 (Veteran)" Banner- 输出更精简，聚焦核心风险 |
 
 **切换方式**：
 
@@ -259,13 +239,13 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
 ## 🏗 架构
 
 ```
-                    ┌──────────────┐
+┌──────────────┐
                     │   AI Agent   │   ← Claude Code / AutoGPT / Cursor
-                    │  (ai-mian/)  │   ← 80+ Attack Skill 文件
+                    │  (ai-mian/)  │   ← 103 Attack Skill 文件
                     └──────┬───────┘
                            │
                     ┌──────▼───────┐
-                    │   CLI 入口    │   ← 35+ 命令 · argparse
+                    │   CLI 入口    │   ← 87 命令 · 数据驱动分发
                     │  (main.py)   │
                     └──────┬───────┘
                            │
@@ -339,8 +319,8 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
 
 | 角色                      | 价值                                       |
 | ------------------------- | ------------------------------------------ |
-| **渗透测试工程师**  | 35+ 命令覆盖全攻击链，自动化报告           |
-| **AI Agent 开发者** | 统一接口 + JSON 输出 + 80+ Skill，即插即用 |
+| **渗透测试工程师**  | 87 命令覆盖全攻击链，自动化报告           |
+| **AI Agent 开发者** | 统一接口 + JSON 输出 + 103 Skill，即插即用 |
 | **安全研究员**      | 深度武器化模块 + WAF 绕过引擎              |
 | **CTF 选手**        | 全链路工具包，快速验证漏洞                 |
 | **企业安全团队**    | 自动化流水线 + 持续集成                    |
@@ -358,14 +338,14 @@ pytest --cov=tools        # 覆盖率报告
 
 ## 🌐 项目宣传网站
 
-https://aimy-skill.netlify.app/
+https://aimy-skill.netlify.app/   项目官网
 
 ---
 
 ## ⚖️ 法律声明
 
 > **⚠️ 重要提醒**
->
+> 
 > 本工具仅限 **已获得明确授权** 的环境中进行安全测试、CTF 竞赛或漏洞研究使用。未经授权使用可能违反法律法规。**使用者自行承担所有责任。**
 
 ---
@@ -376,3 +356,4 @@ https://aimy-skill.netlify.app/
     <a href="https://github.com/Prohao42/aimy-skill">GitHub</a>
   </sub>
 </div>
+

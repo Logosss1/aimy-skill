@@ -42,6 +42,20 @@ def _measure_baseline(url, param, sess, timeout):
     return statistics.median(samples) if len(samples) >= 3 else sum(samples) / len(samples)
 
 
+def _is_reflected(text: str, payload: str) -> bool:
+    """True if the payload is echoed back verbatim (or url-encoded).
+
+    An indicator match is only meaningful when the payload itself is NOT
+    reflected: endpoints that echo the input make a plain substrings like
+    ``config`` (from ``{{config}}``) appear in the response, which previously
+    produced false positives on non-template endpoints (e.g. /clean_sqli).
+    """
+    if payload in text:
+        return True
+    from urllib.parse import quote
+    return quote(payload, safe="") in text
+
+
 def check(url: str, param: str, sess: Optional[requests.Session] = None,
           timeout: float = 10.0, waf_name: Optional[str] = None) -> dict:
     if sess is None:
@@ -61,7 +75,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         indicator = entry["indicator"]
         try:
             r = sess.get(build_url(url, param, payload), timeout=timeout)
-            if indicator in r.text:
+            if indicator in r.text and not _is_reflected(r.text, payload):
                 detect_hits += 1
                 result["evidence"].append("ssti: %s => %s" % (payload[:25], indicator))
                 result["payload"] = payload
@@ -85,7 +99,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         for payload, indicator, engine_hint in alt_pairs:
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
-                if indicator in r.text:
+                if indicator in r.text and not _is_reflected(r.text, payload):
                     detect_hits += 1
                     result["evidence"].append("ssti: %s => %s (engine=%s)" % (payload[:25], indicator, engine_hint))
                     result["payload"] = payload
@@ -103,23 +117,25 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         result["vulnerable"] = True
 
     if not result["vulnerable"]:
-        true_payloads = [
-            "{{'a'.startswith('a')}}",
-            "${'a'.startsWith('a')}",
-            "#{7==7}",
-        ]
-        false_payloads = [
-            "{{'a'.startswith('b')}}",
-            "${'a'.startsWith('b')}",
-            "#{7==8}",
-        ]
+        # Boolean-blind: the TRUE and FALSE conditions must produce a
+        # *different evaluated output*.  Payload pairs are chosen so a real
+        # evaluation changes the response LENGTH markedly (20 chars vs 1),
+        # whereas plain reflection only changes length by the tiny difference
+        # between the payload strings (10 chars vs 9).  Requiring a real
+        # length delta rejects echo endpoints, which previously produced a
+        # false positive (e.g. /clean_sqli echoes the input verbatim, so
+        # true/false responses differed in content but not in length).
+        true_payloads = ["{{'a'*20}}", "${'a'.repeat(20)}", "#{'a'.repeat(20)}"]
+        false_payloads = ["{{'a'*1}}", "${'a'.repeat(1)}", "#{'a'.repeat(1)}"]
         for tp, fp in zip(true_payloads, false_payloads):
             try:
                 r_true = sess.get(build_url(url, param, tp), timeout=timeout)
                 r_false = sess.get(build_url(url, param, fp), timeout=timeout)
-                if r_true.text != r_false.text and len(r_true.text) > 50:
+                len_delta = abs(len(r_true.text) - len(r_false.text))
+                if len_delta >= 8 and len(r_true.text) > 50:
                     result["vulnerable"] = True
-                    result["evidence"].append("ssti: boolean blind (true!=false)")
+                    result["evidence"].append(
+                        "ssti: boolean blind (len delta=%d)" % len_delta)
                     result["payload"] = tp
                     result["engine"] = "detected_boolean"
                     voter.add_vote("boolean_blind", 0.6)
@@ -162,7 +178,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
             indicator = entry["indicator"]
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
-                if indicator in r.text:
+                if indicator in r.text and not _is_reflected(r.text, payload):
                     result["rce_available"] = True
                     result["evidence"].append("ssti rce: %s" % payload[:30])
                     voter.add_vote("rce_available", 0.5)

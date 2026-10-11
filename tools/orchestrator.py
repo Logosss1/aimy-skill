@@ -2,16 +2,18 @@ import concurrent.futures
 import json
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import requests
 
 from tools.log_utils import get_logger
+from tools.session import build_session
 
 logger = get_logger("orchestrator")
 
 # Security tools ( kept for backward compatibility )
-from tools import auth_bypass, crawler, jwt_exploiter, param_miner, sqli_weaponizer, waf_bypass
+from tools import auth_bypass, crawler, param_miner, waf_bypass
 from tools.adaptive_fuzzer import AdaptiveFuzzer
 from tools.adaptive_payload import suggest_additional_tests
 from tools.attack_graph import build_attack_graph
@@ -21,14 +23,25 @@ from tools.context_memory import get_memory
 from tools.cross_validator import run_cross_validation
 from tools.dual_session import DualSessionManager
 from tools.oob_server import OOBServer
+from tools.orchestrator_engine import test_runner, weaponizer
 from tools.orchestrator_engine.helpers import (
     ALL_DETECTOR_NAMES,
     ALL_DETECTORS,
     DETECTOR_RISK_ORDER,
     HIGH_VALUE_DETECTORS,
     LOW_VALUE_DETECTORS,
-    _run_detector_by_name,
 )
+
+__all__ = [
+    "Orchestrator",
+    "ALL_DETECTORS",
+    "ALL_DETECTOR_NAMES",
+    "DETECTOR_RISK_ORDER",
+    "HIGH_VALUE_DETECTORS",
+    "LOW_VALUE_DETECTORS",
+    "SKIP_PARAMS",
+    "SIGNATURE_PLACEHOLDER",
+]
 from tools.orchestrator_engine.recon.recon_engine import (
     check_git_leak,
     enum_subdomains,
@@ -47,16 +60,22 @@ from tools.ssrf_chain import chain_ssrf as ssrf_chain_attack
 from tools.type_confusion import TypeConfusionDetector
 from tools.verification_oracle import VerificationOracle
 from tools.version_fingerprint import fingerprint_target
-from tools.vuln_context import ContextMemory as VulnContextMemory
+from tools.vuln_context import VulnContextStore as VulnContextMemory
 
-# 构建测试点时跳过的表单类参数 (无注入意义)
+# 构建测试点时跳过的表单类参数 (无注入意义).
+# 注意: 不要加入 "file" —— 它是最常见的 LFI / 任意文件读取 / 文件上传参数名
+# (?file=../../etc/passwd), 跳过它会让 orchestrator 永远测不到这类端点的注入.
 SKIP_PARAMS = {
-    "submit", "button", "reset", "image", "file", "action",
+    "submit", "button", "reset", "image", "action",
     "_method", "_token", "utf8", "commit", "form_id", "form_build_id",
     "form_token", "authenticity_token",
 }
 # 无参数 URL 的占位参数名 (仅作为调度键，不会真正注入)
 SIGNATURE_PLACEHOLDER = "__placeholder__"
+
+# phase_pivot 调度表: pivot phase 名 -> handler 方法
+# handler 签名: (self, vuln_list, chain, pivot_results) -> set[str]
+_PIVOT_HANDLERS: Dict[str, Any] = {}
 
 
 class Orchestrator:
@@ -66,13 +85,25 @@ class Orchestrator:
                  high_priv_sess: Optional['requests.Session'] = None,
                  fast_recon: bool = True, time_budget: Optional[float] = None,
                  high_value: bool = False, turbo: bool = False,
-                 skip_verify: bool = False, opsec: bool = False):
+                 skip_verify: bool = False, opsec: bool = False,
+                 endpoints: Optional[List[str]] = None):
+        # endpoints: 用户/agent 提供的额外种子端点 (URL 或 "URL PARAM").
+        # 让 agent 把 Burp / 手工浏览发现的端点喂进流水线, 不再纯靠 crawl.
+        self.seed_endpoints = list(endpoints or [])
         self.target = target.rstrip("/")
+        # base_target: 去掉 query 的版本, 专供路径拼接 (self.target + "/path").
+        # 若用带 query 的 self.target 拼接, `.../page?id=1` + "/x" 会得到
+        # 畸形 URL `.../page?id=1/x`, 污染测试点与结果.
+        _parsed = urlparse(self.target)
+        self.base_target = "%s://%s%s" % (
+            _parsed.scheme, _parsed.netloc, _parsed.path,
+        ) or self.target
         self.timeout = timeout
+        # self.sess 必须非空: 检测/验证/武器化各层直接复用, 不再各自兜底 None.
+        self.sess: 'requests.Session' = sess if sess is not None else build_session()
         if opsec:
             from tools.opsec_session import opsec_session
-            sess = opsec_session(sess)
-        self.sess = sess
+            self.sess = opsec_session(self.sess)
         self.high_priv_sess = high_priv_sess
         self.threads = threads if not turbo else min(threads * 3, 60)
         self.max_pages = max_pages if not turbo else min(max_pages * 2, 100)
@@ -83,7 +114,7 @@ class Orchestrator:
         self.high_value = high_value
         self.skip_verify = skip_verify
         self._start_time = time.time()
-        self.state = {
+        self.state: Dict[str, Any] = {
             "phases": {},
             "vulnerabilities": [],
             "exploits": [],
@@ -108,7 +139,7 @@ class Orchestrator:
 
         # New enhanced systems
         self.context_memory = get_memory()
-        self.verifier = SecondOrderVerifier(sess, timeout)
+        self.verifier = SecondOrderVerifier(self.sess, timeout)
         self.vuln_ctx = VulnContextMemory()
         from tools.evasion_engine import EvasionEngine
         self.evasion = EvasionEngine()
@@ -187,7 +218,7 @@ class Orchestrator:
             logger.debug("save findings: %s", e)
 
     def phase_recon(self) -> Dict:
-        print("[Recon] Phase 1/7: Reconnaissance ...")
+        print("[Recon] Phase 1/9: Reconnaissance ...")
         recon = {"target": self.target}
 
         print("  [Recon] Technology fingerprint ...")
@@ -332,7 +363,7 @@ class Orchestrator:
         return plan
 
     def phase_reason(self) -> List[Dict]:
-        print("[Reason] Phase 1b/7: Hypothesis-driven reasoning ...")
+        print("[Reason] Phase 1b/9: Hypothesis-driven reasoning ...")
         recon = self.state["phases"].get("recon", {})
         plan = self.attack_plan or {}
         crawl_data = self.state["phases"].get("crawl", {})
@@ -436,7 +467,7 @@ class Orchestrator:
                 if d in ALL_DETECTOR_NAMES:
                     mapped.append(d)
                 elif d == "sql_injection":
-                    mapped.append("sql_injection")
+                    mapped.append("sqlcheck")
             recommended = mapped
         if not recommended:
             recommended = list(ALL_DETECTOR_NAMES)
@@ -466,8 +497,17 @@ class Orchestrator:
                 for p in path_data.get("all_params", []):
                     all_params.add(p)
 
+        # Seed from the target URL's own query string.  The most common
+        # invocation is `auto http://target/page?id=1`; without this the
+        # orchestrator produced ZERO test points because crawl finds no
+        # links and dirfuzz has no real paths.  A human/agent pointing the
+        # tool at a known parameterized URL must get that param tested.
+        points.extend(self._seed_points_from_target(seen))
+        # Seed from a user/agent-supplied endpoints list (--endpoints FILE).
+        points.extend(self._seed_points_from_endpoints(seen))
+
         for path, info in crawl_data.get("endpoints", {}).items():
-            url = info.get("url", "%s%s" % (self.target, path))
+            url = info.get("url", "%s%s" % (self.base_target, path))
             for p in set(info.get("params", []) + list(all_params)[:5]):
                 if p.lower() in SKIP_PARAMS:
                     continue
@@ -479,7 +519,7 @@ class Orchestrator:
         for path, pd in mine_data.items():
             if not isinstance(pd, dict):
                 continue
-            url = "%s%s" % (self.target, path)
+            url = "%s%s" % (self.base_target, path)
             get_mined = set()
             post_mined = set()
             for p in pd.get("get_params", []):
@@ -506,7 +546,7 @@ class Orchestrator:
 
         dirs = self.state.get("phases", {}).get("recon", {}).get("directories", {}).get("interesting", [])
         for d in dirs[:20]:
-            full_url = self.target.rstrip("/") + d["path"]
+            full_url = self.base_target.rstrip("/") + d["path"]
             key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
             if key not in seen:
                 seen.add(key)
@@ -514,7 +554,7 @@ class Orchestrator:
 
         js_apis = crawl_data.get("js_api_endpoints", [])
         for api_path in js_apis:
-            full_url = api_path if api_path.startswith("http") else "%s%s" % (self.target, api_path)
+            full_url = api_path if api_path.startswith("http") else "%s%s" % (self.base_target, api_path)
             key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
             if key not in seen:
                 seen.add(key)
@@ -530,7 +570,7 @@ class Orchestrator:
             for ph in plan.get("phases", []):
                 if ph.get("phase") == "tech_specific":
                     for mod in ph.get("priority_modules", []):
-                        full_url = self.target.rstrip("/") + mod
+                        full_url = self.base_target.rstrip("/") + mod
                         key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
                         if key not in seen:
                             seen.add(key)
@@ -554,7 +594,7 @@ class Orchestrator:
                 seen_url_params.add(key)
                 groups = fuzzer.all_groups(
                     param_name=p["param"],
-                    url_path=p["url"].replace(self.target, ""),
+                    url_path=p["url"].replace(self.base_target, ""),
                 )
                 p["_payload_groups"] = [
                     {"vuln_type": g.vuln_type, "confidence": g.confidence, "count": len(g.payloads)}
@@ -565,6 +605,71 @@ class Orchestrator:
 
         limit = 500 if self.turbo else 300
         return points[:limit]
+
+    def _seed_points_from_target(self, seen: set) -> List[Dict]:
+        """从种子 URL 自身的查询参数生成测试点.
+
+        `auto http://target/page?id=1` 是最自然的用法, 但 crawl 找不到链接、
+        dirfuzz 又没有真实路径时, 旧实现会产出 0 个测试点, 完全忽略 URL 里
+        已经写明的 `id` 参数. 本方法把种子 URL 的 query 参数直接纳入测试.
+        """
+
+        return self._seed_points_from_url(self.target, seen, "from_seed")
+
+    def _seed_points_from_url(self, url: str, seen: set, marker: str) -> List[Dict]:
+        """把 URL 的 query 参数转成测试点."""
+        from urllib.parse import parse_qs
+
+        parsed = urlparse(url)
+        if not parsed.query:
+            return []
+        base_url = "%s://%s%s" % (parsed.scheme, parsed.netloc, parsed.path)
+        seeded = []
+        for param in parse_qs(parsed.query, keep_blank_values=True).keys():
+            if param.lower() in SKIP_PARAMS:
+                continue
+            key = "%s|%s|GET" % (base_url, param)
+            if key in seen:
+                continue
+            seen.add(key)
+            seeded.append({
+                "url": base_url, "param": param, "method": "GET",
+                marker: True, "_score": 1.0,
+            })
+        return seeded
+
+    def _seed_points_from_endpoints(self, seen: set) -> List[Dict]:
+        """从 `--endpoints` 列表生成测试点.
+
+        每行格式:
+          - `URL`               -> 该 URL 的所有 query 参数各建一个测试点
+          - `URL PARAM`         -> 指定参数 (URL 可含 query)
+          - `# ...` / 空行      -> 跳过
+        """
+        points = []
+        for raw in self.seed_endpoints:
+            line = (raw or "").strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                url, param = parts[0], parts[1].strip()
+                if not url.startswith(("http://", "https://")):
+                    continue
+                base = url.split("?")[0]
+                if param.lower() in SKIP_PARAMS:
+                    continue
+                key = "%s|%s|GET" % (base, param)
+                if key in seen:
+                    continue
+                seen.add(key)
+                points.append({
+                    "url": base, "param": param, "method": "GET",
+                    "from_endpoints": True, "_score": 1.0,
+                })
+            else:
+                points.extend(self._seed_points_from_url(parts[0], seen, "from_endpoints"))
+        return points
 
     def _budget_remaining(self) -> float:
         return self.time_budget - (time.time() - self._start_time)
@@ -591,15 +696,10 @@ class Orchestrator:
             return None
 
         from tools.chain_engine import ChainEngine
+        from tools.orchestrator_engine.chains import by_vtype
         chain = ChainEngine(self.sess, self.timeout)
 
-        vtype_to_chain = {
-            "ssrf": ("ssrf_to_rce", chain.chain_ssrf_to_rce),
-            "lfi": ("lfi_to_rce", chain.chain_lfi_to_rce),
-            "sqli": ("sqli_to_rce", chain.chain_sqli_to_rce),
-            "xss": ("xss_to_hijack", chain.chain_xss_to_hijack),
-            "deser": ("deser_to_rce", chain.chain_deser_to_rce),
-        }
+        vtype_to_chain = by_vtype(chain)
 
         if vtype in vtype_to_chain and self._budget_ok(10):
             cname, cfn = vtype_to_chain[vtype]
@@ -623,40 +723,12 @@ class Orchestrator:
                        waf_name: str, oob: dict, first_result: dict,
                        post_data: Optional[dict] = None,
                        method: str = "GET") -> dict:
-        """独立复验：换一个随机编码表示重新触发检测器 + oracle 独立确认。
-
-        与首轮检测不同，复验使用独立的 payload 表示（WAF 编码策略），
-        只有当信号在不同表示下可复现且通过 oracle 验证才计入 cross_verified。
-        修复原实现：同参数跑两遍不算交叉验证，且 confirmed 恒为 True。
-        """
-        from tools.payload_mutator import encode_payload
-
-        cross = []
-        payload = first_result.get("result", {}).get("payload") or param
-        encoders = ["url", "double_url", "b64", "hex", "unicode"]
-        variant = encode_payload(payload, encoders[hash((vtype, url, param)) % len(encoders)])
-
-        # 一次独立重跑 + oracle 确认，最多 2 轮 (原始 + 复验)
-        for attempt in (variant, None):
-            if attempt is None and cross:
-                break
-            try:
-                r2 = _run_detector_by_name(
-                    vtype, url, param, self.sess, self.timeout, waf_name, oob,
-                    post_data=post_data, method=method,
-                )
-                if isinstance(r2, dict) and not r2.get("error") and r2.get("vulnerable"):
-                    cv = self.oracle.verify(vtype, r2, url, param, self.sess, self.timeout)
-                    if cv.get("verified") is not False:
-                        cross.append(vtype)
-                        break
-            except Exception as e:
-                logger.debug("cross_verify %s: %s", vtype, e)
-
-        first_result["cross_verified"] = cross
-        first_result["cross_count"] = len(cross)
-        first_result["confirmed"] = len(cross) >= 1
-        return first_result
+        """独立复验: 委托给 test_runner.cross_verify (薄包装, 保留向后兼容)."""
+        return test_runner.cross_verify(
+            vtype, url, param, waf_name, oob, first_result,
+            oracle=self.oracle, sess=self.sess, timeout=self.timeout,
+            post_data=post_data, method=method,
+        )
 
     def _backtrack_loop_closure(self, chain_result: dict, finding: dict) -> None:
         """Feed chain output back into new attack surface.
@@ -697,18 +769,10 @@ class Orchestrator:
                       waf_name: Optional[str], oob: dict,
                       effective_timeout: float, post_data: Optional[dict] = None,
                       method: str = "GET") -> Optional[Dict]:
-        waf_name = waf_name or ""
-        if vtype not in ALL_DETECTOR_NAMES and vtype not in ALL_DETECTORS:
-            return None
-        try:
-            r = _run_detector_by_name(vtype, url, param, self.sess, effective_timeout,
-                                      waf_name, oob, post_data=post_data, method=method)
-            if isinstance(r, dict):
-                r["_vtype"] = vtype
-                return r
-        except Exception as e:
-            logger.debug("detect %s on %s?%s: %s", vtype, url, param, e)
-        return None
+        return test_runner.run_detector(
+            vtype, url, param, self.sess, waf_name, oob,
+            effective_timeout, post_data=post_data, method=method,
+        )
 
     def _test_single_point(self, point: Dict, active_detectors: List[str],
                            waf_name: Optional[str] = None,
@@ -724,15 +788,12 @@ class Orchestrator:
         method = point.get("method", "GET")
         oob = {"oob_url": oob_url, "oob_domain": oob_domain}
         results = []
-        found_critical = False
 
         effective_timeout = max(self.timeout * 0.7, 3.0) if self.turbo else self.timeout
 
         eligible = []
         for vtype in active_detectors:
             if vtype in self._detectors_disabled:
-                continue
-            if found_critical and vtype in LOW_VALUE_DETECTORS:
                 continue
             time_sensitive = {"sqli", "cmdi", "nosqli", "ssti"}
             timeout_needed = 8 if self.turbo else 10
@@ -788,8 +849,7 @@ class Orchestrator:
                                        post_data=post_data, method=method)
                 vuln = r.get("confirmed", vuln)
             if vuln:
-                if vtype in ("sql_injection", "cmdi", "ssrf", "deser"):
-                    found_critical = True
+                if vtype in ("sqlcheck", "sql_injection", "cmdi", "ssrf", "deser"):
                     if self._fast_mode:
                         self._detectors_disabled.update(LOW_VALUE_DETECTORS)
 
@@ -798,7 +858,7 @@ class Orchestrator:
                     verified["verified"] = True
                     oracle_confidence = native_confidence
                 else:
-                    verified = self.oracle.verify(vtype, r, url, param, self.sess, self.timeout)
+                    verified = self.oracle.verify(vtype, r, url, param, self.sess or build_session(), self.timeout)
                     oracle_confidence = verified.get("confidence_score", 0.0)
 
                 if verified.get("verified") is not False:
@@ -1012,16 +1072,7 @@ class Orchestrator:
         active = self._select_detectors()
         print("  -> Active detectors (%d): %s" % (len(active), ", ".join(active)))
 
-        cached_waf = self.context_memory.get("waf")
-        if cached_waf:
-            waf_info = {"name": cached_waf}
-            print("  [WAF] %s detected (cached)" % cached_waf)
-        else:
-            waf_info = waf_bypass.fingerprint_waf(self.target, self.sess, self.timeout)
-            waf_name_val = waf_info.get("name")
-            if waf_name_val:
-                self.context_memory.set("waf", waf_name_val, "waf_bypass", 0.90)
-                print("  [WAF] %s detected - using bypass strategies" % waf_name_val)
+        waf_info = self._fingerprint_waf_cached()
         waf_name = waf_info.get("name")
         self.state["waf"] = waf_info
 
@@ -1038,7 +1089,41 @@ class Orchestrator:
         if profiled:
             print("  -> %d endpoints profiled for anomaly detection" % profiled)
 
-        all_findings = {}
+        all_findings = self._phase_detect_scan(
+            points, active, waf_name, budget_pct, cb_id, oob_url, oob_domain,
+        )
+        self._phase_detect_semantic(all_findings)
+        self._phase_detect_second_order(all_findings)
+        self._phase_detect_type_confusion(points, all_findings)
+
+        self.state["ai_prepared"] = {
+            "waf": waf_info.get("name", ""),
+            "technologies": [t["name"] for t in recon.get("technologies", {}).get("technologies", [])],
+            "debug_endpoints": self.vuln_ctx.get().debug_endpoints,
+        }
+
+        self._phase_detect_bayes(active)
+        return all_findings
+
+    def _fingerprint_waf_cached(self) -> Dict:
+        """WAF 指纹 (带 context_memory 缓存)."""
+        cached_waf = self.context_memory.get("waf")
+        if cached_waf:
+            print("  [WAF] %s detected (cached)" % cached_waf)
+            return {"name": cached_waf}
+        waf_info = waf_bypass.fingerprint_waf(self.target, self.sess, self.timeout)
+        waf_name_val = waf_info.get("name")
+        if waf_name_val:
+            self.context_memory.set("waf", waf_name_val, "waf_bypass", 0.90)
+            print("  [WAF] %s detected - using bypass strategies" % waf_name_val)
+        return waf_info
+
+    def _phase_detect_scan(self, points: List[Dict], active: List[str],
+                           waf_name: Optional[str], budget_pct: float,
+                           cb_id: str, oob_url: Optional[str],
+                           oob_domain: Optional[str]) -> Dict:
+        """并行跑所有检测点 + 收集 OOB 回调 + 落盘."""
+        all_findings: Dict[str, Dict] = {}
         self._lock = threading.Lock()
         done = [0]
         total = len(points)
@@ -1098,13 +1183,17 @@ class Orchestrator:
         self._save_findings(all_findings)
         self._save_phase("detect")
         self._run_kali_recon()
+        return all_findings
 
+    def _phase_detect_semantic(self, all_findings: Dict) -> None:
+        """响应结构分析: 检测异常结构与错误信号."""
         print("  [Semantic] Response structure analysis ...")
         sem_count = 0
         try:
             baseline_resp = self.sess.get(self.target, timeout=self.timeout)
-            baseline_sig = analyze_single_response(baseline_resp.text, baseline_resp.status_code,
-                                                     baseline_resp.headers.get("content-type", ""))
+            baseline_sig = analyze_single_response(
+                baseline_resp.text, baseline_resp.status_code,
+                baseline_resp.headers.get("content-type", ""))
         except Exception:
             baseline_sig = None
 
@@ -1126,7 +1215,8 @@ class Orchestrator:
         if sem_count:
             print("    -> %d findings with anomalous response structure" % sem_count)
 
-        # Second-order verification for high-confidence findings
+    def _phase_detect_second_order(self, all_findings: Dict) -> None:
+        """对高置信 finding 做二阶交叉验证."""
         print("  [Verify] Second-order cross-validation ...")
         verified_count = 0
         for key, finding in list(all_findings.items()):
@@ -1144,17 +1234,19 @@ class Orchestrator:
                     finding["verification_confidence"] = vresult.get("confidence", 0)
                     finding["verification_methods"] = vresult.get("methods_succeeded", [])
                     verified_count += 1
-                    # Update attack graph
                     if self.attack_graph:
                         node_id = "%s_found" % vtype
                         if node_id in self.attack_graph.nodes:
-                            self.attack_graph.integrate_evidence(node_id, True, vresult.get("confidence", 0.8))
+                            self.attack_graph.integrate_evidence(
+                                node_id, True, vresult.get("confidence", 0.8))
             except Exception as e:
                 logger.debug("Second-order verification failed: %s", e)
 
         if verified_count:
             print("    -> %d findings cross-verified" % verified_count)
 
+    def _phase_detect_type_confusion(self, points: List[Dict], all_findings: Dict) -> None:
+        """类型混淆 + TOCTOU 竞态检测."""
         print("  [TypeConfusion] Type confusion & TOCTOU detection ...")
         tc_detector = TypeConfusionDetector(self.sess, self.timeout)
         tc_count = 0
@@ -1162,10 +1254,9 @@ class Orchestrator:
             if not self._budget_ok(2):
                 break
             try:
-                tc_results = tc_detector.detect(
+                for tc in tc_detector.detect(
                     point["url"], point["param"], point.get("method", "GET")
-                )
-                for tc in tc_results:
+                ):
                     if tc.success or tc.error_leak:
                         key = "type_confusion|%s|%s" % (point["url"], point["param"])
                         all_findings[key] = {
@@ -1186,10 +1277,9 @@ class Orchestrator:
                         }
                         tc_count += 1
 
-                toctou_results = tc_detector.detect_toctou(
+                for toctou in tc_detector.detect_toctou(
                     point["url"], point["param"], point.get("method", "GET")
-                )
-                for toctou in toctou_results:
+                ):
                     if toctou.success:
                         key = "race_condition|%s|%s" % (point["url"], point["param"])
                         if key not in all_findings:
@@ -1209,28 +1299,23 @@ class Orchestrator:
         if tc_count:
             print("    -> %d type confusion / TOCTOU findings" % tc_count)
 
-        self.state["ai_prepared"] = {
-            "waf": waf_info.get("name", ""),
-            "technologies": [t["name"] for t in recon.get("technologies", {}).get("technologies", [])],
-            "debug_endpoints": self.vuln_ctx.get().debug_endpoints,
-        }
-
-        if self._backtrack_findings:
-            print("  [Bayes] Updating hypotheses with %d findings ..." % len(self._backtrack_findings))
-            evidence_map = {}
-            for f in self._backtrack_findings:
-                vt = f.get("type", "").lower()
-                evidence_map[vt] = f.get("result", f)
-            if self.last_hypotheses:
-                self.last_hypotheses = self.reasoner.update_with_evidence(
-                    self.last_hypotheses, evidence_map)
-                revised = self.reasoner.suggest_detectors(self.last_hypotheses)
-                new_detectors = [d for d in revised if d not in active]
-                if new_detectors:
-                    print("    -> Revised detector priority: first %d remain, added %s" % (
-                        len(active), new_detectors[:3]))
-
-        return all_findings
+    def _phase_detect_bayes(self, active: List[str]) -> None:
+        """用本轮 findings 更新贝叶斯假设, 输出修正后的 detector 优先级."""
+        if not self._backtrack_findings:
+            return
+        print("  [Bayes] Updating hypotheses with %d findings ..." % len(self._backtrack_findings))
+        evidence_map = {}
+        for f in self._backtrack_findings:
+            vt = f.get("type", "").lower()
+            evidence_map[vt] = f.get("result", f)
+        if self.last_hypotheses:
+            self.last_hypotheses = self.reasoner.update_with_evidence(
+                self.last_hypotheses, evidence_map)
+            revised = self.reasoner.suggest_detectors(self.last_hypotheses)
+            new_detectors = [d for d in revised if d not in active]
+            if new_detectors:
+                print("    -> Revised detector priority: first %d remain, added %s" % (
+                    len(active), new_detectors[:3]))
 
     def phase_ai_hunt(self) -> Dict:
         print("  [Intel] Gathering deep response intelligence ...")
@@ -1272,165 +1357,184 @@ class Orchestrator:
     def phase_pivot(self) -> Dict:
         findings = self.all_findings
         plan = self.attack_plan or {}
-        pivot_results = {"pivot_actions": [], "exploits": []}
+        pivot_results: Dict[str, Any] = {"pivot_actions": [], "exploits": []}
 
-        vuln_list = []
-        for k, f in findings.items():
-            vuln_list.append({"type": f["type"], "url": f["url"], "param": f["param"]})
-
-        confirmed_types = {v["type"].lower() for v in vuln_list}
-
-        if self.last_hypotheses:
-            evidence_map = {}
-            for v in vuln_list:
-                evidence_map[v["type"]] = {"vulnerable": True}
-            self.last_hypotheses = self.reasoner.update_with_evidence(
-                self.last_hypotheses, evidence_map)
-            chains = self.reasoner.suggest_chains(self.last_hypotheses, confirmed_types)
-        else:
-            chains = []
+        vuln_list = self._pivot_vuln_list(findings)
+        chains = self._pivot_reasoner_chains(vuln_list)
 
         if self._chain_cache:
-            for key, r in self._chain_cache.items():
-                pivot_results["pivot_actions"].append(r)
+            pivot_results["pivot_actions"].extend(self._chain_cache.values())
             print("  [Pivot] %d chains already executed during backtrack" % len(self._chain_cache))
 
-        pivoted = pivot_on_intermediate_result(
-            {"vulnerabilities": vuln_list},
-            plan,
-        )
-
         from tools.chain_engine import ChainEngine
+        from tools.orchestrator_engine.chains import by_name
         chain = ChainEngine(self.sess, self.timeout)
+        chain_map = by_name(chain)
 
-        chain_map = {
-            "ssrf_to_rce": ("ssrf", chain.chain_ssrf_to_rce),
-            "lfi_to_rce": ("lfi", chain.chain_lfi_to_rce),
-            "sqli_to_rce": ("sqli", chain.chain_sqli_to_rce),
-            "xss_to_hijack": ("xss", chain.chain_xss_to_hijack),
-            "auth_bypass_to_rce": ("auth_bypass", chain.chain_auth_to_admin),
-            "deser_to_rce": ("deser", chain.chain_deser_to_rce),
-        }
-
-        used_chains = set()
+        used_chains: set = set()
         for chain_name, ep, param in chains:
-            if chain_name in chain_map and chain_name not in used_chains:
-                needed_type, fn = chain_map[chain_name]
-                matching = [v for v in vuln_list if v["type"] == needed_type]
-                for v in matching:
-                    print("    [Reason] Chain %s %s via %s?%s" % (chain_name, v["type"], v["url"], v["param"]))
-                    used_chains.add(chain_name)
-                    try:
-                        r = fn(v["url"], v["param"])
-                        pivot_results["pivot_actions"].append(r)
-                        if r.get("success"):
-                            print("      [CRITICAL] Chain %s confirmed!" % chain_name)
-                        if r.get("credentials_extracted"):
-                            print("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
-                        if r.get("rce_available"):
-                            print("      [RCE] %s via %s" % (chain_name, r.get("rce_method", "unknown")))
-                    except Exception as e:
-                        logger.debug("chain %s: %s", chain_name, e)
-                    break
+            self._pivot_run_suggested_chain(
+                chain_name, vuln_list, chain_map, pivot_results, used_chains,
+            )
 
+        pivoted = pivot_on_intermediate_result(
+            {"vulnerabilities": vuln_list}, plan,
+        )
         if pivoted.get("pivoted"):
             print("  [Pivot] Attack surface triggered additional chain actions:")
-
             for ph in pivoted.get("phases", []):
-                if ph.get("phase") in ("ssrf_pivot",) and "ssrf_to_rce" not in used_chains:
-                    for v in vuln_list:
-                        if v["type"] == "ssrf":
-                            print("    -> SSRF detected, running cloud metadata + internal scan chain")
-                            r = chain.chain_ssrf_to_rce(v["url"], v["param"])
-                            pivot_results["pivot_actions"].append(r)
-                            used_chains.add("ssrf_to_rce")
-
-                            print("    -> SSRF multi-hop chain (Redis/SQL/Docker/K8s) ...")
-                            try:
-                                ssrf_chain_result = ssrf_chain_attack(
-                                    v["url"], v["param"], self.sess, self.timeout, max_hops=3
-                                )
-                                pivot_results["pivot_actions"].append(ssrf_chain_result)
-                                if ssrf_chain_result.get("rce_achieved"):
-                                    print("      [CRITICAL] SSRF chain achieved RCE via %s" % ssrf_chain_result.get("rce_method"))
-                                if ssrf_chain_result.get("services_found"):
-                                    print("      [INTERNAL] %d internal services discovered" % ssrf_chain_result["services_found"])
-                                if ssrf_chain_result.get("ssh_keys"):
-                                    print("      [SSH] SSH key injected via Redis")
-                            except Exception as e:
-                                logger.debug("ssrf chain: %s", e)
-                            break
-
-                if ph.get("phase") in ("lfi_pivot",) and "lfi_to_rce" not in used_chains:
-                    for v in vuln_list:
-                        if v["type"] == "lfi":
-                            print("    -> LFI detected, running log poison + environ leak chain")
-                            r = chain.chain_lfi_to_rce(v["url"], v["param"])
-                            pivot_results["pivot_actions"].append(r)
-                            used_chains.add("lfi_to_rce")
-                            break
-
-                if ph.get("phase") in ("sqli_pivot",) and "sqli_to_rce" not in used_chains:
-                    for v in vuln_list:
-                        if v["type"] == "sqli":
-                            print("    -> SQLi detected, running data extraction + shell chain")
-                            r = chain.chain_sqli_to_rce(v["url"], v["param"])
-                            pivot_results["pivot_actions"].append(r)
-                            used_chains.add("sqli_to_rce")
-                            break
-
-                if ph.get("phase") in ("jwt_pivot",):
-                    for v in vuln_list:
-                        if v["type"] == "jwt":
-                            print("    -> JWT found, running alg none + weak secret + KID injection")
-                            try:
-                                from tools import jwt_exploiter
-                                exploit_r = jwt_exploiter.check(
-                                    url=v["url"], param=v["param"], sess=self.sess,
-                                    timeout=self.timeout,
-                                )
-                                pivot_results["pivot_actions"].append({
-                                    "chain": "jwt_exploit", "result": exploit_r,
-                                })
-                                if exploit_r.get("vulnerable"):
-                                    print("      [CRITICAL] JWT bypassed!")
-                            except Exception as e:
-                                logger.debug("jwt pivot: %s", e)
-
-                if ph.get("phase") in ("auth_pivot",) and "auth_bypass_to_rce" not in used_chains:
-                    auth_data = self.state["phases"].get("auth_bypass", {})
-                    if auth_data.get("vulnerable"):
-                        print("    -> Auth bypass found, escalating to admin")
-                        r = chain.chain_auth_to_admin(self.target)
-                        pivot_results["pivot_actions"].append(r)
-                        used_chains.add("auth_bypass_to_rce")
-                        if r.get("success"):
-                            print("      [CRITICAL] Admin access achieved via auth escalation!")
-
-                if ph.get("phase") in ("deser_pivot",) and "deser_to_rce" not in used_chains:
-                    for v in vuln_list:
-                        if v["type"] == "deser":
-                            print("    -> Deserialization found, running gadget chain")
-                            r = chain.chain_deser_to_rce(v["url"], v["param"])
-                            pivot_results["pivot_actions"].append(r)
-                            used_chains.add("deser_to_rce")
-                            if r.get("success"):
-                                print("      [CRITICAL] Deserialization gadget confirmed!")
-                            break
-
-                if ph.get("phase") in ("graphql_pivot",):
-                    for v in vuln_list:
-                        if v["type"] == "graphql":
-                            pivot_results["pivot_actions"].append({
-                                "chain": "graphql_deep",
-                                "url": v["url"],
-                                "action": "introspection + batch + depth analysis",
-                            })
-                            break
+                handler = _PIVOT_HANDLERS.get(ph.get("phase"))
+                if handler is None:
+                    continue
+                used_chains.update(
+                    handler(self, vuln_list, chain, pivot_results)
+                )
 
         self.state["phases"]["pivot"] = pivot_results
         self._save_phase("pivot")
         return pivot_results
+
+    def _pivot_vuln_list(self, findings: Dict) -> List[Dict]:
+        return [{"type": f["type"], "url": f["url"], "param": f["param"]}
+                for f in findings.values()]
+
+    def _pivot_reasoner_chains(self, vuln_list: List[Dict]) -> List:
+        if not self.last_hypotheses:
+            return []
+        evidence_map = {v["type"]: {"vulnerable": True} for v in vuln_list}
+        self.last_hypotheses = self.reasoner.update_with_evidence(
+            self.last_hypotheses, evidence_map)
+        confirmed_types = {v["type"].lower() for v in vuln_list}
+        return self.reasoner.suggest_chains(self.last_hypotheses, confirmed_types)
+
+    def _pivot_run_suggested_chain(self, chain_name: str, vuln_list: List[Dict],
+                                   chain_map: Dict, pivot_results: Dict,
+                                   used_chains: set) -> None:
+        if chain_name in used_chains or chain_name not in chain_map:
+            return
+        needed_type, fn = chain_map[chain_name]
+        for v in vuln_list:
+            if v["type"] != needed_type:
+                continue
+            print("    [Reason] Chain %s %s via %s?%s" %
+                  (chain_name, v["type"], v["url"], v["param"]))
+            used_chains.add(chain_name)
+            try:
+                r = fn(v["url"], v["param"])
+                pivot_results["pivot_actions"].append(r)
+                if r.get("success"):
+                    print("      [CRITICAL] Chain %s confirmed!" % chain_name)
+                if r.get("credentials_extracted"):
+                    print("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
+                if r.get("rce_available"):
+                    print("      [RCE] %s via %s" %
+                          (chain_name, r.get("rce_method", "unknown")))
+            except Exception as e:
+                logger.debug("chain %s: %s", chain_name, e)
+            return
+
+    def _pivot_handle_ssrf(self, vuln_list, chain, pivot_results) -> set:
+        used = set()
+        for v in vuln_list:
+            if v["type"] != "ssrf":
+                continue
+            print("    -> SSRF detected, running cloud metadata + internal scan chain")
+            pivot_results["pivot_actions"].append(
+                chain.chain_ssrf_to_rce(v["url"], v["param"]))
+            used.add("ssrf_to_rce")
+            print("    -> SSRF multi-hop chain (Redis/SQL/Docker/K8s) ...")
+            try:
+                ssrf_chain_result = ssrf_chain_attack(
+                    v["url"], v["param"], self.sess, self.timeout, max_hops=3)
+                pivot_results["pivot_actions"].append(ssrf_chain_result)
+                if ssrf_chain_result.get("rce_achieved"):
+                    print("      [CRITICAL] SSRF chain achieved RCE via %s"
+                          % ssrf_chain_result.get("rce_method"))
+                if ssrf_chain_result.get("services_found"):
+                    print("      [INTERNAL] %d internal services discovered"
+                          % ssrf_chain_result["services_found"])
+                if ssrf_chain_result.get("ssh_keys"):
+                    print("      [SSH] SSH key injected via Redis")
+            except Exception as e:
+                logger.debug("ssrf chain: %s", e)
+            break
+        return used
+
+    def _pivot_handle_lfi(self, vuln_list, chain, pivot_results) -> set:
+        for v in vuln_list:
+            if v["type"] != "lfi":
+                continue
+            print("    -> LFI detected, running log poison + environ leak chain")
+            pivot_results["pivot_actions"].append(
+                chain.chain_lfi_to_rce(v["url"], v["param"]))
+            return {"lfi_to_rce"}
+        return set()
+
+    def _pivot_handle_sqli(self, vuln_list, chain, pivot_results) -> set:
+        for v in vuln_list:
+            if v["type"] != "sqli":
+                continue
+            print("    -> SQLi detected, running data extraction + shell chain")
+            pivot_results["pivot_actions"].append(
+                chain.chain_sqli_to_rce(v["url"], v["param"]))
+            return {"sqli_to_rce"}
+        return set()
+
+    def _pivot_handle_jwt(self, vuln_list, chain, pivot_results) -> set:
+        for v in vuln_list:
+            if v["type"] != "jwt":
+                continue
+            print("    -> JWT found, running alg none + weak secret + KID injection")
+            try:
+                from tools import jwt_exploiter
+                exploit_r = jwt_exploiter.check(
+                    url=v["url"], param=v["param"], sess=self.sess,
+                    timeout=self.timeout)
+                pivot_results["pivot_actions"].append({
+                    "chain": "jwt_exploit", "result": exploit_r})
+                if exploit_r.get("vulnerable"):
+                    print("      [CRITICAL] JWT bypassed!")
+            except Exception as e:
+                logger.debug("jwt pivot: %s", e)
+            break
+        return set()
+
+    def _pivot_handle_auth(self, vuln_list, chain, pivot_results) -> set:
+        auth_data = self.state["phases"].get("auth_bypass", {})
+        if not auth_data.get("vulnerable"):
+            return set()
+        print("    -> Auth bypass found, escalating to admin")
+        r = chain.chain_auth_to_admin(self.target)
+        pivot_results["pivot_actions"].append(r)
+        used = {"auth_bypass_to_rce"}
+        if r.get("success"):
+            print("      [CRITICAL] Admin access achieved via auth escalation!")
+        return used
+
+    def _pivot_handle_deser(self, vuln_list, chain, pivot_results) -> set:
+        for v in vuln_list:
+            if v["type"] != "deser":
+                continue
+            print("    -> Deserialization found, running gadget chain")
+            r = chain.chain_deser_to_rce(v["url"], v["param"])
+            pivot_results["pivot_actions"].append(r)
+            used = {"deser_to_rce"}
+            if r.get("success"):
+                print("      [CRITICAL] Deserialization gadget confirmed!")
+            return used
+        return set()
+
+    def _pivot_handle_graphql(self, vuln_list, chain, pivot_results) -> set:
+        for v in vuln_list:
+            if v["type"] != "graphql":
+                continue
+            pivot_results["pivot_actions"].append({
+                "chain": "graphql_deep",
+                "url": v["url"],
+                "action": "introspection + batch + depth analysis",
+            })
+            break
+        return set()
 
     def _run_kali_recon(self):
         from tools.kali_executor import is_available
@@ -1497,107 +1601,8 @@ class Orchestrator:
         webshell_urls = []
 
         def _weaponize_one(key, finding):
-            vtype = finding["type"]
-            url = finding["url"]
-            param = finding["param"]
-            result = {}
-            nonlocal webshell_urls
-
-            if vtype == "sqli":
-                for mod_name, mod in [("sqli_weaponizer", sqli_weaponizer)]:
-                    try:
-                        result[mod_name] = mod.check(url, param, raw_sess, self.timeout)
-                    except Exception as e:
-                        logger.debug("sqli weaponize %s: %s", mod_name, e)
-                    if result.get(mod_name, {}).get("vulnerable") or result.get(mod_name, {}).get("data_extracted"):
-                        result["exploit_ready"] = True
-                from tools.kali_executor import is_available as kali_avail
-                if kali_avail():
-                    try:
-                        from tools import kali_toolset
-                        sqlmap_r = kali_toolset.sqlmap_detect(url, param)
-                        if sqlmap_r.get("vulnerable") or sqlmap_r.get("data"):
-                            result["sqlmap"] = sqlmap_r
-                            result["exploit_ready"] = True
-                            if sqlmap_r.get("data"):
-                                result["extracted_data"] = sqlmap_r["data"]
-                    except Exception as e:
-                        logger.debug("sqlmap weaponize: %s", e)
-
-                from tools.weaponize_engine import sqli_into_outfile
-                web_root = self.vuln_ctx.get().discovered_versions.get("web_root", "/var/www/html")
-                sqli_shell = sqli_into_outfile(url, param, raw_sess, self.timeout, web_root)
-                if sqli_shell.get("success"):
-                    result["sqli_webshell"] = sqli_shell
-                    result["exploit_ready"] = True
-                    if sqli_shell.get("webshell_url"):
-                        webshell_urls.append(sqli_shell["webshell_url"])
-
-            if vtype == "ssrf":
-                try:
-                    from tools import ssrf_pwn as ssrf_lateral
-                    lat = ssrf_lateral.run(url, param, sess=raw_sess, timeout=self.timeout)
-                    result["ssrf_lateral"] = lat
-                    result["ssrf_pwn"] = ssrf_lateral.check(url, param, sess=raw_sess, timeout=self.timeout)
-                    cloud_meta = lat.get("cloud_metadata", {})
-                    if cloud_meta:
-                        meta_text = json.dumps(cloud_meta)
-                        from tools.cloud_pwn import check as cloud_check
-                        c_result = cloud_check(meta_text)
-                        if c_result.get("success"):
-                            result["cloud_pwn"] = c_result
-                            result["exploit_ready"] = True
-                except Exception as e:
-                    logger.debug("ssrf weaponize: %s", e)
-
-            if vtype == "lfi":
-                v = finding.get("result", {})
-                if v.get("rce_available"):
-                    result["rce"] = True
-                    result["exploit_ready"] = True
-                    try:
-                        from tools.reverse_shell import deploy_webshell
-                        ws = deploy_webshell(url, webshell_type="php_cmd",
-                                           sess=raw_sess, timeout=self.timeout)
-                        if ws.get("success"):
-                            result["webshell"] = ws
-                    except Exception as e:
-                        logger.debug("webshell deploy: %s", e)
-
-                from tools.weaponize_engine import deploy_webshell_lfi
-                lfi_ws = deploy_webshell_lfi(url, param, raw_sess, self.timeout)
-                if lfi_ws.get("success"):
-                    result["lfi_webshell"] = lfi_ws
-                    result["exploit_ready"] = True
-                    result["webshell"] = result.get("webshell", {})
-                    result["webshell"]["lfi_auto"] = lfi_ws
-
-            if vtype == "xss":
-                try:
-                    from tools import xss_validator
-                    result["xss_validated"] = xss_validator.check(url, param, raw_sess, self.timeout)
-                except Exception as e:
-                    logger.debug("xss validate: %s", e)
-
-            if vtype == "jwt":
-                tokens = finding.get("result", {}).get("tokens_found", [])
-                for token_entry in tokens:
-                    token_str = token_entry.get("token", "")
-                    if token_str:
-                        try:
-                            jwt_r = jwt_exploiter.check(token=token_str, sess=raw_sess,
-                                                        url=url, param=param, timeout=self.timeout)
-                            result["jwt_exploit"] = jwt_r
-                        except Exception as e:
-                            logger.debug("jwt exploit: %s", e)
-                if not result:
-                    try:
-                        none_token = jwt_exploiter.check(token=None, sess=raw_sess,
-                                                         url=url, param=param, timeout=self.timeout)
-                        result["jwt_none_test"] = none_token
-                    except Exception as e:
-                        logger.debug("jwt none test: %s", e)
-
+            result = weaponizer.weaponize_one(
+                finding, raw_sess, self.timeout, self.vuln_ctx, webshell_urls)
             if result:
                 return key, result
             return None, None
@@ -1715,7 +1720,7 @@ class Orchestrator:
         return pr
 
     def phase_report(self) -> Dict:
-        report = {
+        report: Dict[str, Any] = {
             "target": self.target,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "summary": {},
@@ -1726,56 +1731,87 @@ class Orchestrator:
         exploits = self.state["phases"].get("weaponize", {})
         auth_data = self.state["phases"].get("auth_bypass", {})
         recon = self.state["phases"].get("recon", {})
+        crawl_summary = self.state["phases"].get("crawl", {}).get("summary", {})
+        mine_data = self.state["phases"].get("param_mine", {})
+        waf_info = self.state.get("waf", {})
 
-        by_type = {}
-        for key, f in findings.items():
-            vt = f["type"]
-            by_type.setdefault(vt, []).append(f)
+        by_type, by_url = self._report_group(findings)
 
-        by_url = {}
+        report["summary"] = self._report_summary(findings, by_type, by_url, exploits, auth_data)
+        report["details"] = {vt: flist for vt, flist in by_type.items()}
+        report["exploits"] = exploits
+        report["auth_bypass"] = {k: v for k, v in auth_data.items() if k != "vulnerable"}
+        report["recon"] = self._report_recon(
+            recon, detection, crawl_summary, mine_data, waf_info,
+        )
+
+        report["attack_graph"] = self.attack_graph.summary() if self.attack_graph else {}
+        report["context_memory"] = self.context_memory.get_stats()
+        if self.pipeline_result:
+            report["pipeline"] = self.pipeline_result
+        report["second_order_verified"] = sum(
+            1 for f in findings.values() if f.get("second_order_verified")
+        )
+
+        self.state["phases"]["report"] = report
+        self._save_phase("report")
+        self._report_persist(report)
+        return report
+
+    @staticmethod
+    def _report_group(findings: Dict) -> tuple:
+        """按 type / url 聚合 findings."""
+        by_type: Dict[str, List] = {}
+        by_url: Dict[str, List[str]] = {}
         for f in findings.values():
-            u = f["url"]
-            by_url.setdefault(u, []).append(f["type"])
+            by_type.setdefault(f["type"], []).append(f)
+            by_url.setdefault(f["url"], []).append(f["type"])
+        return by_type, by_url
 
-        report["summary"]["vulnerabilities"] = len(findings)
-        report["summary"]["by_type"] = {k: len(v) for k, v in by_type.items()}
-        report["summary"]["by_url"] = {k: len(v) for k, v in by_url.items()}
-        report["summary"]["exploit_ready"] = len(exploits)
-
-        exploit_ready_details = []
-        for k, v in exploits.items():
-            if v.get("exploit_ready"):
-                exploit_ready_details.append(k)
+    @staticmethod
+    def _report_summary(findings: Dict, by_type: Dict, by_url: Dict,
+                        exploits: Dict, auth_data: Dict) -> Dict:
+        vuln_count = len(findings)
+        exploit_ready_details = [
+            k for k, v in exploits.items() if v.get("exploit_ready")
+        ]
         auth_total = auth_data.get("total_bypasses", 0)
         if auth_total > 0:
             exploit_ready_details.append("auth_bypass(%d)" % auth_total)
-        report["summary"]["exploit_ready_details"] = exploit_ready_details
 
-        critical_flags = ["rce_available", "rce", "shell", "data_extracted", "credential_access", "exploit_ready"]
-        report["summary"]["critical"] = any(
-            any(f.get("result", {}).get(k) for k in critical_flags) for f in findings.values()
+        critical_flags = ("rce_available", "rce", "shell", "data_extracted",
+                          "credential_access", "exploit_ready")
+        is_critical = any(
+            any(f.get("result", {}).get(k) for k in critical_flags)
+            for f in findings.values()
         ) or bool(exploit_ready_details)
 
-        report["summary"]["affected_urls"] = list(by_url.keys())
-        report["summary"]["param_hits"] = [
-            "%s?%s [%s]" % (f["url"], f["param"], f["type"]) for f in findings.values()
-        ]
+        return {
+            "vulnerabilities": vuln_count,
+            "by_type": {k: len(v) for k, v in by_type.items()},
+            "by_url": {k: len(v) for k, v in by_url.items()},
+            "exploit_ready": len(exploits),
+            "exploit_ready_details": exploit_ready_details,
+            "critical": is_critical,
+            "affected_urls": list(by_url.keys()),
+            "param_hits": ["%s?%s [%s]" % (f["url"], f["param"], f["type"])
+                           for f in findings.values()],
+        }
 
-        for vt, flist in by_type.items():
-            report["details"][vt] = flist
-        report["exploits"] = exploits
-        report["auth_bypass"] = {k: v for k, v in auth_data.items() if k != "vulnerable"}
-
+    @staticmethod
+    def _report_recon(recon: Dict, detection: Dict,
+                      crawl_summary: Dict, mine_data: Dict, waf_info: Dict) -> Dict:
         techs = recon.get("technologies", {})
         ports = recon.get("open_ports", {})
         git = recon.get("git_leak", {})
         dirs = recon.get("directories", {})
-        crawl_summary = self.state["phases"].get("crawl", {}).get("summary", {})
-        mine_data = self.state["phases"].get("param_mine", {})
-        total_mined = sum(len(pd.get("all_params", [])) for pd in mine_data.values() if isinstance(pd, dict))
-        waf_info = self.state.get("waf", {})
-
-        report["recon"] = {
+        total_mined = sum(len(pd.get("all_params", []))
+                          for pd in mine_data.values() if isinstance(pd, dict))
+        risk_score = 0
+        attack_plan = recon.get("attack_plan") or {}
+        if isinstance(attack_plan, dict):
+            risk_score = attack_plan.get("risk_score", 0)
+        return {
             "technologies": [t["name"] for t in techs.get("technologies", [])],
             "open_ports": [p["port"] for p in ports.get("open_ports", [])],
             "git_exposed": git.get("git_exposed", False),
@@ -1788,32 +1824,21 @@ class Orchestrator:
             "is_spa": crawl_summary.get("is_spa", False),
             "js_api_discovered": crawl_summary.get("js_api_discovered", 0),
             "waf": waf_info.get("name"),
-            "risk_score": self.attack_plan.get("risk_score", 0) if self.attack_plan else 0,
+            "risk_score": risk_score,
         }
 
-        # Enhanced report sections
-        report["attack_graph"] = self.attack_graph.summary() if self.attack_graph else {}
-        report["context_memory"] = self.context_memory.get_stats()
-        if self.pipeline_result:
-            report["pipeline"] = self.pipeline_result
-        report["second_order_verified"] = sum(
-            1 for f in findings.values()
-            if f.get("second_order_verified")
-        )
-
-        self.state["phases"]["report"] = report
-        self._save_phase("report")
-        if self._storage:
-            try:
-                cur = self._storage._conn.cursor()
-                cur.execute(
-                    "UPDATE sessions SET report=?, updated_at=? WHERE id=?",
-                    (json.dumps(report), time.time(), self._storage.session_id())
-                )
-                self._storage._conn.commit()
-            except Exception as e:
-                logger.debug("save report: %s", e)
-        return report
+    def _report_persist(self, report: Dict) -> None:
+        if not self._storage:
+            return
+        try:
+            cur = self._storage._conn.cursor()
+            cur.execute(
+                "UPDATE sessions SET report=?, updated_at=? WHERE id=?",
+                (json.dumps(report), time.time(), self._storage.session_id()),
+            )
+            self._storage._conn.commit()
+        except Exception as e:
+            logger.debug("save report: %s", e)
 
     def run(self) -> Dict:
         start = time.time()
@@ -1823,7 +1848,7 @@ class Orchestrator:
         self.phase_attack_plan()
         self.phase_reason()
 
-        print("[*] Phase 2/7: Crawling %s ..." % self.target)
+        print("[*] Phase 2/9: Crawling %s ..." % self.target)
         crawl_result = self.phase_crawl()
         cs = crawl_result.get("summary", {})
         spa_tag = " [SPA]" if cs.get("is_spa") else ""
@@ -1848,18 +1873,18 @@ class Orchestrator:
                     for ep in spa_result.get("api_routes", []):
                         if ep not in crawl_result.get("endpoints", {}):
                             crawl_result["endpoints"][ep] = {
-                                "url": "%s%s" % (self.target, ep),
+                                "url": "%s%s" % (self.base_target, ep),
                                 "methods": ["GET"], "params": [], "spa_api": True,
                             }
             except Exception as e:
                 logger.debug("spa crawl: %s", e)
 
-        print("[*] Phase 3/7: Parameter mining ...")
+        print("[*] Phase 3/9: Parameter mining ...")
         mine_result = self.phase_mine(crawl_result)
         total_mined = sum(len(pd.get("all_params", [])) for pd in mine_result.values() if isinstance(pd, dict))
         print("  -> %d params discovered across %d endpoints" % (total_mined, len(mine_result)))
 
-        print("[*] Phase 4/7: Auth bypass probing ...")
+        print("[*] Phase 4/9: Auth bypass probing ...")
         auth_result = self.phase_auth_bypass()
         ab_total = auth_result.get("total_bypasses", 0)
         print("  -> %d bypass vectors (%d path, %d cookie, %d header, %d method)" % (
@@ -1870,7 +1895,7 @@ class Orchestrator:
             len(auth_result.get("method_bypasses", [])),
         ))
 
-        print("[*] Phase 5/7: Vulnerability detection (%d threads) ..." % self.threads)
+        print("[*] Phase 5/9: Vulnerability detection (%d threads) ..." % self.threads)
         findings = self.phase_detect()
         by_type = {}
         for f in findings.values():
@@ -1879,10 +1904,10 @@ class Orchestrator:
         by_type_str = " ".join("[%s:%d]" % (k.upper(), v) for k, v in sorted(by_type.items()))
         print("  -> %d vulnerabilities found: %s" % (len(findings), by_type_str))
 
-        print("[*] Phase 5b/7: Deep response intelligence gathering ...")
+        print("[*] Phase 5b/9: Deep response intelligence gathering ...")
         self.phase_ai_hunt()
 
-        print("[*] Phase 6/7: Attack chain pivoting ...")
+        print("[*] Phase 6/9: Attack chain pivoting ...")
         pivot_result = self.phase_pivot()
         pivot_actions = len(pivot_result.get("pivot_actions", []))
         if pivot_actions:
@@ -1890,17 +1915,18 @@ class Orchestrator:
         else:
             print("  -> No chain pivots triggered")
 
+        exploits = {}
         if findings or ab_total > 0:
             if self.high_priv_sess:
-                print("[*] Phase 6b/7: Dual-session BOLA detection ...")
+                print("[*] Phase 6b/9: Dual-session BOLA detection ...")
                 self.phase_dual_session()
-            print("[*] Phase 7/7: Weaponization (%d threads) ..." % self.threads)
+            print("[*] Phase 7/9: Weaponization (%d threads) ..." % self.threads)
             exploits = self.phase_weaponize()
             ex_ready = len([e for e in exploits.values() if e.get("exploit_ready")])
             print("  -> %d exploit paths (%d ready)" % (len(exploits), ex_ready))
 
         if exploits:
-            print("[*] Phase 8/7: Advanced exploitation (tunnel/C2/lateral) ...")
+            print("[*] Phase 8/9: Advanced exploitation (tunnel/C2/lateral) ...")
             adv = self.phase_advanced(exploits)
             if adv.get("tunnels"):
                 print("  -> %d tunnel agents deployed" % len(adv["tunnels"]))
@@ -1911,7 +1937,7 @@ class Orchestrator:
             if adv.get("post_exploit"):
                 print("  -> Post-exploitation persistence generated")
 
-        print("[*] Phase 9/7: Pipeline (asset graph -> crown jewels) ...")
+        print("[*] Phase 9/9: Pipeline (asset graph -> crown jewels) ...")
         self.phase_pipeline()
 
         report = self.phase_report()
@@ -1919,6 +1945,19 @@ class Orchestrator:
         report["elapsed_seconds"] = round(time.time() - start, 1)
         self.state["report"] = report
         return report
+
+
+# Populate pivot handler dispatch table after class is defined.
+# Each handler: (self, vuln_list, chain, pivot_results) -> set[str] of chain_names_used.
+_PIVOT_HANDLERS.update({
+    "ssrf_pivot": Orchestrator._pivot_handle_ssrf,
+    "lfi_pivot": Orchestrator._pivot_handle_lfi,
+    "sqli_pivot": Orchestrator._pivot_handle_sqli,
+    "jwt_pivot": Orchestrator._pivot_handle_jwt,
+    "auth_pivot": Orchestrator._pivot_handle_auth,
+    "deser_pivot": Orchestrator._pivot_handle_deser,
+    "graphql_pivot": Orchestrator._pivot_handle_graphql,
+})
 
 
 def run(target: str, sess: Optional['requests.Session'] = None,

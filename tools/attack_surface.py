@@ -248,13 +248,17 @@ EXPLOIT_AVAILABILITY: Dict[str, Dict] = {
 def lookup_cves(tech_id: str, version_str: str = "") -> List[Dict]:
     if tech_id not in TECH_CVE_DB:
         return []
-    version_match = re.search(r'(\d+)', version_str)
+    version_match = re.search(r'(\d+)', version_str or "")
+    unknown_version = version_match is None
     major = int(version_match.group(1)) if version_match else 0
     hits = []
     for entry in TECH_CVE_DB[tech_id]:
         start, end = entry["range"]
-        if start <= major <= end or not version_str:
+        # 版本区间取半开 [start, end): 旧逻辑闭区间把已修复的大版本也命中
+        # (如 tomcat 10 命中仅影响 6-9 的 Ghostcat).
+        if unknown_version or start <= major < end:
             info = dict(entry)
+            info["version_unconfirmed"] = unknown_version
             exploit = EXPLOIT_AVAILABILITY.get(entry["cve"], {})
             info["exploit_available"] = exploit.get("public_poc", False)
             info["difficulty"] = exploit.get("difficulty", "unknown")
@@ -329,8 +333,15 @@ def visualize_attack_paths(paths: List[Dict]) -> str:
         return "No attack paths identified."
     lines = ["Attack Path Ranking (by score):"]
     for i, p in enumerate(paths[:15]):
-        prefix = {10: "[CRIT]", 9: "[CRIT]", 8: "[HIGH]", 7: "[HIGH]",
-                  6: "[MED]", 5: "[MED]"}.get(int(p.get("score", 0)), "[LOW]")
+        score = float(p.get("score", 0) or 0)
+        if score >= 9:
+            prefix = "[CRIT]"
+        elif score >= 7:
+            prefix = "[HIGH]"
+        elif score >= 5:
+            prefix = "[MED]"
+        else:
+            prefix = "[LOW]"
         if p["type"] == "cve":
             lines.append(f"  {i+1}. {prefix} {p['cve']} ({p['name']}) — impact={p['impact']} score={p['score']} exploit={p['exploit_type']}")
         elif p["type"] == "open_port":
@@ -355,9 +366,7 @@ def build_attack_plan(recon_results: Dict) -> Dict:
 
     techs = recon_results.get("technologies", [])
     open_ports = recon_results.get("open_ports", [])
-    recon_results.get("subdomains", [])
     git_leak = recon_results.get("git_leak", {})
-    recon_results.get("directories", [])
 
     detected_tech_ids = set()
     for t in techs:
@@ -399,11 +408,13 @@ def build_attack_plan(recon_results: Dict) -> Dict:
         })
         plan["risk_score"] += 10
 
-    if not detected_tech_ids:
+    # 无技术栈或技术栈全部未映射时走通用扫描 (旧逻辑只处理"零技术栈",
+    # 已识别但未映射的栈如 apache 会既无 phase 也无 fallback).
+    if not detected_tech_ids or not any(tid in TECH_STACK_ATTACK_MAP for tid in detected_tech_ids):
         plan["phases"].append({
             "phase": "generic",
             "detectors": ["sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti"],
-            "strategy": "no tech detected, run broad scan",
+            "strategy": "no mapped tech, run broad scan",
         })
         plan["recommended_detectors"] = [
             "sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti",
@@ -432,6 +443,8 @@ def build_attack_plan(recon_results: Dict) -> Dict:
 def pivot_on_intermediate_result(current_findings: Dict, current_plan: Dict) -> Dict:
     findings = current_findings.get("vulnerabilities", [])
     plan = dict(current_plan)
+    # 深拷贝推荐列表: 旧逻辑浅拷贝会把调用方的 plan 一并改掉.
+    plan["recommended_detectors"] = list(current_plan.get("recommended_detectors", []))
     new_phases = []
 
     for vuln in findings:
@@ -493,6 +506,30 @@ def pivot_on_intermediate_result(current_findings: Dict, current_plan: Dict) -> 
                 "trigger": "graphql_detected",
                 "actions": ["introspection_deep", "batch_attack", "query_depth", "authz_bypass"],
                 "risk": "high",
+            })
+
+        elif vtype == "ssti":
+            new_phases.append({
+                "phase": "ssti_pivot",
+                "trigger": "ssti_detected",
+                "actions": ["engine_fingerprint", "sandbox_escape", "jinja_rce"],
+                "risk": "critical",
+            })
+
+        elif vtype == "xss":
+            new_phases.append({
+                "phase": "xss_pivot",
+                "trigger": "xss_detected",
+                "actions": ["session_hijack", "csrf_chain", "hook_injection"],
+                "risk": "high",
+            })
+
+        elif vtype in ("rce", "cmdi"):
+            new_phases.append({
+                "phase": "rce_pivot",
+                "trigger": "rce_detected",
+                "actions": ["reverse_shell", "persistence", "lateral_move"],
+                "risk": "critical",
             })
 
     if new_phases:
