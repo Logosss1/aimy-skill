@@ -10,7 +10,13 @@
     <br>
     <i>Next-generation AI-native penetration testing toolkit</i>
   </p>
+<p>
+    公告：关于aimy-skill停止推送更新
+因不可抗力原因，[aimy-skill] 自 [2026年10月19日] 起停止推送更新。已发布版本仍可正常使用，现有代码和文档保留在 仓库地址。感谢大家的支持。
 
+[炸炸酥]
+[2026年10月19日]
+</p>
 <div align="center">
     <a href="https://aimy-skill.netlify.app/"><b>🌐 官网</b></a> •
     <a href="#-核心优势"><b>✨ 优势</b></a> •
