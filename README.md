@@ -79,7 +79,7 @@ result = checker.check(
 - **Telegram**：[@Prohao42](https://t.me/Prohao42)
 - **抖音**：[炸炸酥~](https://www.douyin.com/user/MS4wLjABAAAAfgxDFsrK3Fgf_PnJRcPeFdjjKnqtLNTR_q4KKKZKHyGlzYz8T3mZf3V4qax05lFb)
 - **知识星球**：[@炸炸酥](https://t.zsxq.com/FGUeq)
-  ![图片](https://yangdada873.ggff.net/file/1790961984947_7e6b8fe85a9a6c7c6040b281f049902d.jpg)
+  ![图片](https://cloudflare-imgbed-4h5.pages.dev/file/1790961077516_7e6b8fe85a9a6c7c6040b281f049902d.jpg)
 - 更多渗透技能的闭源skill，在知识星球、渗透教程和更多的渗透技能知识点。
 - **微信公众号**:[炸炸酥渗透测试](https://yangdada873.ggff.net/file/1790961747832_扫码_搜索联合传播样式-标准色版.png)
   ![图片](https://cloudflare-imgbed-4h5.pages.dev/file/1790961747832_%E6%89%AB%E7%A0%81_%E6%90%9C%E7%B4%A2%E8%81%94%E5%90%88%E4%BC%A0%E6%92%AD%E6%A0%B7%E5%BC%8F-%E6%A0%87%E5%87%86%E8%89%B2%E7%89%88.png)
