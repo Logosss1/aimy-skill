@@ -224,10 +224,20 @@ def _subdomain_state():
         "root_domain": "target.test",
         "resolved": [{"domain": "api.target.test", "ip": "10.0.0.5"}],
         "http_reachable": [
-            {"domain": "api.target.test", "status": 200, "title": "API",
-             "server": "nginx", "tech": ["https"]},
-            {"domain": "admin.target.test", "status": 200, "title": "Admin",
-             "server": "nginx", "tech": []},
+            {
+                "domain": "api.target.test",
+                "status": 200,
+                "title": "API",
+                "server": "nginx",
+                "tech": ["https"],
+            },
+            {
+                "domain": "admin.target.test",
+                "status": 200,
+                "title": "Admin",
+                "server": "nginx",
+                "tech": [],
+            },
         ],
     }
     state["phases"]["crawl"]["endpoints"]["/v1/users"] = {
@@ -270,4 +280,3 @@ class TestCrossHost:
         assert b in g.adj.get(a, set())
         sub = endpoint_id("http://api.target.test/v1/users")
         assert sub not in g.adj.get(a, set())
-

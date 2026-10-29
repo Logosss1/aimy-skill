@@ -24,13 +24,14 @@ from tools import kali_capture as kc
 # binary_analyzer helpers
 # ---------------------------------------------------------------------------
 
-def build_pe(machine=0x14c, num_sections=1, extra=b"", magic=0x10b):
+
+def build_pe(machine=0x14C, num_sections=1, extra=b"", magic=0x10B):
     pe_off = 0x80
     opt_size = 0xE0
     buf = bytearray(b"\x00" * 2048)
     buf[0:2] = b"MZ"
     struct.pack_into("<I", buf, 60, pe_off)
-    buf[pe_off:pe_off + 4] = b"PE\x00\x00"
+    buf[pe_off : pe_off + 4] = b"PE\x00\x00"
     struct.pack_into("<H", buf, pe_off + 4, machine)
     struct.pack_into("<H", buf, pe_off + 6, num_sections)
     struct.pack_into("<H", buf, pe_off + 20, opt_size)
@@ -41,13 +42,13 @@ def build_pe(machine=0x14c, num_sections=1, extra=b"", magic=0x10b):
     struct.pack_into("<I", buf, opt + 60, 0x400)
     struct.pack_into("<I", buf, opt + 68, 0x100000)
     sec = pe_off + 24 + opt_size
-    buf[sec:sec + 8] = b".text\x00\x00\x00"
+    buf[sec : sec + 8] = b".text\x00\x00\x00"
     struct.pack_into("<I", buf, sec + 8, 0x200)
     struct.pack_into("<I", buf, sec + 12, 0x1000)
     struct.pack_into("<I", buf, sec + 16, 0x200)
     struct.pack_into("<I", buf, sec + 20, 0x400)
     struct.pack_into("<I", buf, sec + 36, 0x60000020)
-    buf[0x600:0x600 + len(extra)] = extra
+    buf[0x600 : 0x600 + len(extra)] = extra
     return bytes(buf)
 
 
@@ -62,7 +63,7 @@ def build_elf64(flags=0, extra=b""):
     struct.pack_into("<H", buf, 56, 1)
     struct.pack_into("<I", buf, 64, 2)  # PT_LOAD
     struct.pack_into("<I", buf, 68, flags)
-    buf[128:128 + len(extra)] = extra
+    buf[128 : 128 + len(extra)] = extra
     return bytes(buf)
 
 
@@ -83,13 +84,13 @@ def make_analyzer(paths=None):
 
 
 def patch_entropy(monkeypatch, value=0.0):
-    monkeypatch.setattr(ba.BinaryAnalyzer, "_calc_entropy",
-                        lambda self, data: value)
+    monkeypatch.setattr(ba.BinaryAnalyzer, "_calc_entropy", lambda self, data: value)
 
 
 # ---------------------------------------------------------------------------
 # pure logic
 # ---------------------------------------------------------------------------
+
 
 def test_calc_entropy_empty_is_zero():
     assert make_analyzer()._calc_entropy(b"") == 0.0
@@ -125,8 +126,7 @@ def test_to_dict_truncates_suspicious_imports():
 # PE parsing
 # ---------------------------------------------------------------------------
 
-PE_STRINGS = (b"kernel32.dll\x00CreateRemoteThread\x00cmd -e\x00"
-              b"http://10.0.0.1/x\x00UPX\x00")
+PE_STRINGS = b"kernel32.dll\x00CreateRemoteThread\x00cmd -e\x00http://10.0.0.1/x\x00UPX\x00"
 
 
 def test_check_pe_full_parse(monkeypatch):
@@ -141,11 +141,17 @@ def test_check_pe_full_parse(monkeypatch):
     assert info.protections["nx"] is True
     assert info.protections["size_of_headers"] == 1024
     assert info.protections["image_size"] == 16384
-    assert info.sections == [{
-        "name": ".text", "virtual_size": 512, "virtual_address": "0x1000",
-        "raw_size": 512, "raw_offset": "0x400",
-        "executable": True, "writable": False,
-    }]
+    assert info.sections == [
+        {
+            "name": ".text",
+            "virtual_size": 512,
+            "virtual_address": "0x1000",
+            "raw_size": 512,
+            "raw_offset": "0x400",
+            "executable": True,
+            "writable": False,
+        }
+    ]
     assert info.suspicious_imports == ["kernel32.dll!CreateRemoteThread"]
     labels = {s["label"] for s in info.strings_found}
     assert "shell_command" in labels
@@ -210,7 +216,7 @@ def test_check_pe_truncated_optional_header_is_safe():
     buf[0:2] = b"MZ"
     struct.pack_into("<I", buf, 60, 100)
     buf[100:104] = b"PE\x00\x00"
-    struct.pack_into("<H", buf, 104, 0x14c)
+    struct.pack_into("<H", buf, 104, 0x14C)
     struct.pack_into("<H", buf, 106, 1)
     struct.pack_into("<H", buf, 122, 0x0102)
     info = make_analyzer()._check_pe("t.exe", bytes(buf))
@@ -221,6 +227,7 @@ def test_check_pe_truncated_optional_header_is_safe():
 # ---------------------------------------------------------------------------
 # ELF parsing
 # ---------------------------------------------------------------------------
+
 
 def test_check_elf64_parses_header_and_segments():
     info = make_analyzer()._check_elf("t", build_elf64())
@@ -245,6 +252,7 @@ def test_check_elf_truncated_is_safe():
 # ---------------------------------------------------------------------------
 # file dispatch / scan
 # ---------------------------------------------------------------------------
+
 
 def test_analyze_file_pe_works_in_production(monkeypatch, tmp_path):
     # 修复: entropy 正常计算, PE 文件不再恒返回 None
@@ -353,6 +361,7 @@ def test_scan_high_entropy_summary(monkeypatch, tmp_path):
 # kali_capture
 # ---------------------------------------------------------------------------
 
+
 class FakeKali:
     def __init__(self):
         self.calls = []
@@ -373,16 +382,17 @@ def cap(monkeypatch):
 
 
 def ok(stdout="", success=True):
-    return {"success": success, "exit_code": 0 if success else 1,
-            "stdout": stdout, "stderr": ""}
+    return {"success": success, "exit_code": 0 if success else 1, "stdout": stdout, "stderr": ""}
 
 
 # resolve_interface ---------------------------------------------------------
 
+
 def test_resolve_interface_ip_route(monkeypatch):
-    with mock.patch("subprocess.run",
-                    return_value=mock.Mock(stdout="default via 10.0.0.1 dev eth1 proto dhcp",
-                                           returncode=0)):
+    with mock.patch(
+        "subprocess.run",
+        return_value=mock.Mock(stdout="default via 10.0.0.1 dev eth1 proto dhcp", returncode=0),
+    ):
         assert kc.resolve_interface() == "eth1"
 
 
@@ -405,6 +415,7 @@ def test_resolve_interface_empty_output(monkeypatch):
 
 # _install_tshark_json_deps -------------------------------------------------
 
+
 def test_install_tshark_local_present():
     with mock.patch("subprocess.run", return_value=mock.Mock(returncode=0)):
         assert kc._install_tshark_json_deps(None, local=True) is True
@@ -425,31 +436,48 @@ def test_install_tshark_remote():
 
 # capture -------------------------------------------------------------------
 
-JSON_PACKETS = json.dumps([
-    {"_index": "p1", "_source": {"layers": {
-        "frame.protocols": "eth:ip:tcp:http",
-        "ip.src": "10.0.0.1", "ip.dst": "10.0.0.2",
-        "http.request.method": "GET", "http.response.code": "200",
-    }}},
-    {"_index": "p2", "_source": {"layers": {
-        "frame.protocols": "eth:ip:tcp:tls",
-        "ip.src": ["10.0.0.3"], "ip.dst": ["10.0.0.2"],
-        "tls.record.content.type": "22",
-    }}},
-])
+JSON_PACKETS = json.dumps(
+    [
+        {
+            "_index": "p1",
+            "_source": {
+                "layers": {
+                    "frame.protocols": "eth:ip:tcp:http",
+                    "ip.src": "10.0.0.1",
+                    "ip.dst": "10.0.0.2",
+                    "http.request.method": "GET",
+                    "http.response.code": "200",
+                }
+            },
+        },
+        {
+            "_index": "p2",
+            "_source": {
+                "layers": {
+                    "frame.protocols": "eth:ip:tcp:tls",
+                    "ip.src": ["10.0.0.3"],
+                    "ip.dst": ["10.0.0.2"],
+                    "tls.record.content.type": "22",
+                }
+            },
+        },
+    ]
+)
 
-PDML = ("<pdml><packet><proto name='ip'><field name='ip.src' show='1.2.3.4'/>"
-        "</proto><proto name='tcp'><field name='tcp.srcport' show='80'/></proto>"
-        "</packet></pdml>")
+PDML = (
+    "<pdml><packet><proto name='ip'><field name='ip.src' show='1.2.3.4'/>"
+    "</proto><proto name='tcp'><field name='tcp.srcport' show='80'/></proto>"
+    "</packet></pdml>"
+)
 
 
 def test_capture_full_flow(cap):
     capture, fk = cap
     fk.queue = [
-        ok("tshark 4.0"),            # which tshark
-        ok(""),                      # tcpdump
-        ok("file\n1234"),            # _check_pcap
-        ok(JSON_PACKETS),            # tshark -T json
+        ok("tshark 4.0"),  # which tshark
+        ok(""),  # tcpdump
+        ok("file\n1234"),  # _check_pcap
+        ok(JSON_PACKETS),  # tshark -T json
     ]
     r = capture.capture(interface="eth0", count=10, bpf_filter="tcp port 80", timeout=5)
     assert r["success"] is True
@@ -536,18 +564,31 @@ def test_live_http_parses_fields(cap):
     capture, fk = cap
     fk.queue = [
         ok("tshark"),
-        ok('1.5|10.0.0.1|10.0.0.2|1234|80|"GET"|"/index"|"200"|"example.com"\n'
-           '2.0|10.0.0.1|10.0.0.2|1234|80\n'
-           "short|line\n"),
+        ok(
+            '1.5|10.0.0.1|10.0.0.2|1234|80|"GET"|"/index"|"200"|"example.com"\n'
+            "2.0|10.0.0.1|10.0.0.2|1234|80\n"
+            "short|line\n"
+        ),
     ]
     entries = capture.live_http(interface="eth0", max_packets=5, timeout=3)
     assert entries[0] == {
-        "time": "1.5", "src": "10.0.0.1", "dst": "10.0.0.2",
-        "sport": "1234", "dport": "80", "method": "GET",
-        "uri": "/index", "status": "200", "host": "example.com",
+        "time": "1.5",
+        "src": "10.0.0.1",
+        "dst": "10.0.0.2",
+        "sport": "1234",
+        "dport": "80",
+        "method": "GET",
+        "uri": "/index",
+        "status": "200",
+        "host": "example.com",
     }
-    assert entries[1] == {"time": "2.0", "src": "10.0.0.1", "dst": "10.0.0.2",
-                          "sport": "1234", "dport": "80"}
+    assert entries[1] == {
+        "time": "2.0",
+        "src": "10.0.0.1",
+        "dst": "10.0.0.2",
+        "sport": "1234",
+        "dport": "80",
+    }
 
 
 def test_live_http_without_tshark(cap):
@@ -571,6 +612,7 @@ def test_live_http_uses_resolved_interface(cap, monkeypatch):
 
 
 # parsing helpers -----------------------------------------------------------
+
 
 def test_check_pcap_variants(cap):
     capture, fk = cap
@@ -604,15 +646,19 @@ def test_parse_fallback_limits_to_500(cap):
 
 def test_flatten_packet_types(cap):
     capture, _ = cap
-    flat = capture._flatten_packet({
-        "_index": "i1",
-        "_source": {"layers": {
-            "http.request.uri": ["/a", "/b"],
-            "tcp.payload": {"x": 1},
-            "ip.src": "1.1.1.1",
-            "empty.list": [],
-        }},
-    })
+    flat = capture._flatten_packet(
+        {
+            "_index": "i1",
+            "_source": {
+                "layers": {
+                    "http.request.uri": ["/a", "/b"],
+                    "tcp.payload": {"x": 1},
+                    "ip.src": "1.1.1.1",
+                    "empty.list": [],
+                }
+            },
+        }
+    )
     assert flat["index"] == "i1"
     assert flat["http.request.uri"] == "/a"
     assert json.loads(flat["tcp.payload"]) == {"x": 1}
@@ -628,10 +674,13 @@ def test_parse_pdml_bad_xml(cap):
 def test_summarize_counts(cap):
     capture, _ = cap
     packets = [
-        {"frame.protocols": "eth:ip:tcp:http", "ip.src": "1.1.1.1",
-         "ip.dst": "2.2.2.2", "http.request.method": "GET"},
-        {"frame.protocols": "eth:ip:tcp:http", "ip.src": "1.1.1.1",
-         "http.response.code": "200"},
+        {
+            "frame.protocols": "eth:ip:tcp:http",
+            "ip.src": "1.1.1.1",
+            "ip.dst": "2.2.2.2",
+            "http.request.method": "GET",
+        },
+        {"frame.protocols": "eth:ip:tcp:http", "ip.src": "1.1.1.1", "http.response.code": "200"},
         {"tls.record.content.type": "22"},
     ]
     summary = capture._summarize(packets)

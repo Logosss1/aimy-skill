@@ -61,6 +61,7 @@ Works when p and q are close together: |p - q| is small.
 ```python
 from gmpy2 import isqrt, is_square
 
+
 def fermat_factor(n):
     a = isqrt(n) + 1
     while True:
@@ -78,6 +79,7 @@ Works when p-1 has only small prime factors (B-smooth).
 ```python
 from gmpy2 import gcd
 
+
 def pollard_p1(n, B=2**20):
     a = 2
     for j in range(2, B):
@@ -93,6 +95,7 @@ def pollard_p1(n, B=2**20):
 ```python
 from math import gcd
 from functools import reduce
+
 
 def batch_gcd(moduli):
     """Find shared factors among multiple RSA moduli."""
@@ -179,9 +182,11 @@ def wiener_attack(e, n):
         discriminant = s * s - 4 * n
         if discriminant >= 0:
             from gmpy2 import isqrt, is_square
+
             if is_square(discriminant):
                 return d
     return None
+
 
 def continued_fraction(a, b):
     cf = []
@@ -189,6 +194,7 @@ def continued_fraction(a, b):
         cf.append(a // b)
         a, b = b, a % b
     return cf
+
 
 def get_convergents(cf):
     convergents = []
@@ -255,6 +261,7 @@ Two ciphertexts of same message under same n but different e₁, e₂ where gcd(
 ```python
 from gmpy2 import gcd, invert
 
+
 def common_modulus(n, e1, e2, c1, c2):
     """Recover m when same message encrypted with two different e under same n."""
     assert gcd(e1, e2) == 1
@@ -269,6 +276,7 @@ def common_modulus(n, e1, e2, c1, c2):
 
     m = (pow(c1, s1, n) * pow(c2, s2, n)) % n
     return m
+
 
 def extended_gcd(a, b):
     if a == 0:
@@ -288,9 +296,11 @@ An oracle reveals whether decrypted message is even or odd.
 ```python
 from gmpy2 import mpz
 
+
 def lsb_oracle_attack(n, e, c, oracle_func):
     """Decrypt using LSB (parity) oracle. oracle_func(c) returns m%2."""
     from fractions import Fraction
+
     lo, hi = Fraction(0), Fraction(n)
 
     for _ in range(n.bit_length()):
@@ -325,12 +335,14 @@ If RSA-CRT signing produces a faulty signature (fault in one CRT half):
 def rsa_crt_fault(n, e, correct_sig, faulty_sig, msg):
     """Factor n from one correct and one faulty CRT signature."""
     from math import gcd
+
     diff = pow(correct_sig, e, n) - pow(faulty_sig, e, n)
     p = gcd(diff % n, n)
     if 1 < p < n:
         q = n // p
         return p, q
     return None
+
 
 # Even simpler: only faulty signature needed if message is known
 def rsa_crt_fault_simple(n, e, faulty_sig, msg):
@@ -432,6 +444,6 @@ d = int(invert(e, phi))
 
 c = ...  # ciphertext as integer
 m = pow(c, d, n)
-plaintext = m.to_bytes((m.bit_length() + 7) // 8, 'big')
+plaintext = m.to_bytes((m.bit_length() + 7) // 8, "big")
 print(plaintext)
 ```

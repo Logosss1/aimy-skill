@@ -32,10 +32,8 @@ class SessionMatrix:
         self._lock = threading.Lock()
         self._loaded = False
 
-    def register(self, label: str, username: str, password: str,
-                 role: str = "user") -> Identity:
-        identity = Identity(label=label, username=username,
-                           password=password, role=role)
+    def register(self, label: str, username: str, password: str, role: str = "user") -> Identity:
+        identity = Identity(label=label, username=username, password=password, role=role)
         self.identities[label] = identity
         return identity
 
@@ -45,9 +43,11 @@ class SessionMatrix:
     def list(self) -> Dict[str, str]:
         return {k: f"{v.role}:{v.username}" for k, v in self.identities.items()}
 
-    def authenticate_all(self, login_url: str, auth_mode: str = "form",
-                         timeout: float = 10.0) -> Dict[str, bool]:
+    def authenticate_all(
+        self, login_url: str, auth_mode: str = "form", timeout: float = 10.0
+    ) -> Dict[str, bool]:
         import requests
+
         results = {}
         for label, identity in self.identities.items():
             if identity.authenticated:
@@ -57,23 +57,27 @@ class SessionMatrix:
             ok = False
             try:
                 if auth_mode == "form":
-                    r = sess.post(login_url,
-                                  data={"username": identity.username,
-                                        "password": identity.password},
-                                  timeout=timeout)
+                    r = sess.post(
+                        login_url,
+                        data={"username": identity.username, "password": identity.password},
+                        timeout=timeout,
+                    )
                     ok = r.status_code == 200
                 elif auth_mode == "json":
-                    r = sess.post(login_url,
-                                  json={"username": identity.username,
-                                        "password": identity.password},
-                                  timeout=timeout)
+                    r = sess.post(
+                        login_url,
+                        json={"username": identity.username, "password": identity.password},
+                        timeout=timeout,
+                    )
                     ok = r.status_code == 200
                 elif auth_mode == "basic":
                     from requests.auth import HTTPBasicAuth
-                    r = sess.get(login_url,
-                                 auth=HTTPBasicAuth(identity.username,
-                                                    identity.password),
-                                 timeout=timeout)
+
+                    r = sess.get(
+                        login_url,
+                        auth=HTTPBasicAuth(identity.username, identity.password),
+                        timeout=timeout,
+                    )
                     ok = r.status_code == 200
                 if ok:
                     for c in sess.cookies:
@@ -83,6 +87,7 @@ class SessionMatrix:
                         # basic 认证不落 cookies/headers, 显式持久化凭据头,
                         # 否则 make_session 复放的是匿名会话.
                         import base64
+
                         cred = base64.b64encode(
                             ("%s:%s" % (identity.username, identity.password)).encode()
                         ).decode()
@@ -96,6 +101,7 @@ class SessionMatrix:
 
     def make_session(self, label: str) -> Optional[object]:
         import requests
+
         identity = self.identities.get(label)
         if not identity:
             logger.warning("unknown identity: %s", label)
@@ -108,31 +114,37 @@ class SessionMatrix:
         sess.verify = settings.verify_ssl
         return sess
 
-    def cross_session_test(self, actor_label: str, target_label: str,
-                           url: str, method: str = "GET",
-                           **kwargs) -> Dict:
+    def cross_session_test(
+        self, actor_label: str, target_label: str, url: str, method: str = "GET", **kwargs
+    ) -> Dict:
         actor_sess = self.make_session(actor_label)
         target_sess = self.make_session(target_label)
         if not actor_sess or not target_sess:
             return {"error": "session not found"}
         try:
-            actor_resp = getattr(actor_sess, method.lower())(url,
-                              timeout=10, **kwargs)
-            target_resp = getattr(target_sess, method.lower())(url,
-                               timeout=10, **kwargs)
+            actor_resp = getattr(actor_sess, method.lower())(url, timeout=10, **kwargs)
+            target_resp = getattr(target_sess, method.lower())(url, timeout=10, **kwargs)
             identical = actor_resp.text == target_resp.text
             return {
-                "actor": {"label": actor_label, "status": actor_resp.status_code,
-                          "length": len(actor_resp.text)},
-                "target": {"label": target_label, "status": target_resp.status_code,
-                           "length": len(target_resp.text)},
+                "actor": {
+                    "label": actor_label,
+                    "status": actor_resp.status_code,
+                    "length": len(actor_resp.text),
+                },
+                "target": {
+                    "label": target_label,
+                    "status": target_resp.status_code,
+                    "length": len(target_resp.text),
+                },
                 "body_match": identical,
                 # 越权差异必须真实存在: actor 能访问而 target 不能, 且响应体
                 # 不同; 两个身份字节相同 (无隔离差异) 不再误报 critical.
-                "authz_gap": (actor_resp.status_code in (200, 201, 204)
-                              and target_resp.status_code not in (200, 201, 204)
-                              and not identical
-                              and len(actor_resp.text) > 50),
+                "authz_gap": (
+                    actor_resp.status_code in (200, 201, 204)
+                    and target_resp.status_code not in (200, 201, 204)
+                    and not identical
+                    and len(actor_resp.text) > 50
+                ),
             }
         except Exception as e:
             logger.debug("cross_session_test failed: %s", e)
@@ -142,17 +154,21 @@ class SessionMatrix:
         with self._lock:
             try:
                 os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
-                data = {k: {
-                    "label": v.label,
-                    "username": v.username,
-                    "password": v.password,
-                    "role": v.role,
-                    "cookies": v.cookies,
-                    "headers": v.headers,
-                    "tokens": v.tokens,
-                    "authenticated": v.authenticated,
-                    "metadata": v.metadata,
-                } for k, v in self.identities.items() if v.authenticated}
+                data = {
+                    k: {
+                        "label": v.label,
+                        "username": v.username,
+                        "password": v.password,
+                        "role": v.role,
+                        "cookies": v.cookies,
+                        "headers": v.headers,
+                        "tokens": v.tokens,
+                        "authenticated": v.authenticated,
+                        "metadata": v.metadata,
+                    }
+                    for k, v in self.identities.items()
+                    if v.authenticated
+                }
                 with open(SESSION_FILE, "w") as f:
                     json.dump(data, f)
             except Exception as e:
@@ -188,24 +204,22 @@ class SessionComparator:
     def __init__(self, matrix: SessionMatrix):
         self.matrix = matrix
 
-    def compare(self, url: str, actor_a: str, actor_b: str,
-                method: str = "GET", **kwargs) -> Dict:
+    def compare(self, url: str, actor_a: str, actor_b: str, method: str = "GET", **kwargs) -> Dict:
         sa = self.matrix.make_session(actor_a)
         sb = self.matrix.make_session(actor_b)
         if not sa or not sb:
             return {"error": "session not found"}
         try:
-            ra = getattr(sa, method.lower())(url, timeout=10,
-                                              **kwargs)
-            rb = getattr(sb, method.lower())(url, timeout=10,
-                                              **kwargs)
+            ra = getattr(sa, method.lower())(url, timeout=10, **kwargs)
+            rb = getattr(sb, method.lower())(url, timeout=10, **kwargs)
         except Exception as e:
             return {"error": str(e)}
 
         diff = self._compute_diff(ra, rb)
         return {
             "url": url,
-            "actor_a": actor_a, "actor_b": actor_b,
+            "actor_a": actor_a,
+            "actor_b": actor_b,
             "a": {"status": ra.status_code, "len": len(ra.text)},
             "b": {"status": rb.status_code, "len": len(rb.text)},
             "identical": ra.status_code == rb.status_code and ra.text == rb.text,
@@ -232,8 +246,14 @@ class SessionComparator:
     def _json_diff(self, a: Any, b: Any, path: str = "") -> Dict:
         diffs = []
         if type(a) != type(b):
-            diffs.append({"path": path or "root", "reason": "type_mismatch",
-                         "a_type": type(a).__name__, "b_type": type(b).__name__})
+            diffs.append(
+                {
+                    "path": path or "root",
+                    "reason": "type_mismatch",
+                    "a_type": type(a).__name__,
+                    "b_type": type(b).__name__,
+                }
+            )
         elif isinstance(a, dict):
             all_keys = set(a) | set(b)
             for k in all_keys:
@@ -251,15 +271,22 @@ class SessionComparator:
         elif isinstance(a, list):
             for i in range(min(len(a), len(b))):
                 if a[i] != b[i]:
-                    diffs.append({"path": f"{path}[{i}]",
-                                  "reason": "value_diff",
-                                  "a": str(a[i])[:60], "b": str(b[i])[:60]})
+                    diffs.append(
+                        {
+                            "path": f"{path}[{i}]",
+                            "reason": "value_diff",
+                            "a": str(a[i])[:60],
+                            "b": str(b[i])[:60],
+                        }
+                    )
             if len(a) != len(b):
-                diffs.append({"path": path, "reason": "length_diff",
-                             "a_len": len(a), "b_len": len(b)})
+                diffs.append(
+                    {"path": path, "reason": "length_diff", "a_len": len(a), "b_len": len(b)}
+                )
         elif a != b:
-            diffs.append({"path": path or "root", "reason": "value_diff",
-                         "a": str(a)[:60], "b": str(b)[:60]})
+            diffs.append(
+                {"path": path or "root", "reason": "value_diff", "a": str(a)[:60], "b": str(b)[:60]}
+            )
         return {"diffs": diffs, "total": len(diffs)}
 
 

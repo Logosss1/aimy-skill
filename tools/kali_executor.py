@@ -10,19 +10,41 @@ logger = get_logger("kali_executor")
 HAS_PARAMIKO = False
 try:
     import paramiko
+
     HAS_PARAMIKO = True
 except ImportError:
     pass
 
 
 KALI_KNOWN_TOOLS = [
-    "sqlmap", "nmap", "ffuf", "gobuster", "nuclei",
-    "whatweb", "hashcat", "john", "hydra", "medusa",
-    "nikto", "wpscan", "dirb", "wfuzz", "amass",
-    "subfinder", "httpx", "dnsx", "crackmapexec",
-    "impacket-smbserver", "responder", "bettercap",
-    "metasploit", "msfconsole", "searchsploit",
-    "aircrack-ng", "burpsuite", "zap-cli",
+    "sqlmap",
+    "nmap",
+    "ffuf",
+    "gobuster",
+    "nuclei",
+    "whatweb",
+    "hashcat",
+    "john",
+    "hydra",
+    "medusa",
+    "nikto",
+    "wpscan",
+    "dirb",
+    "wfuzz",
+    "amass",
+    "subfinder",
+    "httpx",
+    "dnsx",
+    "crackmapexec",
+    "impacket-smbserver",
+    "responder",
+    "bettercap",
+    "metasploit",
+    "msfconsole",
+    "searchsploit",
+    "aircrack-ng",
+    "burpsuite",
+    "zap-cli",
 ]
 
 
@@ -30,9 +52,7 @@ def detect_local_tools() -> Dict[str, bool]:
     available = {}
     for tool in KALI_KNOWN_TOOLS:
         try:
-            r = subprocess.run(
-                ["which", tool], capture_output=True, text=True, timeout=5
-            )
+            r = subprocess.run(["which", tool], capture_output=True, text=True, timeout=5)
             available[tool] = r.returncode == 0 and r.stdout.strip() != ""
         except Exception:
             available[tool] = False
@@ -42,9 +62,16 @@ def detect_local_tools() -> Dict[str, bool]:
 
 
 class KaliConfig:
-    def __init__(self, host: str = "", port: int = 22, user: str = "root",
-                 password: str = "", key_file: str = "", timeout: int = 30,
-                 local: bool = False):
+    def __init__(
+        self,
+        host: str = "",
+        port: int = 22,
+        user: str = "root",
+        password: str = "",
+        key_file: str = "",
+        timeout: int = 30,
+        local: bool = False,
+    ):
         self.host = host
         self.port = port
         self.user = user
@@ -52,7 +79,7 @@ class KaliConfig:
         self.key_file = key_file
         self.timeout = timeout
         self.local = local
-        self.available = (local or (bool(host) and HAS_PARAMIKO))
+        self.available = local or (bool(host) and HAS_PARAMIKO)
 
     def __bool__(self):
         return self.available
@@ -95,11 +122,15 @@ class KaliExecutor:
 
     def disconnect(self):
         if self._sftp:
-            try: self._sftp.close()
-            except Exception: pass
+            try:
+                self._sftp.close()
+            except Exception:
+                pass
         if self._client:
-            try: self._client.close()
-            except Exception: pass
+            try:
+                self._client.close()
+            except Exception:
+                pass
         self._client = None
         self._sftp = None
 
@@ -234,8 +265,9 @@ KALI_INSTANCE: Optional[KaliExecutor] = None
 KALI_LOCAL_TOOLS: Dict[str, bool] = {}
 
 
-def init_kali(host: str = "", port: int = 22, user: str = "root",
-              password: str = "", key_file: str = "") -> KaliExecutor:
+def init_kali(
+    host: str = "", port: int = 22, user: str = "root", password: str = "", key_file: str = ""
+) -> KaliExecutor:
     global KALI_INSTANCE
     cfg = KaliConfig(host, port, user, password, key_file)
     ex = KaliExecutor(cfg)
@@ -253,7 +285,9 @@ def init_kali_local() -> KaliExecutor:
     KALI_INSTANCE = ex
     KALI_LOCAL_TOOLS = detect_local_tools()
     avail = [k for k, v in KALI_LOCAL_TOOLS.items() if v]
-    logger.info("Local Kali mode: %s", " ".join(avail[:8]) + "..." if len(avail) > 8 else " ".join(avail))
+    logger.info(
+        "Local Kali mode: %s", " ".join(avail[:8]) + "..." if len(avail) > 8 else " ".join(avail)
+    )
     return ex
 
 

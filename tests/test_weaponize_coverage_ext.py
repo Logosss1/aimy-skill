@@ -213,7 +213,8 @@ class TestInteractiveWebshell:
         monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
         uploaded = []
         monkeypatch.setattr(
-            we, "_upload_via_webshell",
+            we,
+            "_upload_via_webshell",
             lambda ws, lp, rp, sess, timeout: uploaded.append((lp, rp)) or True,
         )
 
@@ -255,8 +256,11 @@ class TestUploadExt:
 
         monkeypatch.setattr(we, "run_command_via_webshell", fake_run)
         ok = we._upload_via_webshell(
-            "http://t.test/shell.php", str(local), "/tmp/pwn.bin",
-            HandlerSession(_raise_handler), 1.0,
+            "http://t.test/shell.php",
+            str(local),
+            "/tmp/pwn.bin",
+            HandlerSession(_raise_handler),
+            1.0,
         )
         assert ok is False
         assert len(calls) == 2

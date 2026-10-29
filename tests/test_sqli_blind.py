@@ -113,8 +113,9 @@ class TestBlindInjector:
 
     @responses.activate
     def test_auto_detect_dbms_mssql_by_error(self):
-        responses.add(responses.GET, re.compile(r".*"),
-                       body="Microsoft SQL Server error", status=200)
+        responses.add(
+            responses.GET, re.compile(r".*"), body="Microsoft SQL Server error", status=200
+        )
 
         injector = BlindInjector(_make_session(), timeout=5.0)
         dbms = injector._auto_detect_dbms("http://test.com/page", "id")
@@ -122,8 +123,7 @@ class TestBlindInjector:
 
     @responses.activate
     def test_auto_detect_dbms_postgres_by_error(self):
-        responses.add(responses.GET, re.compile(r".*"),
-                       body="PostgreSQL psql error", status=200)
+        responses.add(responses.GET, re.compile(r".*"), body="PostgreSQL psql error", status=200)
 
         injector = BlindInjector(_make_session(), timeout=5.0)
         dbms = injector._auto_detect_dbms("http://test.com/page", "id")
@@ -131,8 +131,9 @@ class TestBlindInjector:
 
     @responses.activate
     def test_auto_detect_dbms_oracle_by_error(self):
-        responses.add(responses.GET, re.compile(r".*"),
-                       body="ORA-00911: invalid character", status=200)
+        responses.add(
+            responses.GET, re.compile(r".*"), body="ORA-00911: invalid character", status=200
+        )
 
         injector = BlindInjector(_make_session(), timeout=5.0)
         dbms = injector._auto_detect_dbms("http://test.com/page", "id")
@@ -211,8 +212,12 @@ class TestConfidenceIntegration:
         injector = BlindInjector(_make_session(), timeout=5.0)
         injector.dbms = "mysql"
         result = {
-            "vulnerable": False, "dbms": "mysql", "technique": None,
-            "data": {}, "error": None, "waf_detected": None,
+            "vulnerable": False,
+            "dbms": "mysql",
+            "technique": None,
+            "data": {},
+            "error": None,
+            "waf_detected": None,
         }
         val = injector._extract_via_error("http://test.com/page", "id", "@@version")
         if val:

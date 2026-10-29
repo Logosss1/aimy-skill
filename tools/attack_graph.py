@@ -17,6 +17,7 @@ Confidence Propagation:
   - Bayesian update on evidence
   - Negative evidence prunes entire subgraph
 """
+
 import heapq
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -213,30 +214,56 @@ class AttackGraph:
         self._id_counter += 1
         return "%s_%d" % (prefix, self._id_counter)
 
-    def add_node(self, node_id: str, state_type: str, description: str,
-                 confidence: float, is_goal: bool = False, is_start: bool = False,
-                 tags: List[str] = None, preconditions: List[str] = None) -> GraphNode:
+    def add_node(
+        self,
+        node_id: str,
+        state_type: str,
+        description: str,
+        confidence: float,
+        is_goal: bool = False,
+        is_start: bool = False,
+        tags: List[str] = None,
+        preconditions: List[str] = None,
+    ) -> GraphNode:
         if node_id in self.nodes:
             existing = self.nodes[node_id]
             existing.confidence = max(existing.confidence, confidence)
             return existing
         node = GraphNode(
-            id=node_id, state_type=state_type, description=description,
-            confidence=confidence, is_goal=is_goal, is_start=is_start,
-            tags=tags or [], preconditions=preconditions or [],
+            id=node_id,
+            state_type=state_type,
+            description=description,
+            confidence=confidence,
+            is_goal=is_goal,
+            is_start=is_start,
+            tags=tags or [],
+            preconditions=preconditions or [],
         )
         self.nodes[node_id] = node
         return node
 
-    def add_edge(self, from_id: str, to_id: str, action: str,
-                 transition_prob: float, cost: float = 1.0,
-                 preconditions: List[str] = None, postconditions: List[str] = None,
-                 cve_ids: List[str] = None, description: str = "") -> GraphEdge:
+    def add_edge(
+        self,
+        from_id: str,
+        to_id: str,
+        action: str,
+        transition_prob: float,
+        cost: float = 1.0,
+        preconditions: List[str] = None,
+        postconditions: List[str] = None,
+        cve_ids: List[str] = None,
+        description: str = "",
+    ) -> GraphEdge:
         edge = GraphEdge(
-            from_id=from_id, to_id=to_id, action=action,
-            transition_prob=transition_prob, cost=cost,
-            preconditions=preconditions or [], postconditions=postconditions or [],
-            cve_ids=cve_ids or [], description=description,
+            from_id=from_id,
+            to_id=to_id,
+            action=action,
+            transition_prob=transition_prob,
+            cost=cost,
+            preconditions=preconditions or [],
+            postconditions=postconditions or [],
+            cve_ids=cve_ids or [],
+            description=description,
         )
         self.edges[from_id].append(edge)
         self.reverse_edges[to_id].append(edge)
@@ -290,19 +317,27 @@ class AttackGraph:
         if any("spring" in t for t in tech_names):
             if "sqli_found" not in self.nodes:
                 self.add_node("sqli_found", "initial_access", "SQL Injection Found", 0.75)
-            self.add_edge("recon_complete", "sqli_found", "spring_sqli", 0.75, cve_ids=["CVE-2022-22965"])
+            self.add_edge(
+                "recon_complete", "sqli_found", "spring_sqli", 0.75, cve_ids=["CVE-2022-22965"]
+            )
 
         if any("weblogic" in t for t in tech_names):
             self.add_node("deser_found", "initial_access", "Deserialization Found", 0.85)
-            self.add_edge("recon_complete", "deser_found", "weblogic_deser", 0.80, cve_ids=["CVE-2020-14882"])
+            self.add_edge(
+                "recon_complete", "deser_found", "weblogic_deser", 0.80, cve_ids=["CVE-2020-14882"]
+            )
 
         if any("thinkphp" in t for t in tech_names):
             self.add_node("cmdi_found", "initial_access", "Command Injection Found", 0.90)
-            self.add_edge("recon_complete", "cmdi_found", "thinkphp_cmdi", 0.85, cve_ids=["CVE-2018-1000001"])
+            self.add_edge(
+                "recon_complete", "cmdi_found", "thinkphp_cmdi", 0.85, cve_ids=["CVE-2018-1000001"]
+            )
 
         if any("laravel" in t for t in tech_names):
             self.add_node("deser_found", "initial_access", "Deserialization Found", 0.80)
-            self.add_edge("recon_complete", "deser_found", "laravel_deser", 0.75, cve_ids=["CVE-2021-3129"])
+            self.add_edge(
+                "recon_complete", "deser_found", "laravel_deser", 0.75, cve_ids=["CVE-2021-3129"]
+            )
 
         if 6379 in open_port_numbers:
             self.add_node("redis_unauth", "service_vuln", "Redis Unauthorized", 0.80)
@@ -351,8 +386,7 @@ class AttackGraph:
             if not changed:
                 break
 
-    def integrate_evidence(self, node_id: str, confirmed: bool,
-                           likelihood: float = 0.80) -> None:
+    def integrate_evidence(self, node_id: str, confirmed: bool, likelihood: float = 0.80) -> None:
         if node_id not in self.nodes:
             return
         node = self.nodes[node_id]
@@ -369,8 +403,9 @@ class AttackGraph:
             node.evidence.append("Not confirmed (fpr=%.2f)" % false_pos)
         self.propagate()
 
-    def shortest_path(self, goal_type: str = "rce_obtained",
-                      min_confidence: float = 0.10) -> Optional[AttackPath]:
+    def shortest_path(
+        self, goal_type: str = "rce_obtained", min_confidence: float = 0.10
+    ) -> Optional[AttackPath]:
         start = "start"
         if goal_type not in self.nodes:
             for nid, n in self.nodes.items():
@@ -390,8 +425,11 @@ class AttackGraph:
             if current == goal_type:
                 conf = -neg_conf
                 return AttackPath(
-                    nodes=path, edges=edge_names, confidence=conf,
-                    cost=cost, path_string=" → ".join(path),
+                    nodes=path,
+                    edges=edge_names,
+                    confidence=conf,
+                    cost=cost,
+                    path_string=" → ".join(path),
                     chains=[],
                 )
             for edge in self.edges.get(current, []):
@@ -404,22 +442,45 @@ class AttackGraph:
                 new_cost = cost + edge.cost
                 new_conf = -neg_conf * edge.transition_prob
                 if next_node not in dist or new_cost < dist[next_node][0]:
-                    dist[next_node] = (new_cost, new_conf, path + [next_node], edge_names + [edge.action])
-                    heapq.heappush(heap, (new_cost, new_conf, next_node,
-                                          path + [next_node], edge_names + [edge.action]))
+                    dist[next_node] = (
+                        new_cost,
+                        new_conf,
+                        path + [next_node],
+                        edge_names + [edge.action],
+                    )
+                    heapq.heappush(
+                        heap,
+                        (
+                            new_cost,
+                            new_conf,
+                            next_node,
+                            path + [next_node],
+                            edge_names + [edge.action],
+                        ),
+                    )
         return None
 
     def all_paths(self, max_depth: int = 8, min_confidence: float = 0.10) -> List[AttackPath]:
         paths = []
-        goals = [nid for nid, n in self.nodes.items() if n.is_goal or n.state_type == "post_exploit"]
+        goals = [
+            nid for nid, n in self.nodes.items() if n.is_goal or n.state_type == "post_exploit"
+        ]
         for goal in goals:
             self._dfs_paths("start", goal, [], [], set(), max_depth, min_confidence, paths)
         paths.sort(key=lambda p: p.confidence * (1.0 / max(p.cost, 0.1)), reverse=True)
         return paths
 
-    def _dfs_paths(self, current: str, goal: str, path: List[str],
-                   edges: List[str], visited: Set[str], max_depth: int,
-                   min_confidence: float, result: List[AttackPath]) -> None:
+    def _dfs_paths(
+        self,
+        current: str,
+        goal: str,
+        path: List[str],
+        edges: List[str],
+        visited: Set[str],
+        max_depth: int,
+        min_confidence: float,
+        result: List[AttackPath],
+    ) -> None:
         if len(path) > max_depth:
             return
         if current in visited:
@@ -436,22 +497,36 @@ class AttackGraph:
                             break
             if conf >= min_confidence:
                 cost = len(edges)
-                result.append(AttackPath(
-                    nodes=list(path), edges=list(edges), confidence=conf,
-                    cost=cost, path_string=" → ".join(path),
-                ))
+                result.append(
+                    AttackPath(
+                        nodes=list(path),
+                        edges=list(edges),
+                        confidence=conf,
+                        cost=cost,
+                        path_string=" → ".join(path),
+                    )
+                )
         else:
             for edge in self.edges.get(current, []):
                 next_node = edge.to_id
                 next_obj = self.nodes.get(next_node)
                 if next_obj and next_obj.confidence >= min_confidence:
-                    self._dfs_paths(next_node, goal, path, edges + [edge.action],
-                                    visited, max_depth, min_confidence, result)
+                    self._dfs_paths(
+                        next_node,
+                        goal,
+                        path,
+                        edges + [edge.action],
+                        visited,
+                        max_depth,
+                        min_confidence,
+                        result,
+                    )
         path.pop()
         visited.remove(current)
 
-    def best_paths(self, min_confidence: float = 0.20,
-                   max_depth: int = 6, top_n: int = 10) -> List[AttackPath]:
+    def best_paths(
+        self, min_confidence: float = 0.20, max_depth: int = 6, top_n: int = 10
+    ) -> List[AttackPath]:
         all_p = self.all_paths(max_depth, min_confidence)
         seen = set()
         unique = []
@@ -463,7 +538,7 @@ class AttackGraph:
         unique.sort(key=lambda x: x.confidence * (1.0 / max(x.cost, 0.1)), reverse=True)
         return unique[:top_n]
 
-    def subgraph_from(self, start_node: str, max_depth: int = 5) -> 'AttackGraph':
+    def subgraph_from(self, start_node: str, max_depth: int = 5) -> "AttackGraph":
         sub = AttackGraph(self.target)
         visited = set()
         queue = [(start_node, 0)]
@@ -474,15 +549,29 @@ class AttackGraph:
             visited.add(nid)
             node = self.nodes.get(nid)
             if node:
-                sub.add_node(nid, node.state_type, node.description,
-                            node.confidence, node.is_goal, node.is_start,
-                            node.tags, node.preconditions)
+                sub.add_node(
+                    nid,
+                    node.state_type,
+                    node.description,
+                    node.confidence,
+                    node.is_goal,
+                    node.is_start,
+                    node.tags,
+                    node.preconditions,
+                )
             for edge in self.edges.get(nid, []):
                 if edge.to_id in self.nodes:
-                    sub.add_edge(nid, edge.to_id, edge.action,
-                                edge.transition_prob, edge.cost,
-                                edge.preconditions, edge.postconditions,
-                                edge.cve_ids, edge.description)
+                    sub.add_edge(
+                        nid,
+                        edge.to_id,
+                        edge.action,
+                        edge.transition_prob,
+                        edge.cost,
+                        edge.preconditions,
+                        edge.postconditions,
+                        edge.cve_ids,
+                        edge.description,
+                    )
                 queue.append((edge.to_id, depth + 1))
         return sub
 

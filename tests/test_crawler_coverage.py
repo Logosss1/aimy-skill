@@ -85,14 +85,17 @@ class TestCrawlerBasics:
         assert http is created
         assert http.verify == crawler_mod.settings.verify_ssl
 
-    @pytest.mark.parametrize("href, expected", [
-        ("/a/b/", BASE + "/a/b"),
-        ("/", BASE + "/"),
-        ("page?x=1", BASE + "/page?x=1"),
-        ("#frag", BASE + "/"),
-        ("mailto:x@y.com", None),
-        ("javascript:void(0)", None),
-    ])
+    @pytest.mark.parametrize(
+        "href, expected",
+        [
+            ("/a/b/", BASE + "/a/b"),
+            ("/", BASE + "/"),
+            ("page?x=1", BASE + "/page?x=1"),
+            ("#frag", BASE + "/"),
+            ("mailto:x@y.com", None),
+            ("javascript:void(0)", None),
+        ],
+    )
     def test_normalize(self, href, expected):
         c = Crawler(BASE)
         assert c._normalize(href, BASE) == expected
@@ -106,21 +109,25 @@ class TestCrawlerBasics:
     def test_detect_spa(self):
         c = Crawler(BASE)
         assert c._detect_spa('<div id="root"></div>') is True
-        assert c._detect_spa('const a = Vue.createApp({})') is True
+        assert c._detect_spa("const a = Vue.createApp({})") is True
         assert c._detect_spa("<html><body>plain</body></html>") is False
 
     def test_extract_js_bundles_dedupes(self):
         c = Crawler(BASE)
-        html = ('<script src="/a.js"></script><script src="/a.js"></script>'
-                "<script src='/b.js'></script><script>inline</script>")
+        html = (
+            '<script src="/a.js"></script><script src="/a.js"></script>'
+            "<script src='/b.js'></script><script>inline</script>"
+        )
         assert c._extract_js_bundles(html) == ["/a.js", "/b.js"]
 
     def test_analyze_js_for_api(self):
         c = Crawler(BASE)
-        js = ('var a = "/api/users"; axios.get("v1/items");'
-              'var base = baseURL: "http://api.site.test";'
-              'url: "/xx/yy"; path: "/admin"; route: "/r1";'
-              '"/about": {component: Home}; const tiny = "/ab";')
+        js = (
+            'var a = "/api/users"; axios.get("v1/items");'
+            'var base = baseURL: "http://api.site.test";'
+            'url: "/xx/yy"; path: "/admin"; route: "/r1";'
+            '"/about": {component: Home}; const tiny = "/ab";'
+        )
         apis = c._analyze_js_for_api(js)
         assert "/api/users" in apis
         assert "v1/items" in apis
@@ -135,11 +142,13 @@ class TestCrawlerBasics:
 class TestCrawlerExtractors:
     def test_extract_forms_bs4(self):
         c = Crawler(BASE)
-        html = ('<form action="/login" method="post">'
-                '<input name="user" type="text" value="a">'
-                '<input type="hidden">'
-                "</form>"
-                "<form><input name='q'></form>")
+        html = (
+            '<form action="/login" method="post">'
+            '<input name="user" type="text" value="a">'
+            '<input type="hidden">'
+            "</form>"
+            "<form><input name='q'></form>"
+        )
         c._extract_forms(html, BASE + "/p")
         assert c.forms[0]["action"] == BASE + "/login"
         assert c.forms[0]["method"] == "POST"
@@ -165,12 +174,14 @@ class TestCrawlerExtractors:
 
     def test_extract_endpoints_bs4(self):
         c = Crawler(BASE)
-        html = ('<a href="/page?x=1&y=2">p</a>'
-                '<a href="/page?x=1&y=2">dup</a>'
-                '<a href="mailto:x@y.com">m</a>'
-                '<a href="/style.css">c</a>'
-                "<a>nohref</a>"
-                '<script>var u = "/api/users";</script>')
+        html = (
+            '<a href="/page?x=1&y=2">p</a>'
+            '<a href="/page?x=1&y=2">dup</a>'
+            '<a href="mailto:x@y.com">m</a>'
+            '<a href="/style.css">c</a>'
+            "<a>nohref</a>"
+            '<script>var u = "/api/users";</script>'
+        )
         c._extract_endpoints(html, BASE + "/p")
         assert c.endpoints["/page"]["params"] == ["x", "y"]
         assert {"x", "y"} <= c.all_params
@@ -194,7 +205,8 @@ class TestCrawlerExtractors:
     def test_extract_embedded_params(self):
         c = Crawler(BASE)
         c._extract_embedded_params(
-            '{"alpha": "1"} var beta = "x"; let gamma = "y"; const delta = "z"; {"a": "1"}')
+            '{"alpha": "1"} var beta = "x"; let gamma = "y"; const delta = "z"; {"a": "1"}'
+        )
         assert {"alpha", "beta", "gamma", "delta"} <= c.all_params
         assert "a" not in c.all_params
 
@@ -206,7 +218,7 @@ class TestCrawlerExtractors:
             "</script>"
             "<script>window.__INITIAL_STATE__ = "
             '{"a": "/api/state", "b": "http://cdn.test/x.json", "c": {"d": "/api/deep"}};</script>'
-            "<script>window.__NUXT__ = {\"route\": \"/nuxt\"}</script>"
+            '<script>window.__NUXT__ = {"route": "/nuxt"}</script>'
         )
         c._extract_ssr_data(html, BASE)
         assert {"/api/next", "/deep", "/api/state", "/api/deep", "/nuxt"} <= c.api_endpoints
@@ -253,8 +265,7 @@ class TestCrawlerExtractors:
 
     def test_process_page_redirect_and_links(self):
         c = Crawler(BASE)
-        html = ('<a href="/next">n</a><a href="/img.png">i</a>'
-                '<a href="http://other.test/x">e</a>')
+        html = '<a href="/next">n</a><a href="/img.png">i</a><a href="http://other.test/x">e</a>'
         r = _resp(BASE + "/final", html)
         new_urls = c._process_page(BASE + "/p", r)
         urls = [u for u, _ in new_urls]
@@ -283,8 +294,9 @@ class TestCrawlLoop:
             if url == BASE:
                 return _resp(url, '<a href="/a">a</a><a href="/b">b</a><a href="/broken">x</a>')
             if url == BASE + "/a":
-                return _resp(url, '<a href="/c">c</a>'
-                                  '<form action="/submit"><input name="q"></form>')
+                return _resp(
+                    url, '<a href="/c">c</a><form action="/submit"><input name="q"></form>'
+                )
             if url == BASE + "/b":
                 return _resp(url, "")
             if url == BASE + "/c":
@@ -301,30 +313,41 @@ class TestCrawlLoop:
         assert result["summary"]["endpoints_found"] >= 3
 
     def test_crawl_single_worker_respects_max_pages(self):
-        c = Crawler(BASE, max_pages=1, sess=FakeSession(lambda url: _resp(
-            url, '<a href="/a">a</a>')))
+        c = Crawler(
+            BASE, max_pages=1, sess=FakeSession(lambda url: _resp(url, '<a href="/a">a</a>'))
+        )
         result = c.crawl()
         assert result["summary"]["pages_crawled"] == 1
         assert result["urls"] == [BASE]
         assert result["summary"]["is_spa"] is False
 
     def test_crawl_self_link_and_delay(self):
-        c = Crawler(BASE, max_pages=5, delay=0.001,
-                    sess=FakeSession(lambda url: _resp(url, '<a href="/">self</a>')))
+        c = Crawler(
+            BASE,
+            max_pages=5,
+            delay=0.001,
+            sess=FakeSession(lambda url: _resp(url, '<a href="/">self</a>')),
+        )
         result = c.crawl()
         assert result["summary"]["pages_crawled"] == 2
 
     def test_crawl_spa_bundles_and_common_api_fallback(self):
         def router(url):
             if url == BASE:
-                return _resp(url, '<div id="app"></div>'
-                                  '<script src="/static/app.js"></script>'
-                                  '<script src="/static/fail.js"></script>'
-                                  'var cfg = "/api/users";')
+                return _resp(
+                    url,
+                    '<div id="app"></div>'
+                    '<script src="/static/app.js"></script>'
+                    '<script src="/static/fail.js"></script>'
+                    'var cfg = "/api/users";',
+                )
             if url == BASE + "/static/app.js":
-                return _resp(url, 'var a="/api/users";axios.get("v1/items");'
-                                  'base:"http://api.site.test";url:"/x/y";'
-                                  'path:"/admin";route:"/r1";"/about":{component:Home}')
+                return _resp(
+                    url,
+                    'var a="/api/users";axios.get("v1/items");'
+                    'base:"http://api.site.test";url:"/x/y";'
+                    'path:"/admin";route:"/r1";"/about":{component:Home}',
+                )
             if url == BASE + "/static/fail.js":
                 raise RuntimeError("bundle gone")
             if url.endswith("/api/health") or url.endswith("/api/users"):
@@ -375,8 +398,7 @@ class TestCrawlLoop:
         assert result["is_spa"] is False
 
     def test_module_level_crawl(self):
-        result = crawl(BASE, max_pages=1,
-                       sess=FakeSession(lambda url: _resp(url, "<html></html>")))
+        result = crawl(BASE, max_pages=1, sess=FakeSession(lambda url: _resp(url, "<html></html>")))
         assert result["summary"]["pages_crawled"] == 1
         assert set(result) >= {"urls", "endpoints", "forms", "api_endpoints", "summary"}
 
@@ -435,8 +457,7 @@ class FakeTextHandle:
 
 
 class FakePage:
-    def __init__(self, url, html="", anchors=(), scripts=(), buttons=(),
-                 content_error=None):
+    def __init__(self, url, html="", anchors=(), scripts=(), buttons=(), content_error=None):
         self.url = url
         self._html = html
         self.anchors = list(anchors)
@@ -512,6 +533,7 @@ class TestSpaCrawlerWithFakeEngine:
     @pytest.fixture(autouse=True)
     def _no_sleep(self, monkeypatch):
         import tools.spa_crawler as spa_mod
+
         self.spa_mod = spa_mod
         monkeypatch.setattr(spa_mod.time, "sleep", lambda seconds: None)
 
@@ -519,8 +541,7 @@ class TestSpaCrawlerWithFakeEngine:
         return FakePage(
             "http://app.test/",
             html="<html>home</html>",
-            anchors=["http://app.test/about", "http://other.test/x",
-                     "#top", "javascript:void(0)"],
+            anchors=["http://app.test/about", "http://other.test/x", "#top", "javascript:void(0)"],
             scripts=["/static/app.js"],
             buttons=["Login", "Login"],
         )
@@ -529,8 +550,12 @@ class TestSpaCrawlerWithFakeEngine:
         return FakeEngine(
             self._page(),
             api_calls=[
-                FakeApiCall("http://app.test/api/login", "POST", 200,
-                            '{"endpoints": ["/api/a", 1], "links": ["/api/b"]}'),
+                FakeApiCall(
+                    "http://app.test/api/login",
+                    "POST",
+                    200,
+                    '{"endpoints": ["/api/a", 1], "links": ["/api/b"]}',
+                ),
                 FakeApiCall("http://app.test/none", "GET", 500, None),
             ],
             scripts=[
@@ -541,8 +566,9 @@ class TestSpaCrawlerWithFakeEngine:
 
     def test_crawl_discovers_links_apis_and_clicks(self):
         engine = self._engine()
-        crawler = self.spa_mod.SpaCrawler("http://app.test", max_clicks=5,
-                                          max_depth=2, engine=engine)
+        crawler = self.spa_mod.SpaCrawler(
+            "http://app.test", max_clicks=5, max_depth=2, engine=engine
+        )
         result = crawler.crawl()
         assert engine.capture_api is True
         assert engine.navigated == [("http://app.test", 30000)]
@@ -557,23 +583,21 @@ class TestSpaCrawlerWithFakeEngine:
 
     def test_crawl_module_level_function(self):
         engine = self._engine()
-        result = self.spa_mod.crawl_spa("http://app.test", max_clicks=1,
-                                        max_depth=1, engine=engine)
+        result = self.spa_mod.crawl_spa("http://app.test", max_clicks=1, max_depth=1, engine=engine)
         assert result["urls_crawled"] >= 1
 
     def test_crawl_playwright_unavailable(self):
-        with mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available",
-                               return_value=False):
+        with mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available", return_value=False):
             result = self.spa_mod.SpaCrawler("http://app.test").crawl()
         assert result["error"] == "Playwright not available"
         assert result["endpoints"] == {}
 
     def test_crawl_auto_engine_is_started_and_stopped(self):
         engine = self._engine()
-        with mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available",
-                               return_value=True), \
-                mock.patch.object(self.spa_mod, "PlaywrightEngine",
-                                  return_value=engine):
+        with (
+            mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available", return_value=True),
+            mock.patch.object(self.spa_mod, "PlaywrightEngine", return_value=engine),
+        ):
             result = self.spa_mod.SpaCrawler("http://app.test", max_clicks=0).crawl()
         assert engine.started is True
         assert engine.stopped is True
@@ -589,10 +613,10 @@ class TestSpaCrawlerWithFakeEngine:
     def test_auto_engine_stop_failure_is_swallowed(self):
         engine = self._engine()
         engine.stop = mock.Mock(side_effect=RuntimeError("stop failed"))
-        with mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available",
-                               return_value=True), \
-                mock.patch.object(self.spa_mod, "PlaywrightEngine",
-                                  return_value=engine):
+        with (
+            mock.patch.object(self.spa_mod.PlaywrightEngine, "is_available", return_value=True),
+            mock.patch.object(self.spa_mod, "PlaywrightEngine", return_value=engine),
+        ):
             result = self.spa_mod.SpaCrawler("http://app.test", max_clicks=0).crawl()
         assert result["api_discovered"] >= 1
 
@@ -600,8 +624,9 @@ class TestSpaCrawlerWithFakeEngine:
         page = self._page()
         page.goto = mock.Mock(side_effect=RuntimeError("goto failed"))
         engine = FakeEngine(page, scripts=[FakeScript('path:"/x1"')])
-        crawler = self.spa_mod.SpaCrawler("http://app.test", max_clicks=5,
-                                          max_depth=1, engine=engine)
+        crawler = self.spa_mod.SpaCrawler(
+            "http://app.test", max_clicks=5, max_depth=1, engine=engine
+        )
         result = crawler.crawl()
         assert result["urls_crawled"] == 1
         assert "/x1" in result["js_api_routes"]
@@ -620,8 +645,9 @@ class TestSpaCrawlerWithFakeEngine:
         page = self._page()
         page.get_by_text = mock.Mock(return_value=BadClickHandle())
         engine = FakeEngine(page)
-        crawler = self.spa_mod.SpaCrawler("http://app.test", max_clicks=5,
-                                          max_depth=2, engine=engine)
+        crawler = self.spa_mod.SpaCrawler(
+            "http://app.test", max_clicks=5, max_depth=2, engine=engine
+        )
         result = crawler.crawl()
         assert page.closed is True
         assert result["urls_crawled"] == 1
@@ -636,10 +662,13 @@ class TestSpaCrawlerWithFakeEngine:
 
     def test_extract_from_page_merges_methods_for_known_path(self):
         page = FakePage("http://app.test/", html="<html></html>")
-        engine = FakeEngine(page, api_calls=[
-            FakeApiCall("http://app.test/api/x", "GET"),
-            FakeApiCall("http://app.test/api/x", "POST"),
-        ])
+        engine = FakeEngine(
+            page,
+            api_calls=[
+                FakeApiCall("http://app.test/api/x", "GET"),
+                FakeApiCall("http://app.test/api/x", "POST"),
+            ],
+        )
         crawler = self.spa_mod.SpaCrawler("http://app.test", engine=engine)
         crawler._extract_from_page(page)
         assert crawler.discovered_endpoints["/api/x"]["methods"] == ["GET", "POST"]
@@ -648,8 +677,9 @@ class TestSpaCrawlerWithFakeEngine:
         crawler = self.spa_mod.SpaCrawler("http://app.test")
         crawler._parse_json_response("{bad", "http://app.test/")
         crawler._parse_json_response("[1, 2]", "http://app.test/")
-        crawler._parse_json_response('{"endpoints": [1, "/ok"], "routes": "nope"}',
-                                     "http://app.test/")
+        crawler._parse_json_response(
+            '{"endpoints": [1, "/ok"], "routes": "nope"}', "http://app.test/"
+        )
         assert crawler.api_routes == {"/ok"}
 
     def test_get_internal_links_swallows_errors(self):

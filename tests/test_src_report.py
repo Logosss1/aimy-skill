@@ -3,8 +3,13 @@ from tools.src_report import SRC_VULN_TEMPLATES, src_report, src_report_markdown
 
 class TestSrcReport:
     def test_boolean_template(self):
-        f = {"type": "boolean", "url": "http://x.com/p", "param": "id",
-             "vector": "1 AND 1=1", "evidence": ["diff=200"]}
+        f = {
+            "type": "boolean",
+            "url": "http://x.com/p",
+            "param": "id",
+            "vector": "1 AND 1=1",
+            "evidence": ["diff=200"],
+        }
         r = src_report(f)
         assert r["vuln_type"] == "boolean"
         assert r["severity"] == "高危"

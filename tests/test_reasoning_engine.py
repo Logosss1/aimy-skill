@@ -1,4 +1,3 @@
-
 from tools.reasoning_engine import (
     Hypothesis,
     ReasoningEngine,
@@ -120,7 +119,11 @@ class TestReasoningEngineAnalyze:
         engine = ReasoningEngine("http://target.test")
         ctx = self._ctx(open_ports=[{"port": 6379}, {"port": 80}])
         hyps = engine.analyze(ctx)
-        redis_h = [h for h in hyps if h.vuln_type == "unauthorized_access" and h.detail.get("service") == "redis"]
+        redis_h = [
+            h
+            for h in hyps
+            if h.vuln_type == "unauthorized_access" and h.detail.get("service") == "redis"
+        ]
         assert len(redis_h) == 1
         assert redis_h[0].confidence == 0.70
 
@@ -128,7 +131,11 @@ class TestReasoningEngineAnalyze:
         engine = ReasoningEngine("http://target.test")
         ctx = self._ctx(open_ports=[{"port": 3306}, {"port": 80}])
         hyps = engine.analyze(ctx)
-        mysql_h = [h for h in hyps if h.vuln_type == "unauthorized_access" and h.detail.get("service") == "mysql"]
+        mysql_h = [
+            h
+            for h in hyps
+            if h.vuln_type == "unauthorized_access" and h.detail.get("service") == "mysql"
+        ]
         assert len(mysql_h) == 1
         assert mysql_h[0].confidence == 0.50
 
@@ -302,10 +309,20 @@ class TestReasoningEngineChains:
     def test_suggest_chains(self):
         engine = ReasoningEngine("http://target.test")
         hyps = [
-            Hypothesis(vuln_type="ssrf", confidence=0.9,
-                       suggested_chain="ssrf_to_rce", endpoint="/fetch", param="url"),
-            Hypothesis(vuln_type="xss", confidence=0.8,
-                       suggested_chain="xss_to_auth", endpoint="/search", param="q"),
+            Hypothesis(
+                vuln_type="ssrf",
+                confidence=0.9,
+                suggested_chain="ssrf_to_rce",
+                endpoint="/fetch",
+                param="url",
+            ),
+            Hypothesis(
+                vuln_type="xss",
+                confidence=0.8,
+                suggested_chain="xss_to_auth",
+                endpoint="/search",
+                param="q",
+            ),
         ]
         confirmed = {"ssrf", "xss"}
         chains = engine.suggest_chains(hyps, confirmed)
@@ -315,8 +332,13 @@ class TestReasoningEngineChains:
     def test_suggest_chains_filters_unconfirmed(self):
         engine = ReasoningEngine("http://target.test")
         hyps = [
-            Hypothesis(vuln_type="ssrf", confidence=0.9,
-                       suggested_chain="ssrf_to_rce", endpoint="/fetch", param="url"),
+            Hypothesis(
+                vuln_type="ssrf",
+                confidence=0.9,
+                suggested_chain="ssrf_to_rce",
+                endpoint="/fetch",
+                param="url",
+            ),
         ]
         chains = engine.suggest_chains(hyps, set())
         assert len(chains) == 0
@@ -342,17 +364,53 @@ class TestReasoningEngineChains:
 
 class TestRuleFunctions:
     def test_rule_spring_actuator_none(self):
-        ctx = {"all_techs": ["nginx"], "dirs": [], "dir_full": [], "ports": [], "port_data": [], "git": {}, "existing_vulns": [], "existing_types": set()}
+        ctx = {
+            "all_techs": ["nginx"],
+            "dirs": [],
+            "dir_full": [],
+            "ports": [],
+            "port_data": [],
+            "git": {},
+            "existing_vulns": [],
+            "existing_types": set(),
+        }
         assert _rule_spring_actuator(**ctx) is None
 
     def test_rule_php_lfi_none(self):
-        ctx = {"all_techs": ["nginx"], "dirs": [], "dir_full": [], "ports": [], "port_data": [], "git": {}, "existing_vulns": [], "existing_types": set()}
+        ctx = {
+            "all_techs": ["nginx"],
+            "dirs": [],
+            "dir_full": [],
+            "ports": [],
+            "port_data": [],
+            "git": {},
+            "existing_vulns": [],
+            "existing_types": set(),
+        }
         assert _rule_php_lfi(**ctx) is None
 
     def test_rule_graphql_none(self):
-        ctx = {"all_techs": [], "dirs": [], "dir_full": [], "ports": [], "port_data": [], "git": {}, "existing_vulns": [], "existing_types": set()}
+        ctx = {
+            "all_techs": [],
+            "dirs": [],
+            "dir_full": [],
+            "ports": [],
+            "port_data": [],
+            "git": {},
+            "existing_vulns": [],
+            "existing_types": set(),
+        }
         assert _rule_graphql(**ctx) is None
 
     def test_rule_jwt_none(self):
-        ctx = {"all_techs": [], "dirs": [], "dir_full": [], "ports": [], "port_data": [], "git": {}, "existing_vulns": [], "existing_types": set()}
+        ctx = {
+            "all_techs": [],
+            "dirs": [],
+            "dir_full": [],
+            "ports": [],
+            "port_data": [],
+            "git": {},
+            "existing_vulns": [],
+            "existing_types": set(),
+        }
         assert _rule_jwt_found(**ctx) is None

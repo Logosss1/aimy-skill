@@ -80,7 +80,10 @@ class _Settings:
 
     def __repr__(self):
         return "<Settings verify_ssl=%s mode=%s timeout=%s threads=%s>" % (
-            self.verify_ssl, self.mode, self.timeout, self.threads,
+            self.verify_ssl,
+            self.mode,
+            self.timeout,
+            self.threads,
         )
 
 

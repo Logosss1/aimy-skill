@@ -12,6 +12,7 @@ Judgment (engine-style differential vs a per-service baseline probe):
 * oversized_reply     -- reply length ratio > 3x baseline (buffer overwrite candidate)
 * slow_response       -- elapsed ratio > 5x baseline and > 3s (blind-logic candidate)
 """
+
 import socket
 import time
 from typing import Callable, Dict, List, Optional, Sequence
@@ -53,37 +54,50 @@ BASELINE_PROBES: Dict[str, bytes] = {
 
 SERVICE_PAYLOADS: Dict[str, List[bytes]] = {
     "ftp": [
-        b"USER admin\r\n", b"PASS x\r\n", b"STAT\r\n", b"CWD ../../../../\r\n",
-        b"USER " + b"A" * 2048 + b"\r\n", b"LIST -R\r\n",
+        b"USER admin\r\n",
+        b"PASS x\r\n",
+        b"STAT\r\n",
+        b"CWD ../../../../\r\n",
+        b"USER " + b"A" * 2048 + b"\r\n",
+        b"LIST -R\r\n",
     ],
     "ssh": [
-        b"SSH-2.0-OpenSSH_9.0\r\n", b"\x00" * 64, b"A" * 2048 + b"\r\n",
+        b"SSH-2.0-OpenSSH_9.0\r\n",
+        b"\x00" * 64,
+        b"A" * 2048 + b"\r\n",
     ],
     "smtp": [
-        b"EHLO fuzz\r\n", b"VRFY root\r\n",
-        b"RCPT TO:<" + b"A" * 2048 + b">\r\n", b"MAIL FROM:<a@b>\r\n",
+        b"EHLO fuzz\r\n",
+        b"VRFY root\r\n",
+        b"RCPT TO:<" + b"A" * 2048 + b">\r\n",
+        b"MAIL FROM:<a@b>\r\n",
         b"DATA\r\n" + b"X" * 4096 + b"\r\n.\r\n",
     ],
     "pop3": [
-        b"CAPA\r\n", b"USER " + b"A" * 2048 + b"\r\n", b"STAT\r\n",
+        b"CAPA\r\n",
+        b"USER " + b"A" * 2048 + b"\r\n",
+        b"STAT\r\n",
         b"LIST 999999999\r\n",
     ],
     "imap": [
-        b"CAPABILITY\r\n", b"a LOGIN " + b"A" * 2048 + b" x\r\n",
+        b"CAPABILITY\r\n",
+        b"a LOGIN " + b"A" * 2048 + b" x\r\n",
         b"b FETCH 1 BODY[]\r\n",
     ],
     "telnet": [
-        b"\xff\xf6", b"\xff\xfb\x01", b"A" * 2048 + b"\r\n",
+        b"\xff\xf6",
+        b"\xff\xfb\x01",
+        b"A" * 2048 + b"\r\n",
     ],
     "dns": [
-        b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
-        b"\x07example\x03com\x00\x00\x01\x00\x01",
+        b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01",
     ],
     "ldap": [
         b"\x30\x0c\x02\x01\x01\x60\x07\x02\x01\x03\x04\x00\x80\x00",
     ],
     "smb": [
-        b"\x00" * 32, b"\xffSMB" + b"\x00" * 64,
+        b"\x00" * 32,
+        b"\xffSMB" + b"\x00" * 64,
     ],
     "snmp": [
         b"\x30\x26\x02\x01\x01\x04\x06public\xa0\x19\x02\x04"
@@ -91,23 +105,31 @@ SERVICE_PAYLOADS: Dict[str, List[bytes]] = {
         b"\x30\x09\x06\x05\x2b\x06\x01\x02\x01\x05\x00",
     ],
     "mysql": [
-        b"\x00" * 64, b"\x0a" * 64,
+        b"\x00" * 64,
+        b"\x0a" * 64,
     ],
     "mssql": [
-        b"\x12\x01\x00\x34\x00\x00\x00\x00\x00", b"\x00" * 64,
+        b"\x12\x01\x00\x34\x00\x00\x00\x00\x00",
+        b"\x00" * 64,
     ],
     "oracle": [
-        b"\x00\x00\x01\x00\x00\x00", b"A" * 2048,
+        b"\x00\x00\x01\x00\x00\x00",
+        b"A" * 2048,
     ],
     "postgres": [
-        b"\x00\x00\x00\x08\x04\xd2\x16\x2f", b"\x00" * 64,
+        b"\x00\x00\x00\x08\x04\xd2\x16\x2f",
+        b"\x00" * 64,
     ],
     "redis": [
-        b"INFO\r\n", b"CONFIG GET *\r\n", b"EVAL \"return 1\" 0\r\n",
-        b"SET k " + b"B" * 4096 + b"\r\n", b"AUTH " + b"Z" * 2048 + b"\r\n",
+        b"INFO\r\n",
+        b"CONFIG GET *\r\n",
+        b'EVAL "return 1" 0\r\n',
+        b"SET k " + b"B" * 4096 + b"\r\n",
+        b"AUTH " + b"Z" * 2048 + b"\r\n",
     ],
     "memcached": [
-        b"stats\r\n", b"get " + b"A" * 2048 + b"\r\n",
+        b"stats\r\n",
+        b"get " + b"A" * 2048 + b"\r\n",
         b"set k 0 0 4096\r\n" + b"V" * 4096 + b"\r\n",
     ],
     "mongodb": [
@@ -138,10 +160,25 @@ SERVICE_ALIASES: Dict[str, Sequence[str]] = {
 }
 
 PORT_FAMILY: Dict[int, str] = {
-    21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "dns",
-    110: "pop3", 143: "imap", 161: "snmp", 389: "ldap", 445: "smb",
-    636: "ldap", 993: "imap", 995: "pop3", 1433: "mssql", 1521: "oracle",
-    3306: "mysql", 5432: "postgres", 6379: "redis", 11211: "memcached",
+    21: "ftp",
+    22: "ssh",
+    23: "telnet",
+    25: "smtp",
+    53: "dns",
+    110: "pop3",
+    143: "imap",
+    161: "snmp",
+    389: "ldap",
+    445: "smb",
+    636: "ldap",
+    993: "imap",
+    995: "pop3",
+    1433: "mssql",
+    1521: "oracle",
+    3306: "mysql",
+    5432: "postgres",
+    6379: "redis",
+    11211: "memcached",
     27017: "mongodb",
 }
 
@@ -164,19 +201,26 @@ def _repr_payload(payload: bytes) -> str:
     return text
 
 
-def default_sender(host: str, port: int, payload: bytes,
-                   timeout: float = 3.0) -> Dict:
+def default_sender(host: str, port: int, payload: bytes, timeout: float = 3.0) -> Dict:
     """Raw TCP probe: connect, send bytes, read until EOF/timeout."""
     start = time.monotonic()
     sock = None
     try:
         sock = socket.create_connection((host, port), timeout=timeout)
     except socket.timeout:
-        return {"connected": False, "reply": b"", "error": "connect_timeout",
-                "elapsed": time.monotonic() - start}
+        return {
+            "connected": False,
+            "reply": b"",
+            "error": "connect_timeout",
+            "elapsed": time.monotonic() - start,
+        }
     except OSError as exc:
-        return {"connected": False, "reply": b"", "error": str(exc),
-                "elapsed": time.monotonic() - start}
+        return {
+            "connected": False,
+            "reply": b"",
+            "error": str(exc),
+            "elapsed": time.monotonic() - start,
+        }
     try:
         sock.settimeout(timeout)
         if payload:
@@ -192,11 +236,19 @@ def default_sender(host: str, port: int, payload: bytes,
                     break
         except socket.timeout:
             pass
-        return {"connected": True, "reply": reply, "error": None,
-                "elapsed": time.monotonic() - start}
+        return {
+            "connected": True,
+            "reply": reply,
+            "error": None,
+            "elapsed": time.monotonic() - start,
+        }
     except OSError as exc:
-        return {"connected": True, "reply": reply, "error": str(exc),
-                "elapsed": time.monotonic() - start}
+        return {
+            "connected": True,
+            "reply": reply,
+            "error": str(exc),
+            "elapsed": time.monotonic() - start,
+        }
     finally:
         if sock is not None:
             sock.close()
@@ -215,11 +267,9 @@ class ProtocolFuzzer:
         try:
             return self.sender(host, port, payload, self.timeout)
         except Exception as exc:
-            return {"connected": False, "reply": b"", "error": "sender:%s" % exc,
-                    "elapsed": 0.0}
+            return {"connected": False, "reply": b"", "error": "sender:%s" % exc, "elapsed": 0.0}
 
-    def _judge(self, payload: bytes, baseline: Dict, res: Dict,
-               family: str) -> Dict:
+    def _judge(self, payload: bytes, baseline: Dict, res: Dict, family: str) -> Dict:
         interesting = False
         reasons: List[str] = []
 
@@ -262,16 +312,19 @@ class ProtocolFuzzer:
             "reasons": reasons,
         }
 
-    def fuzz_service(self, host: str, port: int, service: str = "",
-                     payloads: Optional[List[bytes]] = None) -> Dict:
+    def fuzz_service(
+        self, host: str, port: int, service: str = "", payloads: Optional[List[bytes]] = None
+    ) -> Dict:
         family = _family_of(service, port)
         probes = payloads or SERVICE_PAYLOADS.get(family, GENERIC_PAYLOADS)
         baseline = self._send(host, port, BASELINE_PROBES.get(family, b""))
-        results = [self._judge(p, baseline, self._send(host, port, p), family)
-                   for p in probes]
+        results = [self._judge(p, baseline, self._send(host, port, p), family) for p in probes]
         interesting = [r for r in results if r["interesting"]]
         return {
-            "host": host, "port": port, "service": service, "family": family,
+            "host": host,
+            "port": port,
+            "service": service,
+            "family": family,
             "baseline_len": _reply_len(baseline),
             "probes": len(results),
             "interesting": len(interesting),
@@ -279,8 +332,9 @@ class ProtocolFuzzer:
             "interesting_results": interesting,
         }
 
-    def fuzz_ports(self, host: str, ports: Sequence[int],
-                   services: Optional[Dict[int, str]] = None) -> Dict:
+    def fuzz_ports(
+        self, host: str, ports: Sequence[int], services: Optional[Dict[int, str]] = None
+    ) -> Dict:
         services = services or {}
         out = []
         for port in ports:
@@ -296,8 +350,9 @@ class ProtocolFuzzer:
             "results": out,
         }
 
-    def fuzz_state(self, state: Dict, target: str = "",
-                   ports: Optional[Sequence[int]] = None) -> Dict:
+    def fuzz_state(
+        self, state: Dict, target: str = "", ports: Optional[Sequence[int]] = None
+    ) -> Dict:
         recon = (state.get("phases") or {}).get("recon", {})
         data = recon.get("open_ports", {})
         if isinstance(data, dict):
@@ -318,15 +373,17 @@ class ProtocolFuzzer:
         return result
 
 
-def fuzz_ports(state: Optional[Dict] = None, target: str = "",
-               ports: Optional[Sequence[int]] = None,
-               sender: Optional[Callable] = None,
-               timeout: float = 3.0) -> Dict:
+def fuzz_ports(
+    state: Optional[Dict] = None,
+    target: str = "",
+    ports: Optional[Sequence[int]] = None,
+    sender: Optional[Callable] = None,
+    timeout: float = 3.0,
+) -> Dict:
     fuzzer = ProtocolFuzzer(sender=sender, timeout=timeout)
     if state is None:
         if not ports:
-            return {"host": "localhost", "ports_fuzzed": 0,
-                    "total_interesting": 0, "results": []}
+            return {"host": "localhost", "ports_fuzzed": 0, "total_interesting": 0, "results": []}
         host = target
         if "://" in host:
             host = urlparse(host).netloc

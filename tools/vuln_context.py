@@ -43,7 +43,9 @@ class VulnContext:
         self.has_debug_mode = self.has_debug_mode or other.has_debug_mode
         self.waf_bypasses = list(set(self.waf_bypasses + other.waf_bypasses))
         self.frameworks = list(set(self.frameworks + other.frameworks))
-        self.discovered_endpoints = list(set(self.discovered_endpoints + other.discovered_endpoints))
+        self.discovered_endpoints = list(
+            set(self.discovered_endpoints + other.discovered_endpoints)
+        )
         self.discovered_params = list(set(self.discovered_params + other.discovered_params))
         self.admin_cookies = list(set(self.admin_cookies + other.admin_cookies))
         self.debug_endpoints = list(set(self.debug_endpoints + other.debug_endpoints))

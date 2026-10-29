@@ -11,7 +11,9 @@ def smb_null_session(target: str) -> Dict:
     try:
         r = subprocess.run(
             ["smbclient", "-N", "-L", f"//{target}/", "-c", "quit"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         output = r.stdout + r.stderr
         if "NT_STATUS" not in output and r.returncode == 0:
@@ -33,7 +35,9 @@ def smb_enum_shares(target: str, user: str = "", password: str = "") -> Dict:
         auth = f"-U{user}%{password}" if user else "-N"
         r = subprocess.run(
             ["smbclient", auth, "-L", f"//{target}/", "-c", "quit"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         for line in (r.stdout + r.stderr).split("\n"):
             if "\\" in line or "Disk" in line:
@@ -48,15 +52,15 @@ def smb_enum_shares(target: str, user: str = "", password: str = "") -> Dict:
     return result
 
 
-def smb_get_file(target: str, share: str, path: str,
-                 user: str = "", password: str = "") -> Dict:
+def smb_get_file(target: str, share: str, path: str, user: str = "", password: str = "") -> Dict:
     result = {"success": False, "content": ""}
     try:
         auth = f"-U{user}%{password}" if user else "-N"
         r = subprocess.run(
-            ["smbclient", auth, f"//{target}/{share}",
-             "-c", f"get {path} -", "quit"],
-            capture_output=True, text=True, timeout=15,
+            ["smbclient", auth, f"//{target}/{share}", "-c", f"get {path} -", "quit"],
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if r.stdout and len(r.stdout) > 10:
             result["success"] = True
@@ -66,12 +70,12 @@ def smb_get_file(target: str, share: str, path: str,
     return result
 
 
-def wmi_exec(target: str, command: str,
-             user: str, password: str, domain: str = ".") -> Dict:
+def wmi_exec(target: str, command: str, user: str, password: str, domain: str = ".") -> Dict:
     result = {"success": False, "method": "wmi_exec", "output": ""}
     try:
         cmd = [
-            "impacket-wmiexec", f"{domain}/{user}:{password}@{target}",
+            "impacket-wmiexec",
+            f"{domain}/{user}:{password}@{target}",
             command,
         ]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -85,12 +89,12 @@ def wmi_exec(target: str, command: str,
     return result
 
 
-def psexec(target: str, command: str,
-           user: str, password: str, domain: str = ".") -> Dict:
+def psexec(target: str, command: str, user: str, password: str, domain: str = ".") -> Dict:
     result = {"success": False, "method": "psexec", "output": ""}
     try:
         cmd = [
-            "impacket-psexec", f"{domain}/{user}:{password}@{target}",
+            "impacket-psexec",
+            f"{domain}/{user}:{password}@{target}",
             command,
         ]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -104,12 +108,12 @@ def psexec(target: str, command: str,
     return result
 
 
-def winrm_exec(target: str, command: str,
-               user: str, password: str, domain: str = ".") -> Dict:
+def winrm_exec(target: str, command: str, user: str, password: str, domain: str = ".") -> Dict:
     result = {"success": False, "method": "winrm", "output": ""}
     try:
         cmd = [
-            "impacket-winrm", f"{domain}/{user}:{password}@{target}",
+            "impacket-winrm",
+            f"{domain}/{user}:{password}@{target}",
             command,
         ]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -119,8 +123,8 @@ def winrm_exec(target: str, command: str,
     except FileNotFoundError:
         try:
             import winrm as pywinrm
-            session = pywinrm.Session(f"http://{target}:5985/wsman",
-                                       auth=(user, password))
+
+            session = pywinrm.Session(f"http://{target}:5985/wsman", auth=(user, password))
             r = session.run_cmd(command)
             if r.status_code == 0:
                 result["success"] = True
@@ -134,10 +138,14 @@ def winrm_exec(target: str, command: str,
     return result
 
 
-def lateral_move(target: str, command: str,
-                 user: str, password: str,
-                 methods: Optional[List[str]] = None,
-                 domain: str = ".") -> Dict:
+def lateral_move(
+    target: str,
+    command: str,
+    user: str,
+    password: str,
+    methods: Optional[List[str]] = None,
+    domain: str = ".",
+) -> Dict:
     methods = methods or ["wmi", "psexec", "winrm"]
     results = {}
     for method in methods:
@@ -151,8 +159,11 @@ def lateral_move(target: str, command: str,
             continue
         results[method] = r
         if r["success"]:
-            return {"target": target, "success": True,
-                    "method": method, "output": r["output"],
-                    "all_results": results}
-    return {"target": target, "success": False,
-            "all_results": results}
+            return {
+                "target": target,
+                "success": True,
+                "method": method,
+                "output": r["output"],
+                "all_results": results,
+            }
+    return {"target": target, "success": False, "all_results": results}

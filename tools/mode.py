@@ -32,8 +32,13 @@ def filter_vulnerabilities(results):
 
 
 LOW_SIGNAL_PATTERNS = [
-    "reflected_xss", "xss_reflected", "open_redirect",
-    "info_disclosure", "low", "info", "information",
+    "reflected_xss",
+    "xss_reflected",
+    "open_redirect",
+    "info_disclosure",
+    "low",
+    "info",
+    "information",
 ]
 
 

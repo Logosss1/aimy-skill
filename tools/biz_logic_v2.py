@@ -14,6 +14,7 @@ biz_logic_scanner.check_biz_logic (单体更紧凑).
   - bizlogic    -> tools.biz_logic_scanner
   - bizlogic-v2 -> tools.biz_logic_v2
 """
+
 from typing import Dict, List
 
 from tools.log_utils import get_logger
@@ -28,9 +29,9 @@ from tools.settings import settings
 from tools.workflow_tracer import WorkflowDeviator, trace_workflow
 
 
-def run_authz_scan(url: str, identities: List[Dict],
-                   auth_url: str = None, sess=None,
-                   timeout: float = 10.0) -> Dict:
+def run_authz_scan(
+    url: str, identities: List[Dict], auth_url: str = None, sess=None, timeout: float = 10.0
+) -> Dict:
     if auth_url is None:
         auth_url = f"{url.rstrip('/')}/login"
     matrix = SessionMatrix(url)
@@ -50,9 +51,11 @@ def run_authz_scan(url: str, identities: List[Dict],
     return result
 
 
-def run_workflow_scan(url: str, workflow_steps: List[Dict],
-                      sess=None, timeout: float = 10.0) -> Dict:
+def run_workflow_scan(
+    url: str, workflow_steps: List[Dict], sess=None, timeout: float = 10.0
+) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -64,13 +67,15 @@ def run_workflow_scan(url: str, workflow_steps: List[Dict],
         try:
             r = sess.get(test["target_url"], timeout=timeout)
             if r.status_code in (200, 201, 202, 204):
-                findings.append({
-                    "type": "workflow_bypass",
-                    "technique": "skip_step",
-                    "detail": test["description"],
-                    "url": test["target_url"],
-                    "status": r.status_code,
-                })
+                findings.append(
+                    {
+                        "type": "workflow_bypass",
+                        "technique": "skip_step",
+                        "detail": test["description"],
+                        "url": test["target_url"],
+                        "status": r.status_code,
+                    }
+                )
         except Exception:
             pass
     replay_tests = deviator.generate_replay()
@@ -78,24 +83,28 @@ def run_workflow_scan(url: str, workflow_steps: List[Dict],
         try:
             r = sess.get(test["old_url"], timeout=timeout)
             if r.status_code in (200, 201, 202, 204):
-                findings.append({
-                    "type": "state_replay",
-                    "technique": "replay",
-                    "detail": test["description"],
-                    "url": test["old_url"],
-                    "status": r.status_code,
-                })
+                findings.append(
+                    {
+                        "type": "state_replay",
+                        "technique": "replay",
+                        "detail": test["description"],
+                        "url": test["old_url"],
+                        "status": r.status_code,
+                    }
+                )
         except Exception:
             pass
     resource_ids = deviator.find_resource_ids()
     for id_key, id_val, step_idx in resource_ids[:10]:
-        findings.append({
-            "type": "idor_candidate",
-            "technique": "resource_id_found",
-            "detail": f"Resource identifier {id_key}={id_val} at step {step_idx}",
-            "extracted_key": id_key,
-            "extracted_value": id_val,
-        })
+        findings.append(
+            {
+                "type": "idor_candidate",
+                "technique": "resource_id_found",
+                "detail": f"Resource identifier {id_key}={id_val} at step {step_idx}",
+                "extracted_key": id_key,
+                "extracted_value": id_val,
+            }
+        )
     return {
         "vulnerable": len(findings) > 0,
         "findings": findings,
@@ -104,9 +113,11 @@ def run_workflow_scan(url: str, workflow_steps: List[Dict],
     }
 
 
-def run_race_scan(url: str, param: str = None, concurrency: int = 20,
-                  sess=None, timeout: float = 10.0) -> Dict:
+def run_race_scan(
+    url: str, param: str = None, concurrency: int = 20, sess=None, timeout: float = 10.0
+) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -117,7 +128,8 @@ def run_race_scan(url: str, param: str = None, concurrency: int = 20,
     return {
         "vulnerable": result["window_found"],
         "detail": f"Found {len(result['windows'])} race window(s)"
-                  if result["window_found"] else "No race window detected",
+        if result["window_found"]
+        else "No race window detected",
         "windows": [
             {
                 "concurrency": w.concurrency,
@@ -134,9 +146,9 @@ def run_race_scan(url: str, param: str = None, concurrency: int = 20,
     }
 
 
-def run_constraint_scan(url: str, param: str = None,
-                        sess=None, timeout: float = 10.0) -> Dict:
+def run_constraint_scan(url: str, param: str = None, sess=None, timeout: float = 10.0) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -154,32 +166,31 @@ def run_constraint_scan(url: str, param: str = None,
         breaker = ConstraintBreaker(graph)
         tests = breaker.generate_break_tests(url, param)
         for test in tests:
-            findings.append({
-                "type": "constraint_break",
-                "technique": test.get("technique", ""),
-                "param": test.get("param", param),
-                "value": test.get("value", ""),
-                "variant": test.get("variant", ""),
-            })
+            findings.append(
+                {
+                    "type": "constraint_break",
+                    "technique": test.get("technique", ""),
+                    "param": test.get("param", param),
+                    "value": test.get("value", ""),
+                    "variant": test.get("variant", ""),
+                }
+            )
     return {
         "vulnerable": len(constraints) > 0 or len(findings) > 0,
         "graph": graph.summary(),
         "constraints": [
-            {"type": c.type, "desc": c.description,
-             "params": c.params, "severity": c.severity}
+            {"type": c.type, "desc": c.description, "params": c.params, "severity": c.severity}
             for c in constraints
         ],
         "findings": findings,
     }
 
 
-def check(url: str, param: str = None, sess=None,
-          timeout: float = 10.0) -> Dict:
+def check(url: str, param: str = None, sess=None, timeout: float = 10.0) -> Dict:
     results = {}
     results["constraints"] = run_constraint_scan(url, param, sess, timeout)
     results["race"] = run_race_scan(url, param, sess=sess, timeout=timeout)
     return {
-        "vulnerable": any(r.get("vulnerable", False)
-                         for r in results.values()),
+        "vulnerable": any(r.get("vulnerable", False) for r in results.values()),
         "checks": results,
     }

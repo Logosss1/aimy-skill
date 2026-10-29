@@ -8,6 +8,7 @@ class TestXSSDetector:
     def test_reflected_xss(self):
         def callback(request):
             import urllib.parse
+
             q = urllib.parse.parse_qs(request.url.split("?", 1)[1])["q"][0]
             return (200, {}, "<html>%s</html>" % q)
 
@@ -33,13 +34,12 @@ class TestXSSDetector:
         assert result["vulnerable"] is False
 
 
-
-
 class TestXSSJSONContext:
     @responses.activate
     def test_json_context_reflection(self):
         def callback(request):
             import urllib.parse
+
             q = urllib.parse.parse_qs(request.url.split("?", 1)[1])["q"][0]
             return (200, {}, '{"data": "%s"}' % q)
 
@@ -57,6 +57,7 @@ class TestXSSDetectorPost:
     def test_post_xss(self):
         def callback(request):
             import urllib.parse
+
             body = urllib.parse.parse_qs(request.body)
             payload = body.get("content", [""])[0]
             return (200, {}, f"<html>{payload}</html>")
@@ -68,27 +69,33 @@ class TestXSSDetectorPost:
         )
 
         result = check(
-            "http://test.com/comment", "content",
-            post_body=True, post_data={"content": "test"},
+            "http://test.com/comment",
+            "content",
+            post_body=True,
+            post_data={"content": "test"},
         )
         assert result["vulnerable"] is True
+
 
 class TestReflectionHelpers:
     def test_no_bracket_payload_reflected_counts_as_unescaped(self):
         # 属性/事件处理器类载荷不含尖括号: 原样出现即未转义 (回归: 曾被恒判已转义)
         from tools.xss_detector import _payload_reflected_unescaped
+
         payload = '" autofocus onfocus=alert(1) x="'
         html = '<input value="' + payload + '">'
         assert _payload_reflected_unescaped(html, payload) is True
 
     def test_angle_bracket_payload_escaped_is_not_unescaped(self):
         from tools.xss_detector import _payload_reflected_unescaped
+
         payload = "<img src=x onerror=alert(1)>"
         html = "&lt;img src=x onerror=alert(1)&gt;"
         assert _payload_reflected_unescaped(html, payload) is False
 
     def test_attr_breakout_matrix(self):
         from tools.xss_detector import _attr_breakout_ok
+
         assert _attr_breakout_ok("' onfocus=alert(1)", "attr_double") is False
         assert _attr_breakout_ok('" onfocus=alert(1)', "attr_double") is True
         assert _attr_breakout_ok('" x=', "attr_single") is False

@@ -92,7 +92,16 @@ class TestPortScan:
         results = ssrf_pwn.SSRFLateral(sess, 1.0).port_scan("http://t.test/fetch", "url")
         assert len(results) == 10
         assert {r["port"] for r in results} == {
-            22, 80, 443, 3306, 6379, 8080, 9200, 27017, 11211, 5000,
+            22,
+            80,
+            443,
+            3306,
+            6379,
+            8080,
+            9200,
+            27017,
+            11211,
+            5000,
         }
 
     def test_filters_status_and_short_body(self):
@@ -109,9 +118,10 @@ class TestPortScan:
 
     def test_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).port_scan(
-            "http://t.test/fetch", "url", ports=[22]
-        ) == []
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).port_scan("http://t.test/fetch", "url", ports=[22])
+            == []
+        )
 
 
 class TestImdsv2:
@@ -124,60 +134,50 @@ class TestImdsv2:
             return FakeResp(200, "meta " * 10)
 
         sess = FakeSession(handler)
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2("http://t.test/fetch", "url")
         assert result["imdsv2_token"] == "TOKEN-ABC"
         assert len(result) == 3
         assert result["http://169.254.169.254/latest/meta-data/"] == "meta " * 10
 
     def test_put_status_not_200(self):
         sess = FakeSession(lambda m, u, k: FakeResp(500, "no"))
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2("http://t.test/fetch", "url") == {}
+        )
 
     def test_put_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_aws_imdsv2("http://t.test/fetch", "url") == {}
+        )
 
 
 class TestK8sDockerSpring:
     def test_kubernetes(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "x" * 60))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes("http://t.test/fetch", "url")
         assert len(result) == 5
 
     def test_kubernetes_forbidden_counts(self):
         sess = FakeSession(lambda m, u, k: FakeResp(403, "x" * 60))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes("http://t.test/fetch", "url")
         assert len(result) == 5
         assert result["http://kubernetes.default.svc/api/v1/nodes"]["status"] == 403
 
     def test_kubernetes_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_kubernetes("http://t.test/fetch", "url") == {}
+        )
 
     def test_docker(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "x" * 30))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_docker(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_docker("http://t.test/fetch", "url")
         assert len(result) == 5
 
     def test_docker_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_docker(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_docker("http://t.test/fetch", "url") == {}
 
     def test_spring(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "x" * 30))
@@ -188,76 +188,64 @@ class TestK8sDockerSpring:
 
     def test_spring_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_spring_actuator(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_spring_actuator("http://t.test/fetch", "url")
+            == {}
+        )
 
 
 class TestEsMemcachedMysql:
     def test_elasticsearch_json_dict(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "", json_data={"status": 200}))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch("http://t.test/fetch", "url")
         assert result["http://127.0.0.1:9200/"] == ["status"]
 
     def test_elasticsearch_json_list(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "", json_data=[1, 2]))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch("http://t.test/fetch", "url")
         assert result["http://127.0.0.1:9200/"] == "json"
 
     def test_elasticsearch_plain_text(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "z" * 150))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch("http://t.test/fetch", "url")
         assert result["http://127.0.0.1:9200/"] == "z" * 100
 
     def test_elasticsearch_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_elasticsearch("http://t.test/fetch", "url")
+            == {}
+        )
 
     def test_memcached(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "STAT curr_items 3"))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached("http://t.test/fetch", "url")
         assert "memcached" in result
 
     def test_memcached_short(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "ok"))
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached("http://t.test/fetch", "url") == {}
 
     def test_memcached_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_memcached("http://t.test/fetch", "url") == {}
 
     def test_mysql(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "mysql handshake"))
-        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf(
-            "http://t.test/fetch", "url"
-        )
+        result = ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf("http://t.test/fetch", "url")
         assert "mysql_probe" in result
 
     def test_mysql_short(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "ok"))
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf("http://t.test/fetch", "url") == {}
+        )
 
     def test_mysql_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_mysql_ssrf("http://t.test/fetch", "url") == {}
+        )
 
 
 class TestGopherAndBypass:
@@ -272,9 +260,10 @@ class TestGopherAndBypass:
 
     def test_gopher_protocols_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).exploit_gopher_protocols(
-            "http://t.test/fetch", "url"
-        ) == {}
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).exploit_gopher_protocols("http://t.test/fetch", "url")
+            == {}
+        )
 
     def test_bypass_variants(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "x" * 60))
@@ -286,15 +275,17 @@ class TestGopherAndBypass:
 
     def test_bypass_variants_filtered(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "tiny"))
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).bypass_filter_variants(
-            "http://t.test/fetch", "url"
-        ) == []
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).bypass_filter_variants("http://t.test/fetch", "url")
+            == []
+        )
 
     def test_bypass_variants_exception(self):
         sess = FakeSession(_handler_raises)
-        assert ssrf_pwn.SSRFLateral(sess, 1.0).bypass_filter_variants(
-            "http://t.test/fetch", "url"
-        ) == []
+        assert (
+            ssrf_pwn.SSRFLateral(sess, 1.0).bypass_filter_variants("http://t.test/fetch", "url")
+            == []
+        )
 
 
 class TestRunAndCheck:
@@ -418,9 +409,7 @@ class TestChainRedis:
         assert hop.chain_path == ["redis_info_leak"]
         result = ssrf_chain.SSRFChainResult(target="t", param="url")
         engine._extract_redis_evidence(hop, result)
-        assert result.evidence == [
-            {"type": "redis_version_leak", "version": "7.0.11", "hop": 1}
-        ]
+        assert result.evidence == [{"type": "redis_version_leak", "version": "7.0.11", "hop": 1}]
 
     def test_ssh_key_injection(self, monkeypatch):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "generic response"))
@@ -487,25 +476,19 @@ class TestChainSql:
 
     def test_unknown_protocol_falls_back_to_mysql(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "1.2.3 build"))
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql(
-            "u", "url", "h", 1521, "Oracle"
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql("u", "url", "h", 1521, "Oracle")
         assert hop.success is True
         assert hop.protocol == "oracle"
 
     def test_no_version(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "nothing"))
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql(
-            "u", "url", "h", 3306, "MySQL"
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql("u", "url", "h", 3306, "MySQL")
         assert hop.success is False
         assert hop.error == "sql_probe_failed"
 
     def test_exception(self):
         sess = FakeSession(_handler_raises)
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql(
-            "u", "url", "h", 3306, "MySQL"
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_sql("u", "url", "h", 3306, "MySQL")
         assert hop.success is False
 
 
@@ -550,33 +533,25 @@ class TestChainDocker:
 class TestChainK8s:
     def test_success(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "{}", json_data={"major": "1"}))
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s(
-            "u", "url", "127.0.0.1", 6443
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s("u", "url", "127.0.0.1", 6443)
         assert hop.success is True
         assert hop.chain_path == ["k8s_api"]
 
     def test_non_json(self):
         sess = FakeSession(lambda m, u, k: FakeResp(200, "not json"))
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s(
-            "u", "url", "127.0.0.1", 6443
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s("u", "url", "127.0.0.1", 6443)
         assert hop.success is False
         assert hop.error == "k8s_probe_failed"
 
     def test_exception(self):
         sess = FakeSession(_handler_raises)
-        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s(
-            "u", "url", "127.0.0.1", 6443
-        )
+        hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_k8s("u", "url", "127.0.0.1", 6443)
         assert hop.success is False
 
 
 class TestChainElasticsearch:
     def test_cluster_name(self):
-        sess = FakeSession(
-            lambda m, u, k: FakeResp(200, "{}", json_data={"cluster_name": "prod"})
-        )
+        sess = FakeSession(lambda m, u, k: FakeResp(200, "{}", json_data={"cluster_name": "prod"}))
         hop = ssrf_chain.SSRFChainEngine(sess, 1.0)._chain_elasticsearch(
             "u", "url", "127.0.0.1", 9200
         )
@@ -666,8 +641,11 @@ class TestChainFull:
 
         def fake_docker(base_url, param, host, port):
             return ssrf_chain.HopResult(
-                hop=1, protocol="docker", target="%s:%d" % (host, port),
-                port=port, success=True,
+                hop=1,
+                protocol="docker",
+                target="%s:%d" % (host, port),
+                port=port,
+                success=True,
             )
 
         monkeypatch.setattr(engine, "_discover_internal_services", lambda u, p: services)
@@ -681,7 +659,8 @@ class TestChainFull:
         sess = FakeSession(_mixed_handler)
         engine = ssrf_chain.SSRFChainEngine(sess, 1.0)
         monkeypatch.setattr(
-            engine, "_discover_internal_services",
+            engine,
+            "_discover_internal_services",
             lambda u, p: [_svc("127.0.0.1", 6379, "Redis")],
         )
         result = engine.chain_full("http://t.test/fetch?url=X", "url", max_hops=3)
@@ -692,7 +671,8 @@ class TestChainFull:
 class TestChainSsrfWrapper:
     def test_no_services(self, monkeypatch):
         monkeypatch.setattr(
-            ssrf_chain.SSRFChainEngine, "_discover_internal_services",
+            ssrf_chain.SSRFChainEngine,
+            "_discover_internal_services",
             lambda self, base_url, param: [],
         )
         sess = FakeSession()
@@ -703,7 +683,8 @@ class TestChainSsrfWrapper:
 
     def test_with_redis(self, monkeypatch):
         monkeypatch.setattr(
-            ssrf_chain.SSRFChainEngine, "_discover_internal_services",
+            ssrf_chain.SSRFChainEngine,
+            "_discover_internal_services",
             lambda self, base_url, param: [_svc("127.0.0.1", 6379, "Redis")],
         )
         sess = FakeSession(lambda m, u, k: FakeResp(200, "redis_version:6.0.0"))

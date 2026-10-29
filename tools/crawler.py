@@ -25,11 +25,38 @@ def _flatten_dict(d: dict, prefix: str = "") -> dict:
 
 
 IGNORE_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".ico", ".webp",
-    ".css", ".js", ".map", ".woff", ".woff2", ".ttf", ".eot",
-    ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z",
-    ".mp3", ".mp4", ".avi", ".mov", ".wmv",
-    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".svg",
+    ".ico",
+    ".webp",
+    ".css",
+    ".js",
+    ".map",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".rar",
+    ".7z",
+    ".mp3",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
 }
 
 SPA_INDICATORS = [
@@ -37,34 +64,57 @@ SPA_INDICATORS = [
     r'id=["\']app["\']',
     r'id=["\']__nuxt["\']',
     r'id=["\']__next["\']',
-    r'__vite_is_modern_browser',
-    r'createApp\(',
-    r'ReactDOM\.createRoot',
-    r'Vue\.createApp',
+    r"__vite_is_modern_browser",
+    r"createApp\(",
+    r"ReactDOM\.createRoot",
+    r"Vue\.createApp",
 ]
 
 COMMON_API_PATHS = [
-    "/api/health", "/api/status", "/api/v1/health", "/api/ping",
-    "/api/users", "/api/user", "/api/login", "/api/auth",
-    "/api/config", "/api/settings", "/api/info", "/api/version",
-    "/api/v1/users", "/api/v1/user", "/api/v1/login", "/api/v1/auth",
-    "/api/v1/config", "/api/v1/version", "/api/v1/models",
-    "/api/v1/chat/completions", "/api/v1/completions",
-    "/graphql", "/api/graphql", "/api/openapi.json",
-    "/swagger-resources", "/api/swagger-resources",
-    "/api/docs", "/api/v1/docs",
-    "/.env", "/api/.env",
-    "/actuator", "/api/actuator", "/actuator/health",
-    "/sitemap.xml", "/robots.txt",
+    "/api/health",
+    "/api/status",
+    "/api/v1/health",
+    "/api/ping",
+    "/api/users",
+    "/api/user",
+    "/api/login",
+    "/api/auth",
+    "/api/config",
+    "/api/settings",
+    "/api/info",
+    "/api/version",
+    "/api/v1/users",
+    "/api/v1/user",
+    "/api/v1/login",
+    "/api/v1/auth",
+    "/api/v1/config",
+    "/api/v1/version",
+    "/api/v1/models",
+    "/api/v1/chat/completions",
+    "/api/v1/completions",
+    "/graphql",
+    "/api/graphql",
+    "/api/openapi.json",
+    "/swagger-resources",
+    "/api/swagger-resources",
+    "/api/docs",
+    "/api/v1/docs",
+    "/.env",
+    "/api/.env",
+    "/actuator",
+    "/api/actuator",
+    "/actuator/health",
+    "/sitemap.xml",
+    "/robots.txt",
 ]
 
 HAS_BS4 = False
 try:
     from bs4 import BeautifulSoup
+
     HAS_BS4 = True
 except ImportError:
     pass
-
 
 
 def _first(value) -> Optional[str]:
@@ -75,9 +125,15 @@ def _first(value) -> Optional[str]:
 
 
 class Crawler:
-    def __init__(self, base_url: str, max_depth: int = 3, max_pages: int = 50,
-                 sess: Optional['requests.Session'] = None, timeout: float = 10.0,
-                 delay: float = 0.0):
+    def __init__(
+        self,
+        base_url: str,
+        max_depth: int = 3,
+        max_pages: int = 50,
+        sess: Optional["requests.Session"] = None,
+        timeout: float = 10.0,
+        delay: float = 0.0,
+    ):
         self.base_url = base_url.rstrip("/")
         self.base_netloc = urllib.parse.urlparse(base_url).netloc
         self.max_depth = max_depth
@@ -95,13 +151,13 @@ class Crawler:
         self.is_spa = False
         self._http = None
 
-    def _get_http(self) -> 'requests.Session':
+    def _get_http(self) -> "requests.Session":
         if self._http is None:
             import requests
+
             self._http = self.sess or requests.Session()
             self._http.verify = settings.verify_ssl
-            self._http.headers.setdefault("User-Agent",
-                                          "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            self._http.headers.setdefault("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         return self._http
 
     def _normalize(self, href: str, current: str) -> Optional[str]:
@@ -133,7 +189,9 @@ class Crawler:
 
     def _extract_js_bundles(self, html: str) -> List[str]:
         bundles = []
-        for m in re.finditer(r'<script[^>]*src=["\']([^"\']+\.js[^"\']*)["\']', html, re.IGNORECASE):
+        for m in re.finditer(
+            r'<script[^>]*src=["\']([^"\']+\.js[^"\']*)["\']', html, re.IGNORECASE
+        ):
             src = m.group(1)
             if src not in bundles:
                 bundles.append(src)
@@ -174,8 +232,11 @@ class Crawler:
         http = self._get_http()
         for path in COMMON_API_PATHS:
             try:
-                r = http.get("%s%s" % (self.base_url, path), timeout=max(3, self.timeout * 0.5),
-                             verify=settings.verify_ssl)
+                r = http.get(
+                    "%s%s" % (self.base_url, path),
+                    timeout=max(3, self.timeout * 0.5),
+                    verify=settings.verify_ssl,
+                )
                 ct = r.headers.get("Content-Type", "")
                 if r.status_code not in (404, 0) and (len(r.text) < 7000 or "text/html" not in ct):
                     found.add((path, r.status_code, ct, r.text[:200]))
@@ -197,24 +258,32 @@ class Crawler:
                     for inp in form.find_all("input"):
                         name = _first(inp.get("name"))
                         if name:
-                            inputs.append({
-                                "name": name,
-                                "type": inp.get("type", "text"),
-                                "value": inp.get("value", ""),
-                            })
+                            inputs.append(
+                                {
+                                    "name": name,
+                                    "type": inp.get("type", "text"),
+                                    "value": inp.get("value", ""),
+                                }
+                            )
                             self.all_params.add(name)
-                    self.forms.append({
-                        "action": action_url,
-                        "method": form.get("method", "get").upper(),
-                        "inputs": inputs,
-                    })
+                    self.forms.append(
+                        {
+                            "action": action_url,
+                            "method": form.get("method", "get").upper(),
+                            "inputs": inputs,
+                        }
+                    )
             except Exception as e:
                 logger.debug("extract forms: %s", e)
         else:
             for m in re.finditer(r'<form[^>]*action=["\']([^"\']+)["\']', html, re.IGNORECASE):
                 action = self._normalize(m.group(1), current) or current
                 inputs = []
-                for im in re.finditer(r'<input[^>]*name=["\']([^"\']+)["\']', html[m.end():m.end()+500], re.IGNORECASE):
+                for im in re.finditer(
+                    r'<input[^>]*name=["\']([^"\']+)["\']',
+                    html[m.end() : m.end() + 500],
+                    re.IGNORECASE,
+                ):
                     inputs.append({"name": im.group(1), "type": "text"})
                     self.all_params.add(im.group(1))
                 self.forms.append({"action": action, "method": "GET", "inputs": inputs})
@@ -277,10 +346,15 @@ class Crawler:
             return None
 
     def _extract_ssr_data(self, html: str, base: str):
-        next_data = re.search(r'<script[^>]*id="__NEXT_DATA__"[^>]*type="application/json"[^>]*>(.*?)</script>', html, re.DOTALL)
+        next_data = re.search(
+            r'<script[^>]*id="__NEXT_DATA__"[^>]*type="application/json"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
         if next_data:
             try:
                 import json
+
                 data = json.loads(next_data.group(1))
                 props = data.get("props", {}).get("pageProps", {})
                 for k, v in _flatten_dict(props).items():
@@ -288,25 +362,34 @@ class Crawler:
                         self.api_endpoints.add(v)
             except Exception:
                 pass
-        init_state = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.*?});', html, re.DOTALL)
+        init_state = re.search(r"window\.__INITIAL_STATE__\s*=\s*({.*?});", html, re.DOTALL)
         if init_state:
             try:
                 import json
+
                 data = json.loads(init_state.group(1))
                 for k, v in _flatten_dict(data).items():
                     if isinstance(v, str) and v.startswith("/api/"):
                         self.api_endpoints.add(v)
                         p = urllib.parse.urlparse(v).path.rstrip("/") or "/"
                         if p not in self.endpoints:
-                            self.endpoints[p] = {"url": v, "methods": ["GET"], "params": [], "source": "ssr"}
+                            self.endpoints[p] = {
+                                "url": v,
+                                "methods": ["GET"],
+                                "params": [],
+                                "source": "ssr",
+                            }
                     if isinstance(v, str) and v.startswith("http"):
                         self.api_endpoints.add(v)
             except Exception:
                 pass
-        nuxt_data = re.search(r'<script[^>]*>window\.__NUXT__\s*=\s*({.*?})</script>', html, re.DOTALL)
+        nuxt_data = re.search(
+            r"<script[^>]*>window\.__NUXT__\s*=\s*({.*?})</script>", html, re.DOTALL
+        )
         if nuxt_data:
             try:
                 import json
+
                 data = json.loads(nuxt_data.group(1))
                 for k, v in _flatten_dict(data).items():
                     if isinstance(v, str) and v.startswith("/"):
@@ -368,7 +451,9 @@ class Crawler:
 
             if crawl_workers > 1 and len(batch) > 1:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=crawl_workers) as ex:
-                    futures = {ex.submit(self._fetch_page, url): (url, depth) for url, depth in batch}
+                    futures = {
+                        ex.submit(self._fetch_page, url): (url, depth) for url, depth in batch
+                    }
                     for future in concurrent.futures.as_completed(futures):
                         result = future.result()
                         if not result:
@@ -410,9 +495,12 @@ class Crawler:
                 bundles = self._extract_js_bundles(r.text)
                 for js_url in bundles[:5]:
                     try:
-                        js_r = http.get(js_url if js_url.startswith("http") else
-                                        "%s/%s" % (self.base_url, js_url.lstrip("/")),
-                                        timeout=self.timeout)
+                        js_r = http.get(
+                            js_url
+                            if js_url.startswith("http")
+                            else "%s/%s" % (self.base_url, js_url.lstrip("/")),
+                            timeout=self.timeout,
+                        )
                         if js_r.status_code == 200:
                             apis = self._analyze_js_for_api(js_r.text)
                             for a in apis:
@@ -424,10 +512,14 @@ class Crawler:
                 for path, status, ct, preview in fallback:
                     p = "/" + path.lstrip("/")
                     if p not in self.endpoints:
-                        self.endpoints[p] = {"url": "%s%s" % (self.base_url, p),
-                                             "methods": ["GET"], "params": [],
-                                             "status": status, "content_type": ct,
-                                             "preview": preview[:100]}
+                        self.endpoints[p] = {
+                            "url": "%s%s" % (self.base_url, p),
+                            "methods": ["GET"],
+                            "params": [],
+                            "status": status,
+                            "content_type": ct,
+                            "preview": preview[:100],
+                        }
             except Exception:
                 pass
 
@@ -451,8 +543,13 @@ class Crawler:
         }
 
 
-def crawl(target: str, max_depth: int = 3, max_pages: int = 50,
-          sess: Optional['requests.Session'] = None, timeout: float = 10.0,
-          delay: float = 0.0) -> Dict:
+def crawl(
+    target: str,
+    max_depth: int = 3,
+    max_pages: int = 50,
+    sess: Optional["requests.Session"] = None,
+    timeout: float = 10.0,
+    delay: float = 0.0,
+) -> Dict:
     c = Crawler(target, max_depth, max_pages, sess, timeout, delay)
     return c.crawl()

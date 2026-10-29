@@ -12,32 +12,121 @@ from tools.settings import settings
 logger = get_logger("param_miner")
 
 COMMON_GET_PARAMS = [
-    "id", "page", "file", "url", "cmd", "q", "search", "name", "user",
-    "type", "category", "sort", "order", "limit", "offset", "filter",
-    "action", "method", "token", "lang", "locale", "debug", "test",
-    "template", "view", "include", "path", "dir", "download", "read",
-    "show", "edit", "delete", "do", "exec", "run", "pid", "uid",
-    "gid", "role", "admin", "config", "setting", "mode", "tab",
-    "section", "step", "state", "status", "format", "output", "callback",
-    "redirect", "next", "return", "referer", "source", "target",
+    "id",
+    "page",
+    "file",
+    "url",
+    "cmd",
+    "q",
+    "search",
+    "name",
+    "user",
+    "type",
+    "category",
+    "sort",
+    "order",
+    "limit",
+    "offset",
+    "filter",
+    "action",
+    "method",
+    "token",
+    "lang",
+    "locale",
+    "debug",
+    "test",
+    "template",
+    "view",
+    "include",
+    "path",
+    "dir",
+    "download",
+    "read",
+    "show",
+    "edit",
+    "delete",
+    "do",
+    "exec",
+    "run",
+    "pid",
+    "uid",
+    "gid",
+    "role",
+    "admin",
+    "config",
+    "setting",
+    "mode",
+    "tab",
+    "section",
+    "step",
+    "state",
+    "status",
+    "format",
+    "output",
+    "callback",
+    "redirect",
+    "next",
+    "return",
+    "referer",
+    "source",
+    "target",
 ]
 
 COMMON_POST_PARAMS = [
-    "username", "password", "pass", "email", "user", "login",
-    "token", "csrf", "csrf_token", "_token", "authenticity_token",
-    "name", "first_name", "last_name", "phone", "address",
-    "message", "comment", "content", "title", "description",
-    "command", "cmd", "code", "data",
-    "file", "image", "document", "attachment", "id", "type",
-    "category", "status", "role", "permission", "setting",
-    "config", "option", "value", "key", "api_key", "secret",
+    "username",
+    "password",
+    "pass",
+    "email",
+    "user",
+    "login",
+    "token",
+    "csrf",
+    "csrf_token",
+    "_token",
+    "authenticity_token",
+    "name",
+    "first_name",
+    "last_name",
+    "phone",
+    "address",
+    "message",
+    "comment",
+    "content",
+    "title",
+    "description",
+    "command",
+    "cmd",
+    "code",
+    "data",
+    "file",
+    "image",
+    "document",
+    "attachment",
+    "id",
+    "type",
+    "category",
+    "status",
+    "role",
+    "permission",
+    "setting",
+    "config",
+    "option",
+    "value",
+    "key",
+    "api_key",
+    "secret",
 ]
 
 
 class ParamMiner:
-    def __init__(self, target_url: str,
-                 sess: Optional['requests.Session'] = None, timeout: float = 10.0,
-                 threads: int = 1, delay: float = 0.0):
+    def __init__(
+        self,
+        target_url: str,
+        sess: Optional["requests.Session"] = None,
+        timeout: float = 10.0,
+        threads: int = 1,
+        delay: float = 0.0,
+    ):
         self.base_url = target_url.rstrip("/")
         self.timeout = timeout
         self.threads = threads
@@ -48,6 +137,7 @@ class ParamMiner:
     def _get_http(self):
         if self._http is None:
             import requests
+
             self._http = self._http_raw or requests.Session()
             self._http.verify = settings.verify_ssl
             self._http.headers["User-Agent"] = "Mozilla/5.0"
@@ -62,8 +152,13 @@ class ParamMiner:
             else:
                 r = http.get(url, timeout=self.timeout)
             elapsed = time.time() - start
-            return {"status": r.status_code, "length": len(r.text),
-                    "body": r.text[:500], "time": elapsed, "url": r.url}
+            return {
+                "status": r.status_code,
+                "length": len(r.text),
+                "body": r.text[:500],
+                "time": elapsed,
+                "url": r.url,
+            }
         except Exception as e:
             logger.debug("baseline %s: %s", url, e)
             return {"status": 0, "length": 0, "body": "", "time": 0, "url": url}
@@ -79,8 +174,7 @@ class ParamMiner:
                 elapsed = time.time() - start
             else:
                 start = time.time()
-                r = http.post(base_url, data={param: test_value},
-                              timeout=self.timeout)
+                r = http.post(base_url, data={param: test_value}, timeout=self.timeout)
                 elapsed = time.time() - start
             result = {
                 "param": param,
@@ -102,8 +196,14 @@ class ParamMiner:
             return result
         except Exception as e:
             logger.debug("test param %s on %s: %s", param, base_url, e)
-            return {"param": param, "method": method, "error": "request failed",
-                    "status": 0, "length": 0, "time": 0}
+            return {
+                "param": param,
+                "method": method,
+                "error": "request failed",
+                "status": 0,
+                "length": 0,
+                "time": 0,
+            }
 
     def _batch_test(self, base_url: str, params: List[str], method: str) -> List[Dict]:
         baseline = self._baseline(base_url, method)
@@ -186,8 +286,13 @@ class ParamMiner:
         return self.mine_all(endpoints)
 
 
-def mine(target_url: str, endpoints: Dict[str, Dict] = None,
-         sess: Optional['requests.Session'] = None, timeout: float = 10.0,
-         threads: int = 1, delay: float = 0.0) -> Dict:
+def mine(
+    target_url: str,
+    endpoints: Dict[str, Dict] = None,
+    sess: Optional["requests.Session"] = None,
+    timeout: float = 10.0,
+    threads: int = 1,
+    delay: float = 0.0,
+) -> Dict:
     m = ParamMiner(target_url, sess, timeout, threads, delay)
     return m.run(endpoints)

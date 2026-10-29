@@ -8,6 +8,7 @@ import responses
 class TestChainEngineInit:
     def test_init_default_session(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         assert engine.results == {}
         assert engine.timeout == 10.0
@@ -15,6 +16,7 @@ class TestChainEngineInit:
 
     def test_init_custom_session(self):
         from tools.chain_engine import ChainEngine
+
         sess = MagicMock()
         engine = ChainEngine(sess=sess, timeout=5.0)
         assert engine.sess is sess
@@ -24,6 +26,7 @@ class TestChainEngineInit:
 class TestExtractCredsFromText:
     def test_extract_aws_creds(self):
         from tools.chain_engine import _extract_creds_from_text
+
         text = "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY"
         result = _extract_creds_from_text(text)
         assert len(result) >= 1
@@ -31,11 +34,13 @@ class TestExtractCredsFromText:
 
     def test_extract_no_creds(self):
         from tools.chain_engine import _extract_creds_from_text
+
         result = _extract_creds_from_text("just some random text")
         assert result == []
 
     def test_extract_database_creds(self):
         from tools.chain_engine import _extract_creds_from_text
+
         text = "DB_PASSWORD=hunter2\nDATABASE_URL=postgres://localhost"
         result = _extract_creds_from_text(text)
         assert len(result) >= 1
@@ -44,18 +49,29 @@ class TestExtractCredsFromText:
 class TestChainMap:
     def test_chain_map_has_all_chains(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         mp = engine._chain_map()
         expected_chains = [
-            "ssrf_to_rce", "ssrf_cloud_pwn", "lfi_to_rce", "lfi_auto_webshell",
-            "lfi_to_ssh", "sqli_to_rce", "sqli_to_data", "xss_to_hijack",
-            "xss_to_cred", "auth_bypass_to_pwn", "deser_to_rce", "debug_abuse",
+            "ssrf_to_rce",
+            "ssrf_cloud_pwn",
+            "lfi_to_rce",
+            "lfi_auto_webshell",
+            "lfi_to_ssh",
+            "sqli_to_rce",
+            "sqli_to_data",
+            "xss_to_hijack",
+            "xss_to_cred",
+            "auth_bypass_to_pwn",
+            "deser_to_rce",
+            "debug_abuse",
         ]
         for chain in expected_chains:
             assert chain in mp, "Missing chain: %s" % chain
 
     def test_chain_map_functions_are_callable(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         mp = engine._chain_map()
         for name, fn in mp.items():
@@ -65,15 +81,22 @@ class TestChainMap:
 class TestAutoCompose:
     def test_auto_compose_ssrf_cloud_metadata(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "ssrf", "evidence": [{"payload": "url=http://169.254.169.254"}], "url": "http://test.com/page", "param": "url"}
+            "f1": {
+                "type": "ssrf",
+                "evidence": [{"payload": "url=http://169.254.169.254"}],
+                "url": "http://test.com/page",
+                "param": "url",
+            }
         }
         composed = engine.auto_compose(findings)
         assert any(c["chain"] == "ssrf_cloud_pwn" for c in composed)
 
     def test_auto_compose_sqli_union(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
             "f1": {"type": "sqli", "evidence": [], "url": "http://test.com/page", "param": "id"}
@@ -83,15 +106,22 @@ class TestAutoCompose:
 
     def test_auto_compose_no_matching_rules(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "info_disclosure", "evidence": [], "url": "http://test.com/page", "param": "q"}
+            "f1": {
+                "type": "info_disclosure",
+                "evidence": [],
+                "url": "http://test.com/page",
+                "param": "q",
+            }
         }
         composed = engine.auto_compose(findings)
         assert len(composed) == 0
 
     def test_auto_compose_xss_stored(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
             "f1": {"type": "xss", "evidence": [], "url": "http://test.com/page", "param": "q"}
@@ -101,10 +131,15 @@ class TestAutoCompose:
 
     def test_auto_compose_deser_gadget(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "deser", "evidence": [{"payload": "rO0ABX..."}],
-                   "url": "http://test.com/page", "param": "data"}
+            "f1": {
+                "type": "deser",
+                "evidence": [{"payload": "rO0ABX..."}],
+                "url": "http://test.com/page",
+                "param": "data",
+            }
         }
         composed = engine.auto_compose(findings)
         assert any(c["chain"] == "deser_to_rce" for c in composed)
@@ -113,10 +148,15 @@ class TestAutoCompose:
 class TestExecuteAutoChains:
     def test_execute_auto_chains_success(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "ssrf", "evidence": [{"payload": "url=http://169.254.169.254"}],
-                   "url": "http://test.com/page?url=x", "param": "url"}
+            "f1": {
+                "type": "ssrf",
+                "evidence": [{"payload": "url=http://169.254.169.254"}],
+                "url": "http://test.com/page?url=x",
+                "param": "url",
+            }
         }
         engine.chain_ssrf_cloud_pwn = MagicMock(return_value={"success": True})
         result = engine.execute_auto_chains(findings, "http://test.com/page", "url")
@@ -126,10 +166,15 @@ class TestExecuteAutoChains:
 
     def test_execute_auto_chains_exception(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "ssrf", "evidence": [{"payload": "url=http://169.254.169.254"}],
-                   "url": "http://test.com/page?url=x", "param": "url"}
+            "f1": {
+                "type": "ssrf",
+                "evidence": [{"payload": "url=http://169.254.169.254"}],
+                "url": "http://test.com/page?url=x",
+                "param": "url",
+            }
         }
         engine.chain_ssrf_cloud_pwn = MagicMock(side_effect=RuntimeError("connection failed"))
         result = engine.execute_auto_chains(findings, "http://test.com/page", "url")
@@ -137,9 +182,15 @@ class TestExecuteAutoChains:
 
     def test_execute_auto_chains_no_matches(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         findings = {
-            "f1": {"type": "info_disclosure", "evidence": [], "url": "http://test.com/page", "param": "q"}
+            "f1": {
+                "type": "info_disclosure",
+                "evidence": [],
+                "url": "http://test.com/page",
+                "param": "q",
+            }
         }
         result = engine.execute_auto_chains(findings, "http://test.com/page", "q")
         assert result["composed_chains"] == []
@@ -149,6 +200,7 @@ class TestExecuteAutoChains:
 class TestRunMethod:
     def test_run_default_chain(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         engine.full_chain = MagicMock(return_value={"overall_success": True})
         result = engine.run("http://test.com/page", "id")
@@ -157,14 +209,18 @@ class TestRunMethod:
 
     def test_run_specific_chain(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
-        engine.chain_ssrf_to_rce = MagicMock(return_value={"chain": "ssrf_to_rce", "success": False})
+        engine.chain_ssrf_to_rce = MagicMock(
+            return_value={"chain": "ssrf_to_rce", "success": False}
+        )
         result = engine.run("http://test.com/page?url=x", "url", chain="ssrf_to_rce")
         engine.chain_ssrf_to_rce.assert_called_once()
         assert result["chain"] == "ssrf_to_rce"
 
     def test_run_unknown_chain_falls_back(self):
         from tools.chain_engine import ChainEngine
+
         engine = ChainEngine()
         engine.full_chain = MagicMock(return_value={"overall_success": True})
         result = engine.run("http://test.com/page", "id", chain="nonexistent")
@@ -176,6 +232,7 @@ class TestChainMethods:
     @pytest.fixture
     def engine(self):
         from tools.chain_engine import ChainEngine
+
         return ChainEngine(timeout=2.0)
 
     @responses.activate
@@ -245,6 +302,7 @@ class TestChainMethods:
 class TestRunFunction:
     def test_run_function_default(self):
         from tools.chain_engine import run
+
         with patch("tools.chain_engine.ChainEngine") as mock_engine:
             mock_instance = mock_engine.return_value
             mock_instance.run.return_value = {"chain": "full_chain", "success": True}
@@ -254,6 +312,7 @@ class TestRunFunction:
 
     def test_run_function_custom_chain(self):
         from tools.chain_engine import run
+
         with patch("tools.chain_engine.ChainEngine") as mock_engine:
             mock_instance = mock_engine.return_value
             mock_instance.run.return_value = {"chain": "ssrf_to_rce", "success": True}
@@ -265,8 +324,10 @@ class TestPrivateTryFunctions:
     @responses.activate
     def test_try_ssrf_cloud_metadata_no_creds(self):
         from tools.chain_engine import _try_ssrf_cloud_metadata
+
         responses.add(responses.GET, re.compile(r".*"), status=200, body="ok")
         import requests
+
         sess = requests.Session()
         result = _try_ssrf_cloud_metadata("url", sess, "http://test.com/page?url=PLACEHOLDER", 2.0)
         assert result["chain"] == "ssrf_to_metadata"
@@ -275,9 +336,11 @@ class TestPrivateTryFunctions:
     @responses.activate
     def test_try_ssrf_cloud_metadata_success(self):
         from tools.chain_engine import _try_ssrf_cloud_metadata
+
         body = '{"AccessKeyId": "AKIAIOSFODNN7EXAMPLE", "SecretAccessKey": "wJalrXUtnFEMI"}'
         responses.add(responses.GET, re.compile(r".*"), status=200, body=body)
         import requests
+
         sess = requests.Session()
         result = _try_ssrf_cloud_metadata("url", sess, "http://test.com/page?url=PLACEHOLDER", 2.0)
         assert result["success"] is True
@@ -286,8 +349,10 @@ class TestPrivateTryFunctions:
     @responses.activate
     def test_try_deser_to_rce_with_evidence(self):
         from tools.chain_engine import _try_deser_to_rce
+
         responses.add(responses.POST, re.compile(r".*"), status=200, body="ok")
         import requests
+
         sess = requests.Session()
         result = _try_deser_to_rce("data", sess, "http://test.com/page", 2.0)
         assert result["success"] is True
@@ -296,8 +361,10 @@ class TestPrivateTryFunctions:
     @responses.activate
     def test_try_deser_to_rce_no_evidence(self):
         from tools.chain_engine import _try_deser_to_rce
+
         responses.add(responses.POST, re.compile(r".*"), status=500, body="server error")
         import requests
+
         sess = requests.Session()
         result = _try_deser_to_rce("data", sess, "http://test.com/page", 2.0)
         assert result["chain"] == "deser_to_rce"

@@ -41,8 +41,7 @@ SENSITIVE_PATTERNS = [
 ]
 
 
-def _fetch_path(base_url: str, path: str, sess: requests.Session,
-                timeout: float) -> Optional[Dict]:
+def _fetch_path(base_url: str, path: str, sess: requests.Session, timeout: float) -> Optional[Dict]:
     url = base_url.rstrip("/") + path
     try:
         r = sess.get(url, timeout=timeout)
@@ -53,8 +52,9 @@ def _fetch_path(base_url: str, path: str, sess: requests.Session,
     return None
 
 
-def check_git_leak(url: str, sess: Optional[requests.Session] = None,
-                   timeout: float = 10.0, deep: bool = False) -> Dict:
+def check_git_leak(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0, deep: bool = False
+) -> Dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = False
@@ -77,10 +77,8 @@ def check_git_leak(url: str, sess: Optional[requests.Session] = None,
             result["accessible_paths"].append(info)
 
     if result["accessible_paths"]:
-        head_paths = [x for x in result["accessible_paths"]
-                      if x["path"].endswith("/HEAD")]
-        config_paths = [x for x in result["accessible_paths"]
-                        if x["path"].endswith("/config")]
+        head_paths = [x for x in result["accessible_paths"] if x["path"].endswith("/HEAD")]
+        config_paths = [x for x in result["accessible_paths"] if x["path"].endswith("/config")]
 
         if head_paths:
             for hp in head_paths:
@@ -92,18 +90,21 @@ def check_git_leak(url: str, sess: Optional[requests.Session] = None,
                             result["git_exposed"] = True
                             result["ref"] = ref
                             if config_paths:
-                                cr = sess.get(url.rstrip("/") + config_paths[0]["path"],
-                                              timeout=timeout)
+                                cr = sess.get(
+                                    url.rstrip("/") + config_paths[0]["path"], timeout=timeout
+                                )
                                 if cr.status_code == 200:
                                     for pat, name in SENSITIVE_PATTERNS:
                                         m = re.search(pat, cr.text, re.I)
                                         if m:
                                             line = m.group(0)
-                                            result["sensitive_finds"].append({
-                                                "type": name,
-                                                "match": line[:100],
-                                                "file": ".git/config",
-                                            })
+                                            result["sensitive_finds"].append(
+                                                {
+                                                    "type": name,
+                                                    "match": line[:100],
+                                                    "file": ".git/config",
+                                                }
+                                            )
                 except requests.RequestException:
                     pass
 
@@ -115,12 +116,16 @@ def check_git_leak(url: str, sess: Optional[requests.Session] = None,
                             m = re.search(pat, r.text, re.I)
                             if m:
                                 line = m.group(0)
-                                if not any(s["match"] == line[:100] for s in result["sensitive_finds"]):
-                                    result["sensitive_finds"].append({
-                                        "type": name,
-                                        "match": line[:100],
-                                        "file": ap["path"],
-                                    })
+                                if not any(
+                                    s["match"] == line[:100] for s in result["sensitive_finds"]
+                                ):
+                                    result["sensitive_finds"].append(
+                                        {
+                                            "type": name,
+                                            "match": line[:100],
+                                            "file": ap["path"],
+                                        }
+                                    )
                 except requests.RequestException:
                     pass
 

@@ -46,14 +46,21 @@ def adapt_payload(vtype: str, ctx: VulnCtx) -> Dict:
             elif "alibaba" in cp:
                 hints["preferred"] = ["100.100.100.200"]
         else:
-            hints["preferred"] = ["169.254.169.254", "metadata.google.internal", "file:///etc/passwd"]
+            hints["preferred"] = [
+                "169.254.169.254",
+                "metadata.google.internal",
+                "file:///etc/passwd",
+            ]
         if vc.has_admin_panel:
             hints["custom"].append("internal_admin_portal_scan")
 
     elif vtype == "lfi":
         if vc.os_type and "windows" in vc.os_type.lower():
-            hints["preferred"] = ["c:/windows/win.ini", "c:/boot.ini",
-                                   "c:/windows/system32/drivers/etc/hosts"]
+            hints["preferred"] = [
+                "c:/windows/win.ini",
+                "c:/boot.ini",
+                "c:/windows/system32/drivers/etc/hosts",
+            ]
         else:
             hints["preferred"] = ["/etc/passwd", "/etc/issue", "/proc/self/environ"]
             hints["custom"] = ["php://filter/convert.base64-encode/resource="]

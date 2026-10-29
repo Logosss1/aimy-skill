@@ -70,7 +70,8 @@ passthru("nslookup " . $host);     // $host = "x.com; id"
 ### Python
 ```python
 import os
-os.system("curl " + url)            # url = "x.com; id"
+
+os.system("curl " + url)  # url = "x.com; id"
 subprocess.call("ls " + path, shell=True)  # shell=True is the key vulnerability
 os.popen("ping " + host)
 ```

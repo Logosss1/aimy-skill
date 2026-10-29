@@ -11,6 +11,7 @@ base64url encode/decode, 函数名不一致 (b64_encode vs b64url_encode),
 - jwt_detector.decode_jwt_header/payload 继续导出 (测试依赖),
   内部委托本模块
 """
+
 from __future__ import annotations
 
 import base64

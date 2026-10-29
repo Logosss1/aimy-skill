@@ -211,13 +211,25 @@ def fingerprint_target(target: str, sess, timeout: float = 10.0) -> Dict:
         logger.debug("fingerprint target: %s", e)
 
     probe_paths = [
-        "/", "/index.php", "/login", "/wp-login.php", "/admin",
-        "/actuator", "/api", "/graphql", "/.env", "/robots.txt",
-        "/server-status", "/server-info", "/phpinfo.php",
+        "/",
+        "/index.php",
+        "/login",
+        "/wp-login.php",
+        "/admin",
+        "/actuator",
+        "/api",
+        "/graphql",
+        "/.env",
+        "/robots.txt",
+        "/server-status",
+        "/server-info",
+        "/phpinfo.php",
     ]
     for path in probe_paths:
         try:
-            r = sess.get(target.rstrip("/") + path, timeout=max(3, timeout * 0.5), verify=settings.verify_ssl)
+            r = sess.get(
+                target.rstrip("/") + path, timeout=max(3, timeout * 0.5), verify=settings.verify_ssl
+            )
             fp.extract_from_headers(dict(r.headers))
             fp.extract_from_body(r.text[:3000])
             if r.status_code == 200 and len(r.text) < 500:

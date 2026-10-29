@@ -86,9 +86,7 @@ class SpaCrawler:
     def _crawl_internal(self):
         page = self.engine.new_page(capture_api=True)
 
-        self.engine.navigate_and_wait(
-            page, self.base_url, timeout=self.timeout
-        )
+        self.engine.navigate_and_wait(page, self.base_url, timeout=self.timeout)
         time.sleep(1)
 
         self._extract_from_page(page)
@@ -106,8 +104,7 @@ class SpaCrawler:
                     self.internal_links.add(href)
                     found_new = True
                     try:
-                        page.goto(href, wait_until="domcontentloaded",
-                                  timeout=self.timeout)
+                        page.goto(href, wait_until="domcontentloaded", timeout=self.timeout)
                         time.sleep(0.5)
                         self._extract_from_page(page)
                         clicks += 1
@@ -141,7 +138,10 @@ class SpaCrawler:
             path = urlparse(url).path.rstrip("/") or "/"
             if path not in self.discovered_endpoints:
                 self.discovered_endpoints[path] = {
-                    "url": url, "methods": ["GET"], "params": [], "spa": True,
+                    "url": url,
+                    "methods": ["GET"],
+                    "params": [],
+                    "spa": True,
                 }
 
             scripts = page.query_selector_all("script[src]")
@@ -227,7 +227,7 @@ class SpaCrawler:
     def _get_clickable_elements(self, page) -> List[str]:
         texts = []
         try:
-            for selector in ("button", "a", '[role="button"]', '[onclick]'):
+            for selector in ("button", "a", '[role="button"]', "[onclick]"):
                 elements = page.query_selector_all(selector)
                 for el in elements:
                     text = el.text_content()

@@ -51,6 +51,7 @@ class ResponseProfiler:
 
         try:
             import time
+
             start = time.time()
             if method.upper() == "POST" and post_data:
                 d = post_data.copy()
@@ -84,17 +85,27 @@ class ResponseProfiler:
         timeout: float = 10.0,
     ) -> int:
         import concurrent.futures
+
         count = 0
         if len(points) <= 5:
             for p in points:
-                if self.profile_endpoint(p["url"], p["param"], sess, timeout, p.get("method", "GET")):
+                if self.profile_endpoint(
+                    p["url"], p["param"], sess, timeout, p.get("method", "GET")
+                ):
                     count += 1
             return count
 
         workers = min(8, len(points))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
             futures = {
-                ex.submit(self.profile_endpoint, p["url"], p["param"], sess, timeout, p.get("method", "GET")): p
+                ex.submit(
+                    self.profile_endpoint,
+                    p["url"],
+                    p["param"],
+                    sess,
+                    timeout,
+                    p.get("method", "GET"),
+                ): p
                 for p in points
             }
             for future in concurrent.futures.as_completed(futures):
@@ -128,9 +139,7 @@ class ResponseProfiler:
 
         current_length = len(resp.text)
         if baseline.length > 0:
-            delta_pct = (
-                abs(current_length - baseline.length) / baseline.length * 100.0
-            )
+            delta_pct = abs(current_length - baseline.length) / baseline.length * 100.0
             report.delta_length_pct = round(delta_pct, 1)
             if delta_pct > self._length_tolerance_pct:
                 report.reasons.append(

@@ -86,6 +86,7 @@ class TestAuthSession:
 
     def test_custom_session_preserves_headers(self):
         import requests
+
         sess = requests.Session()
         sess.headers["X-Custom"] = "val"
         engine = AuthSession(sess)
@@ -94,67 +95,81 @@ class TestAuthSession:
     @responses.activate
     def test_login_form_success(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="http://test.com/login"><input type="text" name="user">'
-                 '<input type="password" name="pass">'
-                 '<input type="submit"></form>',
+            '<input type="password" name="pass">'
+            '<input type="submit"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="x" * 120, status=200,
+            responses.POST,
+            "http://test.com/login",
+            body="x" * 120,
+            status=200,
         )
         engine = AuthSession()
-        result = engine.login_form("http://test.com/login", "admin", "secret",
-                                    user_field="user", pass_field="pass")
+        result = engine.login_form(
+            "http://test.com/login", "admin", "secret", user_field="user", pass_field="pass"
+        )
         assert result is True
 
     @responses.activate
     def test_login_form_failure_status(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="/login"><input type="text" name="user">'
-                 '<input type="password" name="pass"></form>',
+            '<input type="password" name="pass"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="Unauthorized", status=401,
+            responses.POST,
+            "http://test.com/login",
+            body="Unauthorized",
+            status=401,
         )
         engine = AuthSession()
-        result = engine.login_form("http://test.com/login", "admin", "secret",
-                                    user_field="user", pass_field="pass")
+        result = engine.login_form(
+            "http://test.com/login", "admin", "secret", user_field="user", pass_field="pass"
+        )
         assert result is False
 
     @responses.activate
     def test_login_form_short_response(self):
         responses.add(
-            responses.GET, "http://test.com/login",
-            body='<form><input type="text" name="u">'
-                 '<input type="password" name="p"></form>',
+            responses.GET,
+            "http://test.com/login",
+            body='<form><input type="text" name="u"><input type="password" name="p"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="OK", status=200,
+            responses.POST,
+            "http://test.com/login",
+            body="OK",
+            status=200,
         )
         engine = AuthSession()
-        result = engine.login_form("http://test.com/login", "admin", "secret",
-                                    user_field="u", pass_field="p")
+        result = engine.login_form(
+            "http://test.com/login", "admin", "secret", user_field="u", pass_field="p"
+        )
         assert result is False
 
     @responses.activate
     def test_login_form_with_csrf(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="http://test.com/login"><input type="hidden" name="csrf_token" value="tok123">'
-                 '<input type="text" name="username">'
-                 '<input type="password" name="password"></form>',
+            '<input type="text" name="username">'
+            '<input type="password" name="password"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="x" * 120, status=200,
+            responses.POST,
+            "http://test.com/login",
+            body="x" * 120,
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_form("http://test.com/login", "admin", "secret")
@@ -163,17 +178,20 @@ class TestAuthSession:
     @responses.activate
     def test_login_form_with_extra_hidden_inputs(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="http://test.com/login">'
-                 '<input type="hidden" name="csrf_token" value="tok">'
-                 '<input type="hidden" name="redirect" value="/home">'
-                 '<input type="text" name="username" value="admin">'
-                 '<input type="password" name="password"></form>',
+            '<input type="hidden" name="csrf_token" value="tok">'
+            '<input type="hidden" name="redirect" value="/home">'
+            '<input type="text" name="username" value="admin">'
+            '<input type="password" name="password"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="x" * 120, status=200,
+            responses.POST,
+            "http://test.com/login",
+            body="x" * 120,
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_form("http://test.com/login", "admin", "secret")
@@ -182,7 +200,8 @@ class TestAuthSession:
     @responses.activate
     def test_login_form_network_error_returns_false(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body=Exception("Connection refused"),
         )
         engine = AuthSession()
@@ -192,25 +211,29 @@ class TestAuthSession:
     @responses.activate
     def test_login_form_exception_during_post(self):
         responses.add(
-            responses.GET, "http://test.com/login",
-            body='<form><input type="text" name="u">'
-                 '<input type="password" name="p"></form>',
+            responses.GET,
+            "http://test.com/login",
+            body='<form><input type="text" name="u"><input type="password" name="p"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
+            responses.POST,
+            "http://test.com/login",
             body=Exception("Timeout"),
         )
         engine = AuthSession()
-        result = engine.login_form("http://test.com/login", "admin", "secret",
-                                    user_field="u", pass_field="p")
+        result = engine.login_form(
+            "http://test.com/login", "admin", "secret", user_field="u", pass_field="p"
+        )
         assert result is False
 
     @responses.activate
     def test_login_api_success_bearer_token(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            json={"token": "jwt_val"}, status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            json={"token": "jwt_val"},
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -220,8 +243,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_access_token(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            json={"access_token": "access_val"}, status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            json={"access_token": "access_val"},
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -231,8 +256,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_nested_token(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            json={"data": {"token": "nested_val"}}, status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            json={"data": {"token": "nested_val"}},
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -242,8 +269,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_no_token_in_response(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            json={"message": "ok"}, status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            json={"message": "ok"},
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -252,8 +281,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_failure_status(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            body="Unauthorized", status=401,
+            responses.POST,
+            "http://test.com/api/login",
+            body="Unauthorized",
+            status=401,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -262,8 +293,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_non_json_response(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            body="OK plain text", status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            body="OK plain text",
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -272,7 +305,8 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_network_error_returns_false(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
+            responses.POST,
+            "http://test.com/api/login",
             body=Exception("Timeout"),
         )
         engine = AuthSession()
@@ -282,8 +316,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_basic_success(self):
         responses.add(
-            responses.GET, "http://test.com/protected",
-            body="Authorized", status=200,
+            responses.GET,
+            "http://test.com/protected",
+            body="Authorized",
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_basic("http://test.com/protected", "admin", "secret")
@@ -292,8 +328,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_basic_failure(self):
         responses.add(
-            responses.GET, "http://test.com/protected",
-            body="Unauthorized", status=401,
+            responses.GET,
+            "http://test.com/protected",
+            body="Unauthorized",
+            status=401,
         )
         engine = AuthSession()
         result = engine.login_basic("http://test.com/protected", "admin", "secret")
@@ -302,8 +340,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_basic_redirect(self):
         responses.add(
-            responses.GET, "http://test.com/protected",
-            body="Redirecting", status=302,
+            responses.GET,
+            "http://test.com/protected",
+            body="Redirecting",
+            status=302,
         )
         engine = AuthSession()
         result = engine.login_basic("http://test.com/protected", "admin", "secret")
@@ -312,7 +352,8 @@ class TestAuthSession:
     @responses.activate
     def test_login_basic_network_error_returns_false(self):
         responses.add(
-            responses.GET, "http://test.com/protected",
+            responses.GET,
+            "http://test.com/protected",
             body=Exception("Connection refused"),
         )
         engine = AuthSession()
@@ -338,8 +379,12 @@ class TestAuthSession:
     def test_login_browser_playwright_not_available(self):
         engine = AuthSession()
         result = engine.login_browser(
-            "http://test.com/login", "admin", "secret",
-            auth_type="auto", user_field="user", pass_field="pass",
+            "http://test.com/login",
+            "admin",
+            "secret",
+            auth_type="auto",
+            user_field="user",
+            pass_field="pass",
         )
         assert result is False
 
@@ -385,8 +430,10 @@ class TestAuthSession:
     @responses.activate
     def test_login_api_malformed_json_no_exception(self):
         responses.add(
-            responses.POST, "http://test.com/api/login",
-            body="<html>not json</html>", status=200,
+            responses.POST,
+            "http://test.com/api/login",
+            body="<html>not json</html>",
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_api("http://test.com/api/login", "admin", "secret")
@@ -395,15 +442,18 @@ class TestAuthSession:
     @responses.activate
     def test_login_action_url_from_form(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="http://test.com/auth">'
-                 '<input type="text" name="username">'
-                 '<input type="password" name="password"></form>',
+            '<input type="text" name="username">'
+            '<input type="password" name="password"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/auth",
-            body="x" * 120, status=200,
+            responses.POST,
+            "http://test.com/auth",
+            body="x" * 120,
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_form("http://test.com/login", "admin", "secret")
@@ -412,14 +462,17 @@ class TestAuthSession:
     @responses.activate
     def test_login_form_defaults_user_pass_field_names(self):
         responses.add(
-            responses.GET, "http://test.com/login",
+            responses.GET,
+            "http://test.com/login",
             body='<form action="http://test.com/login"><input type="text" name="username">'
-                 '<input type="password" name="password"></form>',
+            '<input type="password" name="password"></form>',
             status=200,
         )
         responses.add(
-            responses.POST, "http://test.com/login",
-            body="x" * 120, status=200,
+            responses.POST,
+            "http://test.com/login",
+            body="x" * 120,
+            status=200,
         )
         engine = AuthSession()
         result = engine.login_form("http://test.com/login", "admin", "secret")

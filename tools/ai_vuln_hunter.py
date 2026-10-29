@@ -27,8 +27,11 @@ class IntelReport:
         if self.technology_stack:
             lines.append("Tech: %s" % ", ".join(self.technology_stack))
         if self.discovered_endpoints:
-            interesting = [e for e in self.discovered_endpoints
-                          if e.get("status") in (200, 401, 403) and e.get("size", 0) > 50]
+            interesting = [
+                e
+                for e in self.discovered_endpoints
+                if e.get("status") in (200, 401, 403) and e.get("size", 0) > 50
+            ]
             if interesting:
                 lines.append("Endpoints (%d interesting):" % len(interesting))
                 for e in interesting[:8]:
@@ -49,8 +52,9 @@ class IntelReport:
                     lines.append("  %s: %.1fs" % (k, v))
         para_behavior = [(p, len(b)) for p, b in self.parameter_behavior.items() if len(b) > 0]
         if para_behavior:
-            lines.append("Parameters tested: %s" % ", ".join(
-                "%s(%d)" % (p, c) for p, c in para_behavior[:6]))
+            lines.append(
+                "Parameters tested: %s" % ", ".join("%s(%d)" % (p, c) for p, c in para_behavior[:6])
+            )
         return "\n".join(lines)
 
 
@@ -63,17 +67,30 @@ class IntelligenceGatherer:
         self.report = IntelReport(target="")
         self._lock = threading.Lock()
 
-    def deep_sample_endpoint(self, url: str, param: str,
-                              baseline_payload: str = "1",
-                              mutant_payloads: List[str] = None) -> Dict:
+    def deep_sample_endpoint(
+        self, url: str, param: str, baseline_payload: str = "1", mutant_payloads: List[str] = None
+    ) -> Dict:
         sample = {"url": url, "param": param, "responses": []}
         if mutant_payloads is None:
             mutant_payloads = [
-                "1", "'", "\"", "true", "null", "1=1",
-                "../", "//", "./",
-                "<test>", "{test}", "[test]",
-                "${1+1}", "#{1+1}", "{{1+1}}",
-                " ", "%00", "\\",
+                "1",
+                "'",
+                '"',
+                "true",
+                "null",
+                "1=1",
+                "../",
+                "//",
+                "./",
+                "<test>",
+                "{test}",
+                "[test]",
+                "${1+1}",
+                "#{1+1}",
+                "{{1+1}}",
+                " ",
+                "%00",
+                "\\",
             ]
         try:
             r = self.sess.get(url, params={param: baseline_payload}, timeout=self.timeout)
@@ -106,14 +123,16 @@ class IntelligenceGatherer:
                     resp["anomaly"] = True
                     resp["diff_reason"] = diff["reason"]
                     with self._lock:
-                        self.report.anomaly_observations.append({
-                            "url": url,
-                            "param": param,
-                            "payload": payload,
-                            "description": diff["reason"],
-                            "baseline_status": baseline["status"],
-                            "response_status": resp["status"],
-                        })
+                        self.report.anomaly_observations.append(
+                            {
+                                "url": url,
+                                "param": param,
+                                "payload": payload,
+                                "description": diff["reason"],
+                                "baseline_status": baseline["status"],
+                                "response_status": resp["status"],
+                            }
+                        )
                 sample["responses"].append(resp)
             except Exception:
                 pass
@@ -125,15 +144,17 @@ class IntelligenceGatherer:
             reasons.append("status %d -> %d" % (baseline["status"], response["status"]))
         size_ratio = response["size"] / max(baseline["size"], 1)
         if size_ratio > 2.0:
-            reasons.append("size %.0f -> %.0f (%.1fx)" % (
-                baseline["size"], response["size"], size_ratio))
+            reasons.append(
+                "size %.0f -> %.0f (%.1fx)" % (baseline["size"], response["size"], size_ratio)
+            )
         elif size_ratio < 0.5 and response["size"] > 50:
-            reasons.append("size %.0f -> %.0f (shrunk %.1fx)" % (
-                baseline["size"], response["size"], size_ratio))
+            reasons.append(
+                "size %.0f -> %.0f (shrunk %.1fx)"
+                % (baseline["size"], response["size"], size_ratio)
+            )
         time_ratio = response["time"] / max(baseline["time"], 0.01)
         if time_ratio > 3.0 and response["time"] > 2.0:
-            reasons.append("slow (%.1fs vs %.1fs baseline)" % (
-                response["time"], baseline["time"]))
+            reasons.append("slow (%.1fs vs %.1fs baseline)" % (response["time"], baseline["time"]))
         if response["status"] in (500, 502, 503):
             reasons.append("server error")
         error_patterns = [
@@ -151,31 +172,63 @@ class IntelligenceGatherer:
     def probe_mutation_matrix(self, url: str, param: str) -> Dict:
         mutation_matrix = {
             "type_coercion": [
-                "1", "true", "false", "null", "undefined",
-                "01", "1.0", "1e0", "0x1",
+                "1",
+                "true",
+                "false",
+                "null",
+                "undefined",
+                "01",
+                "1.0",
+                "1e0",
+                "0x1",
             ],
             "sql_prefix": [
-                "'", "\"", "')", "\"))", "`",
-                "1'", "1\"", "1`",
+                "'",
+                '"',
+                "')",
+                '"))',
+                "`",
+                "1'",
+                '1"',
+                "1`",
             ],
             "path_manipulation": [
-                "../", "..\\", "....//", "..;/",
-                "%2e%2e/", "%252e%252e%252f",
+                "../",
+                "..\\",
+                "....//",
+                "..;/",
+                "%2e%2e/",
+                "%252e%252e%252f",
             ],
             "noop_payloads": [
-                "1 AND 1=1", "1' AND '1'='1",
-                "1 UNION SELECT 1", "1' UNION SELECT '1",
-                "1,2,3", "1;2;3",
+                "1 AND 1=1",
+                "1' AND '1'='1",
+                "1 UNION SELECT 1",
+                "1' UNION SELECT '1",
+                "1,2,3",
+                "1;2;3",
             ],
             "special_chars": [
-                "\x00", "\r\n", "\t", "\\",
-                "' OR '1'='1", "\" OR \"1\"=\"1",
-                "${7*7}", "#{7*7}", "{{7*7}}",
-                "{{config}}", "${java:os}",
+                "\x00",
+                "\r\n",
+                "\t",
+                "\\",
+                "' OR '1'='1",
+                '" OR "1"="1',
+                "${7*7}",
+                "#{7*7}",
+                "{{7*7}}",
+                "{{config}}",
+                "${java:os}",
             ],
             "verb_tampering": [
-                "", "-1", "0", "*",
-                "admin", "root", "true",
+                "",
+                "-1",
+                "0",
+                "*",
+                "admin",
+                "root",
+                "true",
             ],
         }
         results = {"url": url, "param": param, "mutations": {}}
@@ -199,12 +252,16 @@ class IntelligenceGatherer:
                         resp["anomaly"] = True
                         resp["diff_reason"] = diff["reason"]
                         with self._lock:
-                            self.report.anomaly_observations.append({
-                                "url": url, "param": param, "payload": payload[:60],
-                                "description": diff["reason"],
-                                "baseline_status": baseline["status"],
-                                "response_status": resp["status"],
-                            })
+                            self.report.anomaly_observations.append(
+                                {
+                                    "url": url,
+                                    "param": param,
+                                    "payload": payload[:60],
+                                    "description": diff["reason"],
+                                    "baseline_status": baseline["status"],
+                                    "response_status": resp["status"],
+                                }
+                            )
                     group_results.append(resp)
                 except Exception:
                     pass
@@ -225,8 +282,9 @@ class IntelligenceGatherer:
             self.report.parameter_behavior[key].append(result)
         return result
 
-    def explore(self, base_url: str, findings: Dict[str, Dict],
-                recon_data: Optional[Dict] = None) -> Dict:
+    def explore(
+        self, base_url: str, findings: Dict[str, Dict], recon_data: Optional[Dict] = None
+    ) -> Dict:
         self.report.target = base_url
         if recon_data:
             self.report.technology_stack = recon_data.get("technologies", [])
@@ -248,10 +306,14 @@ class IntelligenceGatherer:
         return result
 
 
-def generate_target_brief(sess, base_url: str, timeout: float = 10.0,
-                           findings: Optional[Dict[str, Dict]] = None,
-                           recon_data: Optional[Dict] = None,
-                           context_memory=None, vuln_ctx=None) -> Dict:
+def generate_target_brief(
+    sess,
+    base_url: str,
+    timeout: float = 10.0,
+    findings: Optional[Dict[str, Dict]] = None,
+    recon_data: Optional[Dict] = None,
+    context_memory=None,
+    vuln_ctx=None,
+) -> Dict:
     gatherer = IntelligenceGatherer(sess, timeout, context_memory, vuln_ctx)
-    return gatherer.explore(
-        base_url, findings or {}, recon_data)
+    return gatherer.explore(base_url, findings or {}, recon_data)

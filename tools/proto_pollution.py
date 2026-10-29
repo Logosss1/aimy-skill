@@ -29,8 +29,9 @@ PP_DEEP_MERGE_PAYLOADS = [
 ]
 
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -39,8 +40,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
     if param:
         for payload in PP_PAYLOADS:
             try:
-                r = sess.get(url, params={param: payload},
-                             timeout=timeout)
+                r = sess.get(url, params={param: payload}, timeout=timeout)
                 if PP_MARKER in r.text:
                     result["vulnerable"] = True
                     result["type"] = "get"
@@ -52,8 +52,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
     if not result["vulnerable"] and param:
         for payload in PP_PAYLOADS:
             try:
-                r = sess.post(url, data={param: payload},
-                              timeout=timeout)
+                r = sess.post(url, data={param: payload}, timeout=timeout)
                 if r.status_code < 500 and PP_MARKER in r.text:
                     result["vulnerable"] = True
                     result["type"] = "post"
@@ -64,12 +63,13 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
 
     if not result["vulnerable"]:
         try:
-            r = sess.post(url, json=PP_JSON_PAYLOADS,
-                          timeout=timeout)
+            r = sess.post(url, json=PP_JSON_PAYLOADS, timeout=timeout)
             if r.status_code < 500:
                 result["vulnerable"] = True
                 result["type"] = "json"
-                result["evidence"].append("pp json: __proto__ injection (verified via second request)")
+                result["evidence"].append(
+                    "pp json: __proto__ injection (verified via second request)"
+                )
         except Exception as e:
             logger.debug("pp json: %s", e)
 
@@ -88,8 +88,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
     if result["vulnerable"] and param:
         try:
             verify_payload = "__proto__[%s]=verified&%s=dummy" % (PP_MARKER, param)
-            r2 = sess.get(url, params={param: verify_payload},
-                          timeout=timeout)
+            r2 = sess.get(url, params={param: verify_payload}, timeout=timeout)
             if PP_MARKER not in r2.text:
                 result["vulnerable"] = False
                 result["type"] = None

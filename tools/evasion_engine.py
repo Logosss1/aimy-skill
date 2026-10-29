@@ -75,7 +75,9 @@ class EvasionEngine:
         }
         referer = random.choice(self._referer_pool)
         if referer:
-            h["Referer"] = referer + "".join(random.choices(string.ascii_lowercase, k=random.randint(3, 10)))
+            h["Referer"] = referer + "".join(
+                random.choices(string.ascii_lowercase, k=random.randint(3, 10))
+            )
 
         if self._consecutive_count >= self._rotate_after:
             self._agent_pool = list(USER_AGENTS)
@@ -94,8 +96,9 @@ class EvasionEngine:
             return orig_url + noise
         return orig_url
 
-    def request_with_evasion(self, sess, method: str, url: str,
-                              purpose: str = "recon", **kwargs) -> "requests.Response":
+    def request_with_evasion(
+        self, sess, method: str, url: str, purpose: str = "recon", **kwargs
+    ) -> "requests.Response":
         h = kwargs.pop("headers", {})
         ev_h = self.headers(purpose)
         ev_h.update(h)

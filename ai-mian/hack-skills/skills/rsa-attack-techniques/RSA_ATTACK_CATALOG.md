@@ -29,6 +29,7 @@ def trial_division(n, limit=10**6):
 from math import gcd
 from random import randint
 
+
 def pollard_rho(n):
     """Pollard's rho factorization."""
     if n % 2 == 0:
@@ -96,6 +97,7 @@ When m^e slightly exceeds n (wraps around a few times):
 
 ```python
 from gmpy2 import iroot, mpz
+
 
 def cube_root_with_wrap(c, e, n, max_k=10000):
     """Try c + k*n for small k, check if perfect e-th root."""
@@ -264,31 +266,32 @@ def boneh_durfee(n, e, delta=0.292, m=4):
 from gmpy2 import mpz, invert
 from decimal import Decimal, getcontext
 
+
 def lsb_oracle_full(n, e, c, oracle):
     """
     Full LSB oracle attack.
     oracle(c) → returns LSB of decrypt(c), i.e., m mod 2.
     """
     getcontext().prec = n.bit_length() + 100
-    
+
     lo = Decimal(0)
     hi = Decimal(n)
-    
+
     two_e = pow(2, e, n)
     multiplier = mpz(1)
-    
+
     for i in range(n.bit_length()):
         multiplier = (multiplier * two_e) % n
         test_c = (c * multiplier) % n
-        
+
         lsb = oracle(int(test_c))
-        
+
         mid = (lo + hi) / 2
         if lsb == 0:
             hi = mid
         else:
             lo = mid
-    
+
     return int(hi)
 ```
 
@@ -352,6 +355,7 @@ Therefore:
 ```python
 from math import gcd
 
+
 def rsa_crt_factor(n, e, m, faulty_sig):
     """Factor n from a single faulty CRT signature."""
     diff = (pow(faulty_sig, e, n) - m) % n
@@ -371,13 +375,14 @@ When n = p · q · r (three or more primes):
 from sympy import factorint
 from functools import reduce
 
+
 def multi_prime_decrypt(n, e, c):
     factors = factorint(n)
     primes = list(factors.keys())
-    
+
     # Euler's totient for multi-prime
     phi = reduce(lambda a, p: a * (p - 1), primes, 1)
-    
+
     d = pow(e, -1, phi)
     m = pow(c, d, n)
     return m
@@ -391,18 +396,19 @@ def multi_prime_decrypt(n, e, c):
 from random import randint
 from math import gcd
 
+
 def factor_from_ed(n, e, d):
     """Factor n given e and d such that e·d ≡ 1 (mod φ(n))."""
     k = e * d - 1
-    
+
     while True:
         g = randint(2, n - 2)
         t = k
-        
+
         while t % 2 == 0:
             t //= 2
             x = pow(g, t, n)
-            
+
             if x > 1 and gcd(x - 1, n) > 1:
                 p = gcd(x - 1, n)
                 if p != n:

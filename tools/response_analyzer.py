@@ -12,19 +12,11 @@ SENSITIVE_FIELD_PATTERNS = {
     "credential": re.compile(
         r"(password|passwd|secret|token|apikey|api_key|auth|credential)", re.I
     ),
-    "pii": re.compile(
-        r"(email|ssn|phone|address|birth|id_card|credit_card|cvv|pin)", re.I
-    ),
+    "pii": re.compile(r"(email|ssn|phone|address|birth|id_card|credit_card|cvv|pin)", re.I),
     "financial": re.compile(r"(price|amount|balance|payment|salary|fee|discount)", re.I),
-    "identifier": re.compile(
-        r"(id$|_id|uuid|guid|hash|slug|code|key|ref)", re.I
-    ),
-    "role": re.compile(
-        r"(role|permission|group|level|type|status|is_admin|is_active)", re.I
-    ),
-    "timestamp": re.compile(
-        r"(created_at|updated_at|timestamp|date|time|expires|ttl)", re.I
-    ),
+    "identifier": re.compile(r"(id$|_id|uuid|guid|hash|slug|code|key|ref)", re.I),
+    "role": re.compile(r"(role|permission|group|level|type|status|is_admin|is_active)", re.I),
+    "timestamp": re.compile(r"(created_at|updated_at|timestamp|date|time|expires|ttl)", re.I),
 }
 
 
@@ -62,8 +54,7 @@ class ResponseAnalyzer:
     def __init__(self):
         self._cache: Dict[str, ResponseAnalysis] = {}
 
-    def analyze(self, url: str, status: int, headers: Dict,
-                body: str) -> ResponseAnalysis:
+    def analyze(self, url: str, status: int, headers: Dict, body: str) -> ResponseAnalysis:
         ct = ""
         for k, v in (headers or {}).items():
             if k.lower() == "content-type":
@@ -91,8 +82,7 @@ class ResponseAnalyzer:
         self._cache[url] = analysis
         return analysis
 
-    def _analyze_json(self, analysis: ResponseAnalysis, body: str,
-                      url: str) -> ResponseAnalysis:
+    def _analyze_json(self, analysis: ResponseAnalysis, body: str, url: str) -> ResponseAnalysis:
         try:
             data = json.loads(body)
             analysis.data_structure = self._infer_structure(data)
@@ -106,15 +96,16 @@ class ResponseAnalyzer:
                 analysis.pagination = self._detect_pagination(data)
                 analysis.endpoints_linked = self._extract_endpoints(data, url)
             else:
-                analysis.fields = [FieldAnalysis(
-                    path="$", name="root",
-                    value_type=type(data).__name__,
-                    sample_value=str(data)[:100],
-                )]
+                analysis.fields = [
+                    FieldAnalysis(
+                        path="$",
+                        name="root",
+                        value_type=type(data).__name__,
+                        sample_value=str(data)[:100],
+                    )
+                ]
 
-            analysis.sensitive_fields = [
-                f.path for f in analysis.fields if f.is_sensitive
-            ]
+            analysis.sensitive_fields = [f.path for f in analysis.fields if f.is_sensitive]
         except json.JSONDecodeError as e:
             logger.debug("json parse failed for %s: %s", url, e)
 
@@ -123,26 +114,26 @@ class ResponseAnalyzer:
     def _analyze_html(self, analysis: ResponseAnalysis, body: str) -> ResponseAnalysis:
         fields = []
 
-        for m in re.finditer(
-            r'<input[^>]*name=["\']([^"\']+)["\']', body, re.I
-        ):
-            fields.append(FieldAnalysis(
-                path=f"form.input.{m.group(1)}",
-                name=m.group(1),
-                value_type="html_input",
-                sample_value="",
-                is_nullable=True,
-            ))
+        for m in re.finditer(r'<input[^>]*name=["\']([^"\']+)["\']', body, re.I):
+            fields.append(
+                FieldAnalysis(
+                    path=f"form.input.{m.group(1)}",
+                    name=m.group(1),
+                    value_type="html_input",
+                    sample_value="",
+                    is_nullable=True,
+                )
+            )
 
-        for m in re.finditer(
-            r'data-([\w-]+)=["\']([^"\']*)["\']', body, re.I
-        ):
-            fields.append(FieldAnalysis(
-                path=f"data.{m.group(1)}",
-                name=m.group(1),
-                value_type="data_attr",
-                sample_value=m.group(2)[:50],
-            ))
+        for m in re.finditer(r'data-([\w-]+)=["\']([^"\']*)["\']', body, re.I):
+            fields.append(
+                FieldAnalysis(
+                    path=f"data.{m.group(1)}",
+                    name=m.group(1),
+                    value_type="data_attr",
+                    sample_value=m.group(2)[:50],
+                )
+            )
 
         analysis.fields = fields
 
@@ -150,15 +141,15 @@ class ResponseAnalyzer:
         # "message:"/"alert:" 都当错误页 (200 正常页大量误报).
         error_matches = re.findall(
             r'(error|exception|failure|failed|warning)["\']?\s*[:=]\s*["\']?([^"\'<>{}\[\]|]+)',
-            body, re.I
+            body,
+            re.I,
         )
         if error_matches:
             analysis.is_error = True
 
         return analysis
 
-    def _extract_fields(self, data: Any, path: str,
-                        depth: int = 0) -> List[FieldAnalysis]:
+    def _extract_fields(self, data: Any, path: str, depth: int = 0) -> List[FieldAnalysis]:
         if depth > 5:
             return []
 
@@ -185,9 +176,7 @@ class ResponseAnalyzer:
                 if isinstance(val, dict):
                     fields.extend(self._extract_fields(val, child_path, depth + 1))
                 elif isinstance(val, list) and val and isinstance(val[0], dict):
-                    fields.extend(
-                        self._extract_fields(val[0], f"{child_path}[]", depth + 1)
-                    )
+                    fields.extend(self._extract_fields(val[0], f"{child_path}[]", depth + 1))
 
         return fields
 
@@ -237,16 +226,25 @@ class ResponseAnalyzer:
         return "string"
 
     def _detect_pagination(self, data: Dict) -> Optional[Dict]:
-        for key in ("page", "pages", "offset", "limit", "total", "count",
-                     "has_more", "next_page", "next", "per_page"):
+        for key in (
+            "page",
+            "pages",
+            "offset",
+            "limit",
+            "total",
+            "count",
+            "has_more",
+            "next_page",
+            "next",
+            "per_page",
+        ):
             if key in data:
                 return {"field": key, "value": data[key]}
         return None
 
     def _extract_endpoints(self, data: Dict, base_url: str) -> List[str]:
         endpoints = []
-        for key in ("url", "link", "href", "next", "prev", "self",
-                     "first", "last"):
+        for key in ("url", "link", "href", "next", "prev", "self", "first", "last"):
             if key in data and isinstance(data[key], str):
                 endpoints.append(data[key])
         for key in ("items", "data", "results", "records"):

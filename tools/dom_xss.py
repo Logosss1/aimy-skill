@@ -8,6 +8,7 @@
 4) 输出"source -> sink"路径与验证 payload（#hash 注入）
 Playwright 可用时做真实执行验证。
 """
+
 import re
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
@@ -22,6 +23,7 @@ logger = get_logger("dom_xss")
 HAS_PLAYWRIGHT = False
 try:
     from playwright.sync_api import sync_playwright
+
     HAS_PLAYWRIGHT = True
 except ImportError:
     pass
@@ -48,16 +50,20 @@ def _verify_with_browser(url: str, findings: List[Dict], timeout: float) -> Opti
                     dialog.accept()
 
                 page.on("dialog", on_dialog)
-                page.goto(test_url, wait_until="domcontentloaded",
-                          timeout=int(timeout * 1000))
+                page.goto(test_url, wait_until="domcontentloaded", timeout=int(timeout * 1000))
                 page.wait_for_timeout(800)
                 browser.close()
                 if dialog_caught[0]:
-                    return {"confirmed": True, "url": test_url,
-                            "payload": payload, "sink": f["sink"]}
+                    return {
+                        "confirmed": True,
+                        "url": test_url,
+                        "payload": payload,
+                        "sink": f["sink"],
+                    }
         except Exception as e:
             logger.debug("dom-xss browser verify: %s", e)
     return None
+
 
 SINKS = [
     (r"\.innerHTML\s*=", "innerHTML"),
@@ -151,14 +157,16 @@ def _analyze_scripts(scripts: List[str]) -> List[Dict]:
         for sink_re, sink_name in SINKS:
             for m in re.finditer(sink_re, script):
                 # look for a source feeding this sink within a reasonable window
-                window = script[max(0, m.start() - 300):m.end() + 100]
+                window = script[max(0, m.start() - 300) : m.end() + 100]
                 for src in SOURCES:
                     if src in window:
-                        findings.append({
-                            "sink": sink_name,
-                            "source": src,
-                            "context": window[-120:].strip()[:120],
-                        })
+                        findings.append(
+                            {
+                                "sink": sink_name,
+                                "source": src,
+                                "context": window[-120:].strip()[:120],
+                            }
+                        )
                         break
     # dedupe
     seen = set()
@@ -182,11 +190,9 @@ def _verification_payload(source: str, sink: str) -> str:
     return "<img src=x onerror=alert(1)>"
 
 
-def check(url: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0) -> Dict:
     sess = sess or make_session()
-    result = {"vulnerable": False, "type": "dom_xss", "findings": [],
-              "sinks_found": [], "note": ""}
+    result = {"vulnerable": False, "type": "dom_xss", "findings": [], "sinks_found": [], "note": ""}
     scripts = _get_scripts(url, sess, timeout)
     if not scripts:
         result["note"] = "no scripts found to analyze"
@@ -206,14 +212,16 @@ def check(url: str, sess: Optional[requests.Session] = None,
             verified = _verify_with_browser(url, dangerous[:4], timeout)
             if verified:
                 result["confirmed"] = True
-                result["evidence"] = ["executed via %s at %s" % (
-                    verified["sink"], verified["url"])]
-                result["note"] = (
-                    "DOM XSS CONFIRMED: %s feeds %s - alert() executed with %s" % (
-                        verified["source"], verified["sink"], verified["payload"]))
+                result["evidence"] = ["executed via %s at %s" % (verified["sink"], verified["url"])]
+                result["note"] = "DOM XSS CONFIRMED: %s feeds %s - alert() executed with %s" % (
+                    verified["source"],
+                    verified["sink"],
+                    verified["payload"],
+                )
             else:
                 result["note"] = (
                     "DOM XSS candidate: %s feeds %s. Verify manually with the "
-                    "suggested payload via location.hash injection." % (
-                        dangerous[0]["source"], dangerous[0]["sink"]))
+                    "suggested payload via location.hash injection."
+                    % (dangerous[0]["source"], dangerous[0]["sink"])
+                )
     return result

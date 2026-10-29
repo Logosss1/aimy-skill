@@ -44,12 +44,18 @@ def retry(
                         break
                     _log.debug(
                         "%s failed (attempt %d/%d): %s, retry in %.2fs",
-                        func.__name__, attempt, retries, e, wait,
+                        func.__name__,
+                        attempt,
+                        retries,
+                        e,
+                        wait,
                     )
                     time.sleep(wait)
                     wait = min(wait * backoff, max_delay)
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator
 
 
@@ -78,12 +84,18 @@ def retry_async(
                         break
                     _log.debug(
                         "%s failed (attempt %d/%d): %s, retry in %.2fs",
-                        func.__name__, attempt, retries, e, wait,
+                        func.__name__,
+                        attempt,
+                        retries,
+                        e,
+                        wait,
                     )
                     await asyncio.sleep(wait)
                     wait = min(wait * backoff, max_delay)
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator
 
 

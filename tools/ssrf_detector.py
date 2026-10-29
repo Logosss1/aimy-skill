@@ -146,8 +146,7 @@ def _is_local_target(url: str) -> bool:
 
 
 class OOBListener:
-    def __init__(self, port: int = 0, timeout: float = 6.0,
-                 custom_callback: Optional[str] = None):
+    def __init__(self, port: int = 0, timeout: float = 6.0, custom_callback: Optional[str] = None):
         self.port = port
         self.oob_timeout = timeout
         self.caught = threading.Event()
@@ -160,7 +159,9 @@ class OOBListener:
         if self.custom_callback:
             return self.custom_callback
         try:
-            self._server = http.server.HTTPServer(("127.0.0.1", self.port), self._make_handler(self))
+            self._server = http.server.HTTPServer(
+                ("127.0.0.1", self.port), self._make_handler(self)
+            )
             self.port = self._server.server_address[1]
         except OSError as e:
             logger.debug("OOB listener failed to bind: %s", e)
@@ -186,6 +187,7 @@ class OOBListener:
 
             def log_message(self, *a):
                 pass
+
         return Handler
 
 
@@ -250,7 +252,7 @@ class DnsOobListener:
                 pos += 1
                 if pos + length > len(data):
                     return None
-                labels.append(data[pos:pos + length].decode("ascii", errors="replace"))
+                labels.append(data[pos : pos + length].decode("ascii", errors="replace"))
                 pos += length
             return ".".join(labels)
         except Exception:
@@ -265,11 +267,15 @@ class DnsOobListener:
                 pass
 
 
-def _test_oob(url: str, param: str, sess: requests.Session,
-              timeout: float, custom_callback: Optional[str] = None) -> dict:
+def _test_oob(
+    url: str,
+    param: str,
+    sess: requests.Session,
+    timeout: float,
+    custom_callback: Optional[str] = None,
+) -> dict:
     oob_timeout = min(timeout, 6.0)
-    result = {"vulnerable": False, "type": None, "evidence": [],
-              "payload": None, "oob_methods": []}
+    result = {"vulnerable": False, "type": None, "evidence": [], "payload": None, "oob_methods": []}
 
     # HTTP OOB
     http_listener = OOBListener(timeout=oob_timeout, custom_callback=custom_callback)
@@ -277,17 +283,20 @@ def _test_oob(url: str, param: str, sess: requests.Session,
 
     if oob_url:
         host = oob_url.split("/")[2].split(":")[0] if "://" in oob_url else ""
-        test_payloads = [
-            oob_url,
-            "http://%s/oob" % host,
-            "dict://%s/oob" % host,
-            "gopher://%s/_test" % host,
-        ] if host else [oob_url]
+        test_payloads = (
+            [
+                oob_url,
+                "http://%s/oob" % host,
+                "dict://%s/oob" % host,
+                "gopher://%s/_test" % host,
+            ]
+            if host
+            else [oob_url]
+        )
 
         for payload in test_payloads:
             try:
-                sess.get(build_url(url, param, payload),
-                         timeout=timeout)
+                sess.get(build_url(url, param, payload), timeout=timeout)
             except Exception as e:
                 logger.debug("ssrf oob %s: %s", payload[:30], e)
             if http_listener.caught.wait(timeout=oob_timeout):
@@ -312,8 +321,7 @@ def _test_oob(url: str, param: str, sess: requests.Session,
             ]
             for payload in dns_payloads:
                 try:
-                    sess.get(build_url(url, param, payload),
-                             timeout=timeout)
+                    sess.get(build_url(url, param, payload), timeout=timeout)
                 except Exception as e:
                     logger.debug("ssrf dns oob %s: %s", payload[:30], e)
                 if dns_listener.caught.wait(timeout=oob_timeout):
@@ -329,24 +337,38 @@ def _test_oob(url: str, param: str, sess: requests.Session,
     if not result["oob_methods"]:
         is_external = not _is_local_target(url)
         if is_external and not custom_callback:
-            result["note"] = "External target: OOB callback may not reach local listener. Use --oob-server to specify a public callback URL."
+            result["note"] = (
+                "External target: OOB callback may not reach local listener. Use --oob-server to specify a public callback URL."
+            )
 
     return result
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, oob_server: Optional[str] = None) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    oob_server: Optional[str] = None,
+) -> dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
-    result = {"vulnerable": False, "type": None, "evidence": [], "payload": None,
-              "oob_tested": False, "oob_server_used": oob_server,
-              "confidence": "low", "confirmed": False, "oob_methods": []}
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "payload": None,
+        "oob_tested": False,
+        "oob_server_used": oob_server,
+        "confidence": "low",
+        "confirmed": False,
+        "oob_methods": [],
+    }
 
     for ssrf_url in SSRF_URLS:
         try:
-            r = sess.get(build_url(url, param, ssrf_url),
-                         timeout=timeout)
+            r = sess.get(build_url(url, param, ssrf_url), timeout=timeout)
             for pat in SSRF_EVIDENCE_PATTERNS:
                 if re.search(pat, r.text, re.IGNORECASE):
                     result["vulnerable"] = True
@@ -372,15 +394,18 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
             pass
         for internal_url in INTERNAL_PROBES:
             try:
-                r = sess.get(build_url(url, param, internal_url),
-                             timeout=timeout)
-                if (r.status_code not in (404, 502, 503) and len(r.text) > 10
-                        and (control_body is None or r.text != control_body)):
+                r = sess.get(build_url(url, param, internal_url), timeout=timeout)
+                if (
+                    r.status_code not in (404, 502, 503)
+                    and len(r.text) > 10
+                    and (control_body is None or r.text != control_body)
+                ):
                     result["vulnerable"] = True
                     result["type"] = "internal_reachable"
                     result["confidence"] = "medium"
-                    result["evidence"].append("ssrf: %s => %d bytes, %d" % (
-                        internal_url[:20], len(r.text), r.status_code))
+                    result["evidence"].append(
+                        "ssrf: %s => %d bytes, %d" % (internal_url[:20], len(r.text), r.status_code)
+                    )
                     result["payload"] = internal_url
                     break
             except Exception as e:
@@ -407,7 +432,9 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
     if not result["vulnerable"] and result["oob_tested"] and not result.get("oob_methods"):
         result["confidence"] = "low"
         if not _is_local_target(url):
-            result["note"] = "External target: OOB callback may not reach local listener. Use --oob-server to specify a public callback URL."
+            result["note"] = (
+                "External target: OOB callback may not reach local listener. Use --oob-server to specify a public callback URL."
+            )
         else:
             try:
                 oob_retry = _test_oob(url, param, sess, timeout * 1.5, custom_callback=oob_server)

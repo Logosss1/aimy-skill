@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 # /clean_attr   : attribute context but escaped (NOT injectable)
 # /clean_ssti   : literal echo, never evaluates (NOT injectable)
 
+
 class H(BaseHTTPRequestHandler):
     def _send(self, code, body):
         data = body.encode()
@@ -63,11 +64,18 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, "<html>shopdb</html>")
             m = re.search(r"ORDER BY (\d+)", v)
             if m:
-                return self._send(500 if int(m.group(1)) > 3 else 200, "Unknown column 'x' in 'order clause'" if int(m.group(1)) > 3 else "<html>normal</html>")
+                return self._send(
+                    500 if int(m.group(1)) > 3 else 200,
+                    "Unknown column 'x' in 'order clause'"
+                    if int(m.group(1)) > 3
+                    else "<html>normal</html>",
+                )
             if "UNION SELECT NULL,NULL,NULL" in v:
                 return self._send(200, "<html>normal</html>")
             if "UNION SELECT" in v:
-                return self._send(500, "The used SELECT statements have a different number of columns")
+                return self._send(
+                    500, "The used SELECT statements have a different number of columns"
+                )
             return self._send(200, "<html>page</html>")
 
         if p == "/xss_reflect":
@@ -103,7 +111,7 @@ class H(BaseHTTPRequestHandler):
 
         if p == "/lfi_hardened":
             raw_q = urlparse(self.path).query.lower()
-            encoded = ("%2f" in raw_q or "%252f" in raw_q)
+            encoded = "%2f" in raw_q or "%252f" in raw_q
             if "etc/passwd" in v and ("....//" in v or encoded):
                 return self._send(200, "root:x:0:0:root:/root:/bin/bash")
             return self._send(200, "not found")
@@ -126,8 +134,12 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, "<html><body>" + esc + "</body></html>")
 
         if p == "/clean_attr":
-            esc = (v.replace("&", "&amp;").replace('"', "&quot;")
-                    .replace("<", "&lt;").replace(">", "&gt;"))
+            esc = (
+                v.replace("&", "&amp;")
+                .replace('"', "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
             return self._send(200, '<html><input value="' + esc + '"></html>')
 
         if p == "/clean_ssti":
@@ -137,7 +149,9 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = urlparse(self.path).path
-        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode("utf-8", errors="replace")
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode(
+            "utf-8", errors="replace"
+        )
 
         if p == "/sqli_post":
             q = parse_qs(body)
@@ -154,6 +168,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/nosql":
             try:
                 import json
+
                 payload = json.loads(body or "{}").get("id", {})
             except Exception:
                 payload = {}
@@ -175,5 +190,6 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
 
 HTTPServer(("127.0.0.1", 18774), H).serve_forever()

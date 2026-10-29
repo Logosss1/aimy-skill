@@ -81,9 +81,11 @@ class TestReplay:
 
 class TestFindings:
     def test_authz_inversion(self):
-        roles = _roles_factory(anon={"status": 200, "body": "public data"},
-                               user={"status": 200, "body": "user data"},
-                               admin={"status": 403, "body": "Forbidden"})
+        roles = _roles_factory(
+            anon={"status": 200, "body": "public data"},
+            user={"status": 200, "body": "user data"},
+            admin={"status": 403, "body": "Forbidden"},
+        )
         m = AuthStateMachine(roles)
         out = m.replay("http://x.test/api/admin")
         types = {f["type"] for f in out["findings"]}
@@ -135,10 +137,12 @@ class TestBatch:
     def test_replay_batch_counts(self):
         roles = _roles_factory(user={"status": 200, "body": '{"data": 42}'})
         m = AuthStateMachine(roles)
-        out = m.replay_batch([
-            {"url": "http://x.test/a"},
-            {"url": "http://x.test/b"},
-        ])
+        out = m.replay_batch(
+            [
+                {"url": "http://x.test/a"},
+                {"url": "http://x.test/b"},
+            ]
+        )
         assert out["points_replayed"] == 2
         assert out["vulnerable"] == 2
 

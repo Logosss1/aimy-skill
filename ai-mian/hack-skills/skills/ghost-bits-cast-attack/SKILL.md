@@ -209,6 +209,7 @@ def ghost(target_byte: int, k: int = 1) -> str:
     """Return a Unicode char whose low 8 bits equal target_byte."""
     return chr(((k & 0xFF) << 8) | (target_byte & 0xFF))
 
+
 # 255 candidates per byte, e.g. for '.' (0x2E):
 candidates = [ghost(0x2E, k) for k in range(1, 256)]
 # 阮(U+962E), Ⱦ?-prefixed-..., etc.

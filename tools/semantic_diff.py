@@ -9,15 +9,30 @@ from tools.log_utils import get_logger
 logger = get_logger("semantic_diff")
 
 NOISE_KEYS = {
-    "timestamp", "ts", "_ts", "nonce", "nonce_str", "rand", "random",
-    "trace_id", "traceId", "request_id", "requestId", "span_id",
-    "elapsed", "took", "processing_time", "server_time",
-    "sign", "signature", "_sign", "hash", "_hash",
+    "timestamp",
+    "ts",
+    "_ts",
+    "nonce",
+    "nonce_str",
+    "rand",
+    "random",
+    "trace_id",
+    "traceId",
+    "request_id",
+    "requestId",
+    "span_id",
+    "elapsed",
+    "took",
+    "processing_time",
+    "server_time",
+    "sign",
+    "signature",
+    "_sign",
+    "hash",
+    "_hash",
 }
 
-NOISE_VALUES = re.compile(
-    r"^\d{10,}$|^[\da-f]{8,}$|^\d{4}-\d{2}-\d{2}T|^[A-Za-z0-9+/]{20,}={0,2}$"
-)
+NOISE_VALUES = re.compile(r"^\d{10,}$|^[\da-f]{8,}$|^\d{4}-\d{2}-\d{2}T|^[A-Za-z0-9+/]{20,}={0,2}$")
 
 
 @dataclass
@@ -44,13 +59,21 @@ class SemanticDiffResult:
 class SemanticDiffEngine:
     def __init__(self):
         self._sensitive_keys = {
-            "password", "secret", "token", "api_key", "apikey",
-            "credit_card", "ssn", "cvv", "pin", "auth",
+            "password",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+            "credit_card",
+            "ssn",
+            "cvv",
+            "pin",
+            "auth",
         }
 
-    def diff_json(self, left: str, right: str,
-                  label_a: str = "left",
-                  label_b: str = "right") -> SemanticDiffResult:
+    def diff_json(
+        self, left: str, right: str, label_a: str = "left", label_b: str = "right"
+    ) -> SemanticDiffResult:
         result = SemanticDiffResult()
 
         try:
@@ -121,9 +144,9 @@ class SemanticDiffEngine:
         self._build_summary(result, label_a, label_b)
         return result
 
-    def diff_text(self, left: str, right: str,
-                  label_a: str = "left",
-                  label_b: str = "right") -> SemanticDiffResult:
+    def diff_text(
+        self, left: str, right: str, label_a: str = "left", label_b: str = "right"
+    ) -> SemanticDiffResult:
         result = SemanticDiffResult()
         result.length_diff = abs(len(left) - len(right))
         if result.length_diff > 0:
@@ -192,8 +215,7 @@ class SemanticDiffEngine:
         s = str(val)
         return s[:max_len] + "..." if len(s) > max_len else s
 
-    def _build_summary(self, result: SemanticDiffResult,
-                       label_a: str, label_b: str):
+    def _build_summary(self, result: SemanticDiffResult, label_a: str, label_b: str):
         parts = []
         if result.status_diff:
             parts.append(f"status {result.status_diff[0]} vs {result.status_diff[1]}")

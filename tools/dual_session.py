@@ -59,9 +59,7 @@ class DualSessionManager:
         }
 
         try:
-            low_resp = self.low.get(
-                build_url(url, param, value), timeout=timeout
-            )
+            low_resp = self.low.get(build_url(url, param, value), timeout=timeout)
             result["low_status"] = low_resp.status_code
             result["low_length"] = len(low_resp.text)
         except Exception as e:
@@ -72,9 +70,7 @@ class DualSessionManager:
             return result
 
         try:
-            high_resp = self.high.get(
-                build_url(url, param, value), timeout=timeout
-            )
+            high_resp = self.high.get(build_url(url, param, value), timeout=timeout)
             result["high_status"] = high_resp.status_code
             result["high_length"] = len(high_resp.text)
         except Exception as e:
@@ -90,9 +86,12 @@ class DualSessionManager:
             if endpoint_context == "protected":
                 result["bola_detected"] = True
                 result["evidence"].append(
-                    "BOLA: low_priv=%s(%sB) high_priv=%s(%sB) diff=%sB" % (
-                        result["low_status"], result["low_length"],
-                        result["high_status"], result["high_length"],
+                    "BOLA: low_priv=%s(%sB) high_priv=%s(%sB) diff=%sB"
+                    % (
+                        result["low_status"],
+                        result["low_length"],
+                        result["high_status"],
+                        result["high_length"],
                         length_diff,
                     )
                 )
@@ -104,9 +103,7 @@ class DualSessionManager:
 
         if low_ok and not high_ok:
             result["access_control_bypass"] = True
-            result["evidence"].append(
-                "AC_bypass: low=200 high=%s" % result["high_status"]
-            )
+            result["evidence"].append("AC_bypass: low=200 high=%s" % result["high_status"])
 
         return result
 
@@ -120,9 +117,7 @@ class DualSessionManager:
         bypass_results = []
 
         for p in points:
-            r = self.test_point(
-                p["url"], p.get("param", "id"), "1", timeout
-            )
+            r = self.test_point(p["url"], p.get("param", "id"), "1", timeout)
             if r["bola_detected"]:
                 bola_results.append({**p, **r})
             if r["info_disclosure"]:
@@ -144,10 +139,25 @@ class DualSessionManager:
     def _guess_endpoint_context(url: str) -> str:
         url_lower = url.lower()
         sensitive_keywords = [
-            "admin", "dashboard", "manage", "setting", "config",
-            "user", "account", "profile", "private", "internal",
-            "api/v1/admin", "api/v2/admin", "role", "permission",
-            "secret", "token", "billing", "payment", "order",
+            "admin",
+            "dashboard",
+            "manage",
+            "setting",
+            "config",
+            "user",
+            "account",
+            "profile",
+            "private",
+            "internal",
+            "api/v1/admin",
+            "api/v2/admin",
+            "role",
+            "permission",
+            "secret",
+            "token",
+            "billing",
+            "payment",
+            "order",
         ]
         for kw in sensitive_keywords:
             if kw in url_lower:
@@ -165,6 +175,7 @@ def _do_login(
         if auth_type == "form":
             resp = sess.get(login_url, timeout=10)
             import re
+
             tokens = re.findall(
                 r'<input[^>]*name=["\'](csrf_token|_token|authenticity_token)["\'][^>]*value=["\']([^"\']+)["\']',
                 resp.text,
@@ -178,6 +189,7 @@ def _do_login(
             sess.post(login_url, json=creds, timeout=10)
         elif auth_type == "basic":
             from requests.auth import HTTPBasicAuth
+
             sess.auth = HTTPBasicAuth(creds.get("username", ""), creds.get("password", ""))
             sess.get(login_url, timeout=10)
     except Exception as e:

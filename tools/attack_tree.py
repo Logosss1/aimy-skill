@@ -65,70 +65,140 @@ class AttackTree:
     ENTRY_TEMPLATES: Dict[str, dict] = {
         "ssrf": {
             "children": [
-                ("cloud_metadata", "Cloud Metadata Read", 0.85, [
-                    ("iam_keys", "IAM Key Extraction", 0.75, "ssrf_to_rce"),
-                    ("k8s_metadata", "K8s Secrets via Metadata", 0.65, "ssrf_to_rce"),
-                ]),
-                ("internal_port", "Internal Port Scan", 0.70, [
-                    ("redis_internal", "Internal Redis Exploit", 0.80, "ssrf_to_rce"),
-                    ("internal_web", "Internal Web App Attack", 0.60, None),
-                ]),
-                ("source_code", "Source Code Read", 0.60, [
-                    ("db_creds_from_code", "DB Credentials from Code", 0.70, "ssrf_to_rce"),
-                    ("api_keys", "API Keys from Code", 0.65, None),
-                ]),
+                (
+                    "cloud_metadata",
+                    "Cloud Metadata Read",
+                    0.85,
+                    [
+                        ("iam_keys", "IAM Key Extraction", 0.75, "ssrf_to_rce"),
+                        ("k8s_metadata", "K8s Secrets via Metadata", 0.65, "ssrf_to_rce"),
+                    ],
+                ),
+                (
+                    "internal_port",
+                    "Internal Port Scan",
+                    0.70,
+                    [
+                        ("redis_internal", "Internal Redis Exploit", 0.80, "ssrf_to_rce"),
+                        ("internal_web", "Internal Web App Attack", 0.60, None),
+                    ],
+                ),
+                (
+                    "source_code",
+                    "Source Code Read",
+                    0.60,
+                    [
+                        ("db_creds_from_code", "DB Credentials from Code", 0.70, "ssrf_to_rce"),
+                        ("api_keys", "API Keys from Code", 0.65, None),
+                    ],
+                ),
             ]
         },
         "sqli": {
             "children": [
-                ("data_exfil", "Data Exfiltration", 0.90, [
-                    ("creds_from_db", "Credentials from DB", 0.80, "sqli_to_rce"),
-                    ("admin_from_db", "Admin Panel Access", 0.85, None),
-                ]),
-                ("file_write", "INTO OUTFILE Webshell", 0.60, [
-                    ("rce_via_webshell", "RCE via Webshell", 0.90, "sqli_to_rce"),
-                ]),
-                ("os_cmd", "MSSQL xp_cmdshell / MySQL udf", 0.40, [
-                    ("os_rce", "OS-level RCE", 0.85, "sqli_to_rce"),
-                ]),
+                (
+                    "data_exfil",
+                    "Data Exfiltration",
+                    0.90,
+                    [
+                        ("creds_from_db", "Credentials from DB", 0.80, "sqli_to_rce"),
+                        ("admin_from_db", "Admin Panel Access", 0.85, None),
+                    ],
+                ),
+                (
+                    "file_write",
+                    "INTO OUTFILE Webshell",
+                    0.60,
+                    [
+                        ("rce_via_webshell", "RCE via Webshell", 0.90, "sqli_to_rce"),
+                    ],
+                ),
+                (
+                    "os_cmd",
+                    "MSSQL xp_cmdshell / MySQL udf",
+                    0.40,
+                    [
+                        ("os_rce", "OS-level RCE", 0.85, "sqli_to_rce"),
+                    ],
+                ),
             ]
         },
         "lfi": {
             "children": [
-                ("passwd_read", "/etc/passwd Read", 0.95, [
-                    ("user_enum", "User Enumeration", 0.70, None),
-                    ("ssh_key_read", "SSH Key Read", 0.40, "lfi_to_rce"),
-                ]),
-                ("log_poison", "Log Poisoning", 0.60, [
-                    ("rce_log", "RCE via Log Poison", 0.85, "lfi_to_rce"),
-                ]),
-                ("php_wrapper", "PHP Wrapper Source", 0.75, [
-                    ("code_creds", "Credentials from Source", 0.60, None),
-                ]),
+                (
+                    "passwd_read",
+                    "/etc/passwd Read",
+                    0.95,
+                    [
+                        ("user_enum", "User Enumeration", 0.70, None),
+                        ("ssh_key_read", "SSH Key Read", 0.40, "lfi_to_rce"),
+                    ],
+                ),
+                (
+                    "log_poison",
+                    "Log Poisoning",
+                    0.60,
+                    [
+                        ("rce_log", "RCE via Log Poison", 0.85, "lfi_to_rce"),
+                    ],
+                ),
+                (
+                    "php_wrapper",
+                    "PHP Wrapper Source",
+                    0.75,
+                    [
+                        ("code_creds", "Credentials from Source", 0.60, None),
+                    ],
+                ),
             ]
         },
         "xss": {
             "children": [
-                ("cookie_steal", "Cookie Theft", 0.60, [
-                    ("session_hijack", "Session Hijack", 0.80, "xss_to_creds"),
-                ]),
-                ("csrf_token", "CSRF Token Theft", 0.50, [
-                    ("admin_action", "Admin Action CSRF", 0.70, None),
-                ]),
-                ("keylogger", "Keylogger Injection", 0.40, [
-                    ("cred_capture", "Credential Capture", 0.60, None),
-                ]),
+                (
+                    "cookie_steal",
+                    "Cookie Theft",
+                    0.60,
+                    [
+                        ("session_hijack", "Session Hijack", 0.80, "xss_to_creds"),
+                    ],
+                ),
+                (
+                    "csrf_token",
+                    "CSRF Token Theft",
+                    0.50,
+                    [
+                        ("admin_action", "Admin Action CSRF", 0.70, None),
+                    ],
+                ),
+                (
+                    "keylogger",
+                    "Keylogger Injection",
+                    0.40,
+                    [
+                        ("cred_capture", "Credential Capture", 0.60, None),
+                    ],
+                ),
             ]
         },
         "rce": {
             "children": [
-                ("reverse_shell", "Reverse Shell", 0.95, [
-                    ("full_access", "Full Host Access", 0.90, None),
-                    ("internal_pivot", "Internal Network Pivot", 0.70, None),
-                ]),
-                ("webshell_persist", "Webshell Persistence", 0.85, [
-                    ("c2_beacon", "C2 Beacon", 0.60, None),
-                ]),
+                (
+                    "reverse_shell",
+                    "Reverse Shell",
+                    0.95,
+                    [
+                        ("full_access", "Full Host Access", 0.90, None),
+                        ("internal_pivot", "Internal Network Pivot", 0.70, None),
+                    ],
+                ),
+                (
+                    "webshell_persist",
+                    "Webshell Persistence",
+                    0.85,
+                    [
+                        ("c2_beacon", "C2 Beacon", 0.60, None),
+                    ],
+                ),
             ]
         },
     }
@@ -136,30 +206,55 @@ class AttackTree:
     SERVICE_TEMPLATES: Dict[str, dict] = {
         "redis": {
             "children": [
-                ("ssh_key_inject", "SSH Key Injection", 0.85, [
-                    ("root_shell", "Root Shell", 0.90, "redis_unauth"),
-                ]),
-                ("cron_rce", "Cron Overwrite RCE", 0.70, [
-                    ("root_shell_cron", "Root Shell", 0.85, "redis_unauth"),
-                ]),
+                (
+                    "ssh_key_inject",
+                    "SSH Key Injection",
+                    0.85,
+                    [
+                        ("root_shell", "Root Shell", 0.90, "redis_unauth"),
+                    ],
+                ),
+                (
+                    "cron_rce",
+                    "Cron Overwrite RCE",
+                    0.70,
+                    [
+                        ("root_shell_cron", "Root Shell", 0.85, "redis_unauth"),
+                    ],
+                ),
             ]
         },
         "docker": {
             "children": [
-                ("container_exec", "Container Exec", 0.95, [
-                    ("host_escape", "Host Escape", 0.40, None),
-                    ("secret_exfil", "Container Secrets", 0.70, None),
-                ]),
+                (
+                    "container_exec",
+                    "Container Exec",
+                    0.95,
+                    [
+                        ("host_escape", "Host Escape", 0.40, None),
+                        ("secret_exfil", "Container Secrets", 0.70, None),
+                    ],
+                ),
             ]
         },
         "mysql": {
             "children": [
-                ("data_exfil_mysql", "Data Exfiltration", 0.85, [
-                    ("creds_mysql", "Credentials", 0.75, None),
-                ]),
-                ("file_write_mysql", "INTO OUTFILE", 0.50, [
-                    ("webshell_mysql", "Webshell", 0.90, None),
-                ]),
+                (
+                    "data_exfil_mysql",
+                    "Data Exfiltration",
+                    0.85,
+                    [
+                        ("creds_mysql", "Credentials", 0.75, None),
+                    ],
+                ),
+                (
+                    "file_write_mysql",
+                    "INTO OUTFILE",
+                    0.50,
+                    [
+                        ("webshell_mysql", "Webshell", 0.90, None),
+                    ],
+                ),
             ]
         },
     }
@@ -175,10 +270,16 @@ class AttackTree:
     def _make_id(self, prefix: str, idx: int) -> str:
         return "%s_%d" % (prefix, idx)
 
-    def build_from_recon(self, technologies: List[str], open_ports: List[int],
-                         directories: List[str], vulns: List[dict]) -> None:
+    def build_from_recon(
+        self,
+        technologies: List[str],
+        open_ports: List[int],
+        directories: List[str],
+        vulns: List[dict],
+    ) -> None:
         root = AttackTreeNode(
-            id="root", vuln_type="root",
+            id="root",
+            vuln_type="root",
             description="Target is accessible and scoped for testing",
             confidence=1.0,
         )
@@ -189,28 +290,39 @@ class AttackTree:
         vuln_types = {v.get("type", "").lower() for v in vulns}
 
         web_idx = 0
-        web_root_id = self.add_node(AttackTreeNode(
-            id="branch_web", vuln_type="web",
-            description="Web application attack surface",
-            confidence=0.90, parent_id="root",
-            transition_prob=0.95,
-        ))
+        web_root_id = self.add_node(
+            AttackTreeNode(
+                id="branch_web",
+                vuln_type="web",
+                description="Web application attack surface",
+                confidence=0.90,
+                parent_id="root",
+                transition_prob=0.95,
+            )
+        )
         self.nodes["root"].children.append("branch_web")
 
         service_idx = 0
-        service_root_id = self.add_node(AttackTreeNode(
-            id="branch_service", vuln_type="service",
-            description="Network service attack surface",
-            confidence=0.70, parent_id="root",
-            transition_prob=0.80,
-        ))
+        service_root_id = self.add_node(
+            AttackTreeNode(
+                id="branch_service",
+                vuln_type="service",
+                description="Network service attack surface",
+                confidence=0.70,
+                parent_id="root",
+                transition_prob=0.80,
+            )
+        )
         self.nodes["root"].children.append("branch_service")
 
         web_root = self.nodes[web_root_id]
         self.nodes[service_root_id]
 
-        path_prefixes = {d.split("/")[1] if d.count("/") > 1 else d.strip("/")
-                         for d in dirs_lower if d.strip("/")}
+        path_prefixes = {
+            d.split("/")[1] if d.count("/") > 1 else d.strip("/")
+            for d in dirs_lower
+            if d.strip("/")
+        }
 
         for vt in vuln_types:
             if vt in self.ENTRY_TEMPLATES:
@@ -219,17 +331,22 @@ class AttackTree:
                     if isinstance(v, dict) and v.get("type", "").lower() == vt:
                         matched_cves.extend(v.get("cve_ids", []))
                 self._build_entry_branch(
-                    vt, web_root, web_idx,
+                    vt,
+                    web_root,
+                    web_idx,
                     overrides={"cve_ids": matched_cves},
                 )
 
-        web_exploit_paths = self._detect_web_exploit_paths(
-            techs_lower, dirs_lower, path_prefixes)
+        web_exploit_paths = self._detect_web_exploit_paths(techs_lower, dirs_lower, path_prefixes)
         for path_type, confidence, cves in web_exploit_paths:
             web_idx += 1
-            self._build_entry_branch(path_type, self.nodes["branch_web"], web_idx,
-                                     overrides={"cve_ids": cves},
-                                     confidence_override=confidence)
+            self._build_entry_branch(
+                path_type,
+                self.nodes["branch_web"],
+                web_idx,
+                overrides={"cve_ids": cves},
+                confidence_override=confidence,
+            )
 
         for port in open_ports:
             svc = self._port_to_service(port)
@@ -239,8 +356,9 @@ class AttackTree:
 
         self.propagate()
 
-    def _detect_web_exploit_paths(self, techs: List[str], dirs: List[str],
-                                  prefixes: set) -> List[Tuple[str, float, List[str]]]:
+    def _detect_web_exploit_paths(
+        self, techs: List[str], dirs: List[str], prefixes: set
+    ) -> List[Tuple[str, float, List[str]]]:
         results = []
 
         if "spring" in techs or "spring boot" in techs:
@@ -293,9 +411,14 @@ class AttackTree:
 
         return results
 
-    def _build_entry_branch(self, vuln_type: str, parent_node: AttackTreeNode,
-                            idx: int, overrides: Optional[dict] = None,
-                            confidence_override: Optional[float] = None):
+    def _build_entry_branch(
+        self,
+        vuln_type: str,
+        parent_node: AttackTreeNode,
+        idx: int,
+        overrides: Optional[dict] = None,
+        confidence_override: Optional[float] = None,
+    ):
         template = self.ENTRY_TEMPLATES.get(vuln_type)
         if not template:
             return
@@ -303,10 +426,13 @@ class AttackTree:
         entry_id = self._make_id("entry_%s" % vuln_type, idx)
         base_conf = confidence_override or 0.70
         entry = AttackTreeNode(
-            id=entry_id, vuln_type=vuln_type,
+            id=entry_id,
+            vuln_type=vuln_type,
             description="%s detected — exploring exploitation paths" % vuln_type.upper(),
-            confidence=base_conf, parent_id=parent_node.id,
-            transition_prob=0.80, chain_name=self._first_chain(template),
+            confidence=base_conf,
+            parent_id=parent_node.id,
+            transition_prob=0.80,
+            chain_name=self._first_chain(template),
             cve_ids=(overrides or {}).get("cve_ids", []),
         )
         self.add_node(entry)
@@ -315,9 +441,9 @@ class AttackTree:
         for child_data in template.get("children", []):
             self._build_child_nodes(entry, [child_data])
 
-    def _build_child_nodes(self, parent: AttackTreeNode,
-                           children_spec: List[tuple],
-                           depth: int = 0):
+    def _build_child_nodes(
+        self, parent: AttackTreeNode, children_spec: List[tuple], depth: int = 0
+    ):
         if depth > 3:
             return
         for spec in children_spec:
@@ -336,7 +462,8 @@ class AttackTree:
 
             child_id_full = "%s_%s" % (parent.id, child_id)
             child = AttackTreeNode(
-                id=child_id_full, vuln_type=child_id,
+                id=child_id_full,
+                vuln_type=child_id,
                 description=desc,
                 confidence=parent.confidence * trans_prob,
                 parent_id=parent.id,
@@ -356,9 +483,11 @@ class AttackTree:
 
         svc_id = "svc_%s_%d" % (service, idx)
         svc_node = AttackTreeNode(
-            id=svc_id, vuln_type=service,
+            id=svc_id,
+            vuln_type=service,
             description="%s service — unauthorized access exploitation" % service.upper(),
-            confidence=0.80, parent_id=parent_node.id,
+            confidence=0.80,
+            parent_id=parent_node.id,
             transition_prob=0.75,
         )
         self.add_node(svc_node)
@@ -374,9 +503,17 @@ class AttackTree:
         return None
 
     def _port_to_service(self, port: int) -> Optional[str]:
-        m = {6379: "redis", 3306: "mysql", 5432: "postgres",
-             2375: "docker", 2376: "docker", 9200: "elasticsearch",
-             27017: "mongodb", 11211: "memcached", 4899: "rsync"}
+        m = {
+            6379: "redis",
+            3306: "mysql",
+            5432: "postgres",
+            2375: "docker",
+            2376: "docker",
+            9200: "elasticsearch",
+            27017: "mongodb",
+            11211: "memcached",
+            4899: "rsync",
+        }
         return m.get(port)
 
     def propagate(self) -> None:
@@ -438,8 +575,7 @@ class AttackTree:
                 parent.evidence.append("boosted_by_child_%s" % node_id)
                 self._propagate_up(parent.id)
 
-    def best_paths(self, min_confidence: float = 0.20,
-                   max_depth: int = 6) -> List[dict]:
+    def best_paths(self, min_confidence: float = 0.20, max_depth: int = 6) -> List[dict]:
         paths: List[Dict[str, Any]] = []
         leaf_confirmed = []
 
@@ -462,15 +598,17 @@ class AttackTree:
             vuln_types = [p["vuln_type"] for p in path if p["vuln_type"] != "root"]
             path_str = " → ".join(vuln_types)
 
-            paths.append({
-                "path": path,
-                "confidence": round(conf, 4),
-                "path_string": path_str,
-                "leaf_id": leaf.id,
-                "chain": leaf.chain_name,
-                "cve_ids": leaf.cve_ids,
-                "depth": len(path),
-            })
+            paths.append(
+                {
+                    "path": path,
+                    "confidence": round(conf, 4),
+                    "path_string": path_str,
+                    "leaf_id": leaf.id,
+                    "chain": leaf.chain_name,
+                    "cve_ids": leaf.cve_ids,
+                    "depth": len(path),
+                }
+            )
 
         paths.sort(key=lambda p: p["confidence"], reverse=True)
         return [p for p in paths if p["confidence"] >= min_confidence][:10]

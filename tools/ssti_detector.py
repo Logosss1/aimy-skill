@@ -53,16 +53,27 @@ def _is_reflected(text: str, payload: str) -> bool:
     if payload in text:
         return True
     from urllib.parse import quote
+
     return quote(payload, safe="") in text
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, waf_name: Optional[str] = None) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    waf_name: Optional[str] = None,
+) -> dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = settings.verify_ssl
-    result = {"vulnerable": False, "engine": None, "evidence": [], "payload": None,
-              "rce_available": False}
+    result = {
+        "vulnerable": False,
+        "engine": None,
+        "evidence": [],
+        "payload": None,
+        "rce_available": False,
+    }
 
     voter = ConfidenceVoter()
 
@@ -94,14 +105,16 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
             ('{{"a".toUpperCase()}}', "A", "javascript"),
             ('{{"a".upper()}}', "A", "python"),
             ('${"a".toUpperCase()}', "A", "java"),
-            ('#{7+7}', "14", "java"),
+            ("#{7+7}", "14", "java"),
         ]
         for payload, indicator, engine_hint in alt_pairs:
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
                 if indicator in r.text and not _is_reflected(r.text, payload):
                     detect_hits += 1
-                    result["evidence"].append("ssti: %s => %s (engine=%s)" % (payload[:25], indicator, engine_hint))
+                    result["evidence"].append(
+                        "ssti: %s => %s (engine=%s)" % (payload[:25], indicator, engine_hint)
+                    )
                     result["payload"] = payload
                     result["engine"] = engine_hint
                     voter.add_vote("alt_%s" % engine_hint, 0.5)
@@ -134,8 +147,7 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 len_delta = abs(len(r_true.text) - len(r_false.text))
                 if len_delta >= 8 and len(r_true.text) > 50:
                     result["vulnerable"] = True
-                    result["evidence"].append(
-                        "ssti: boolean blind (len delta=%d)" % len_delta)
+                    result["evidence"].append("ssti: boolean blind (len delta=%d)" % len_delta)
                     result["payload"] = tp
                     result["engine"] = "detected_boolean"
                     voter.add_vote("boolean_blind", 0.6)
@@ -159,8 +171,10 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                     if elapsed >= threshold:
                         result["evidence"].append("ssti: time-based anomaly detected")
                         result["payload"] = payload
-                        voter.add_vote("time_delay", ConfidenceVoter.vote_time_elapsed(
-                            elapsed, baseline, threshold))
+                        voter.add_vote(
+                            "time_delay",
+                            ConfidenceVoter.vote_time_elapsed(elapsed, baseline, threshold),
+                        )
                         result["vulnerable"] = True
                         break
                 except requests.Timeout:

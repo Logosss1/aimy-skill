@@ -76,10 +76,11 @@ def padding_oracle_encrypt(plaintext, block_size, oracle):
     # Pad plaintext
     pad_len = block_size - (len(plaintext) % block_size)
     padded = plaintext + bytes([pad_len] * pad_len)
-    pt_blocks = [padded[i:i+block_size] for i in range(0, len(padded), block_size)]
+    pt_blocks = [padded[i : i + block_size] for i in range(0, len(padded), block_size)]
 
     # Start with random last ciphertext block
     import os
+
     ct_blocks = [os.urandom(block_size)]
 
     # Work backwards
@@ -115,14 +116,15 @@ def cbc_multibyte_flip(ciphertext, block_size, changes):
 
     return bytes(ct)
 
+
 # Example: change ";admin=false;" to ";admin=true;x"
 changes = [
-    (32 + 7, ord('f'), ord('t')),   # f → t
-    (32 + 8, ord('a'), ord('r')),   # a → r
-    (32 + 9, ord('l'), ord('u')),   # l → u
-    (32 + 10, ord('s'), ord('e')),  # s → e
-    (32 + 11, ord('e'), ord(';')),  # e → ;
-    (32 + 12, ord(';'), ord('x')),  # ; → x (pad)
+    (32 + 7, ord("f"), ord("t")),  # f → t
+    (32 + 8, ord("a"), ord("r")),  # a → r
+    (32 + 9, ord("l"), ord("u")),  # l → u
+    (32 + 10, ord("s"), ord("e")),  # s → e
+    (32 + 11, ord("e"), ord(";")),  # e → ;
+    (32 + 12, ord(";"), ord("x")),  # ; → x (pad)
 ]
 ```
 
@@ -191,16 +193,18 @@ def find_prefix_length(encrypt_oracle, block_size):
         test = encrypt_oracle(b"A" * i)
         # Find first block that differs from base
         for b in range(len(base) // block_size):
-            base_block = base[b*block_size:(b+1)*block_size]
-            test_block = test[b*block_size:(b+1)*block_size]
+            base_block = base[b * block_size : (b + 1) * block_size]
+            test_block = test[b * block_size : (b + 1) * block_size]
             if base_block != test_block:
                 # Prefix ends in block b
                 # Now find exact byte offset within block
                 for j in range(1, block_size + 1):
                     t1 = encrypt_oracle(b"A" * j)
                     t2 = encrypt_oracle(b"B" * j)
-                    if (t1[b*block_size:(b+1)*block_size] !=
-                        t2[b*block_size:(b+1)*block_size]):
+                    if (
+                        t1[b * block_size : (b + 1) * block_size]
+                        != t2[b * block_size : (b + 1) * block_size]
+                    ):
                         continue
                     return b * block_size + (block_size - j)
     return 0
@@ -241,15 +245,15 @@ def recover_lcg_truncated(known_upper_bits, modulus, a, b, unknown_bits):
     Uses CVP on a lattice.
     """
     n = len(known_upper_bits)
-    B = 2^unknown_bits  # bound on unknown part
+    B = 2 ^ unknown_bits  # bound on unknown part
 
     # Build lattice
-    M = matrix(ZZ, n+1, n+1)
+    M = matrix(ZZ, n + 1, n + 1)
     for i in range(n):
         M[i, i] = modulus
     # Last row encodes the recurrence
     for i in range(n):
-        M[n, i] = (a^i) % modulus
+        M[n, i] = (a ^ i) % modulus
     M[n, n] = B
 
     # LLL reduction
@@ -271,16 +275,17 @@ def untemper(y):
     y ^= (y << 15) & 0xEFC60000
 
     # Undo: y ^= (y << 7) & 0x9D2C5680 (need multiple steps)
-    y ^= (y <<  7) & 0x9D2C5680
+    y ^= (y << 7) & 0x9D2C5680
     y ^= (y << 14) & 0x9D2C5680
     y ^= (y << 21) & 0x9D2C5680
     y ^= (y << 28) & 0x9D2C5680
 
     # Undo: y ^= y >> 11 (need two steps)
-    y ^= (y >> 11)
-    y ^= (y >> 22)
+    y ^= y >> 11
+    y ^= y >> 22
 
     return y & 0xFFFFFFFF
+
 
 def clone_mt(outputs_624):
     """Clone MT19937 state from 624 consecutive outputs."""
@@ -299,6 +304,7 @@ def clone_mt(outputs_624):
 
 ```python
 from Crypto.Cipher import AES
+
 
 def related_key_test(key1, key2, plaintext):
     """Demonstrate related-key distinguisher."""

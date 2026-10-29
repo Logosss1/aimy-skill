@@ -8,6 +8,7 @@ concurrency cap (semaphore) and an optional rate limit (requests/second).
 The pool plugs into OPSECSession so jitter + UA rotation + proxy rotation +
 failover all happen on the same request path.
 """
+
 import threading
 import time
 from typing import Callable, Dict, List, Optional, Union
@@ -18,9 +19,13 @@ logger = get_logger("proxy_pool")
 
 
 class ProxyPool:
-    def __init__(self, proxies: Optional[Union[List[str], Dict[str, float]]] = None,
-                 max_failures: int = 3, success_reset: int = 2,
-                 rng: Optional[object] = None) -> None:
+    def __init__(
+        self,
+        proxies: Optional[Union[List[str], Dict[str, float]]] = None,
+        max_failures: int = 3,
+        success_reset: int = 2,
+        rng: Optional[object] = None,
+    ) -> None:
         self._entries: List[Dict] = []
         self._idx = 0
         self._lock = threading.Lock()
@@ -37,8 +42,12 @@ class ProxyPool:
 
     def add(self, url: str, weight: float = 1.0) -> Dict:
         entry = {
-            "url": url, "weight": float(weight), "failures": 0,
-            "successes": 0, "healthy": True, "latency": None,
+            "url": url,
+            "weight": float(weight),
+            "failures": 0,
+            "successes": 0,
+            "healthy": True,
+            "latency": None,
         }
         with self._lock:
             self._entries.append(entry)
@@ -102,8 +111,12 @@ class ProxyPool:
 class Throttle:
     """Concurrency cap + optional rate limit. acquire() blocks until allowed."""
 
-    def __init__(self, max_concurrency: int = 0, rate_limit: float = 0.0,
-                 sleep_fn: Optional[Callable[[float], None]] = None) -> None:
+    def __init__(
+        self,
+        max_concurrency: int = 0,
+        rate_limit: float = 0.0,
+        sleep_fn: Optional[Callable[[float], None]] = None,
+    ) -> None:
         self._sem = threading.Semaphore(max_concurrency) if max_concurrency > 0 else None
         self._rate = max(0.0, float(rate_limit))
         self._lock = threading.Lock()
@@ -129,13 +142,19 @@ class Throttle:
             self._sem.release()
 
     def stats(self) -> Dict:
-        return {"max_concurrency": self._sem._value if self._sem else 0,
-                "rate_limit": self._rate, "wait_total": round(self.wait_total, 3)}
+        return {
+            "max_concurrency": self._sem._value if self._sem else 0,
+            "rate_limit": self._rate,
+            "wait_total": round(self.wait_total, 3),
+        }
 
 
-def pool_session(proxies: Optional[Union[List[str], Dict[str, float]]] = None,
-                 max_concurrency: int = 0, rate_limit: float = 0.0,
-                 **opsec_kwargs):
+def pool_session(
+    proxies: Optional[Union[List[str], Dict[str, float]]] = None,
+    max_concurrency: int = 0,
+    rate_limit: float = 0.0,
+    **opsec_kwargs,
+):
     """Build an OPSECSession wired to a ProxyPool + Throttle."""
     from tools.opsec_session import OPSECSession
 

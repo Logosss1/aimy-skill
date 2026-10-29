@@ -81,14 +81,19 @@ class CalibrateStub:
 
 class TestClassifierMore:
     def test_calibrate_true_exception_with_variant(self):
-        sess = ScriptedSession([
-            RuntimeError("boom"),
-            FakeResp(200, "true-body"),
-            FakeResp(200, "false-body"),
-        ])
+        sess = ScriptedSession(
+            [
+                RuntimeError("boom"),
+                FakeResp(200, "true-body"),
+                FakeResp(200, "false-body"),
+            ]
+        )
         clf = ResponseClassifier(sess, 5.0)
         ok = clf.calibrate(
-            "http://t.test/x", "id", "' AND 1=1-- ", "' AND 1=2-- ",
+            "http://t.test/x",
+            "id",
+            "' AND 1=1-- ",
+            "' AND 1=2-- ",
             waf_bypass_variants=["variant-1"],
         )
         assert ok is True
@@ -103,15 +108,20 @@ class TestClassifierMore:
         assert clf.calibrated is False
 
     def test_calibrate_variant_loop_continues_after_error(self):
-        sess = ScriptedSession([
-            RuntimeError("boom"),
-            RuntimeError("boom2"),
-            FakeResp(200, "true-body"),
-            FakeResp(200, "false-body"),
-        ])
+        sess = ScriptedSession(
+            [
+                RuntimeError("boom"),
+                RuntimeError("boom2"),
+                FakeResp(200, "true-body"),
+                FakeResp(200, "false-body"),
+            ]
+        )
         clf = ResponseClassifier(sess, 5.0)
         ok = clf.calibrate(
-            "http://t.test/x", "id", "t", "f",
+            "http://t.test/x",
+            "id",
+            "t",
+            "f",
             waf_bypass_variants=["v1", "v2"],
         )
         assert ok is True
@@ -204,9 +214,7 @@ class TestClassifierMore:
 
 class TestAutoDetectSignatures:
     def _detect(self, body):
-        injector = BlindInjector(
-            FakeSession(lambda u, k: FakeResp(200, body)), timeout=1.0
-        )
+        injector = BlindInjector(FakeSession(lambda u, k: FakeResp(200, body)), timeout=1.0)
         return injector._auto_detect_dbms("http://t.test/x", "id")
 
     def test_mysql_signature(self):
@@ -266,7 +274,8 @@ class TestTimeHelpers:
         monkeypatch.setattr(sqli_blind, "time", FakeTime([0.0, 5.0]))
         injector = BlindInjector(
             FakeSession(lambda u, k: FakeResp(200, "hello world")),
-            timeout=1.0, sleep_time=3,
+            timeout=1.0,
+            sleep_time=3,
         )
         assert injector._auto_detect_dbms("http://t.test/x", "id") == "mysql"
 
@@ -382,9 +391,7 @@ class TestCharExtraction:
     def test_string_time_breaks_on_none(self):
         injector = BlindInjector(FakeSession(), timeout=1.0)
         table = {1: "a", 2: None}
-        injector._extract_char_time = (
-            lambda url, param, query, pos: table.get(pos)
-        )
+        injector._extract_char_time = lambda url, param, query, pos: table.get(pos)
         assert injector._extract_string_time("u", "p", "q", max_len=5) == "a"
 
 
@@ -455,9 +462,7 @@ class TestErrorExtraction:
 
     def test_error_pattern_match(self):
         body = "XPATH syntax error: '~8.0.32'"
-        injector = BlindInjector(
-            FakeSession(lambda u, k: FakeResp(200, body)), timeout=1.0
-        )
+        injector = BlindInjector(FakeSession(lambda u, k: FakeResp(200, body)), timeout=1.0)
         injector.dbms = "mysql"
         assert injector._extract_via_error("u", "p", "@@version") == "8.0.32"
 
@@ -470,8 +475,12 @@ class TestTryDbmsQueries:
 
     def _result(self):
         return {
-            "vulnerable": False, "dbms": None, "technique": None,
-            "data": {}, "error": None, "waf_detected": None,
+            "vulnerable": False,
+            "dbms": None,
+            "technique": None,
+            "data": {},
+            "error": None,
+            "waf_detected": None,
         }
 
     def test_boolean_success_with_empty_query_skip(self, monkeypatch):
@@ -519,9 +528,12 @@ class TestTryDbmsQueries:
 
         injector._extract_string_parallel = extract
         result = self._result()
-        assert injector._try_dbms_queries(
-            "http://t.test/x", "q", "mysql", result,
-            custom_queries={"custom": "CUSTOM_FN()"}) is True
+        assert (
+            injector._try_dbms_queries(
+                "http://t.test/x", "q", "mysql", result, custom_queries={"custom": "CUSTOM_FN()"}
+            )
+            is True
+        )
         assert "CUSTOM_FN()" in seen
         assert result["data"]["custom"] == "custom-value"
 
@@ -548,10 +560,14 @@ class TestConfidence:
         injector.classifier.calibrated = True
         injector.classifier.true_len = 100
         injector.classifier.false_len = 10
-        result = injector._compute_confidence({
-            "vulnerable": True, "data": {"version": "8.0"},
-            "technique": "boolean", "dbms": "mysql",
-        })
+        result = injector._compute_confidence(
+            {
+                "vulnerable": True,
+                "data": {"version": "8.0"},
+                "technique": "boolean",
+                "dbms": "mysql",
+            }
+        )
         assert result["confidence_score"] > 0.7
         assert "bool_length_gap:0.70" in result["confidence_votes"]
 
@@ -560,36 +576,53 @@ class TestConfidence:
         injector.classifier.calibrated = True
         injector.classifier.true_len = 25
         injector.classifier.false_len = 10
-        result = injector._compute_confidence({
-            "vulnerable": True, "data": {"version": "8.0"},
-            "technique": "boolean", "dbms": "mysql",
-        })
+        result = injector._compute_confidence(
+            {
+                "vulnerable": True,
+                "data": {"version": "8.0"},
+                "technique": "boolean",
+                "dbms": "mysql",
+            }
+        )
         assert "bool_length_gap:0.50" in result["confidence_votes"]
 
     def test_time_confidence(self):
         injector = self._injector()
         injector.baseline_time = 0.1
         injector.sleep_time = 2
-        result = injector._compute_confidence({
-            "vulnerable": True, "data": {"version": "8.0", "user": "root"},
-            "technique": "time", "dbms": "mysql",
-        })
+        result = injector._compute_confidence(
+            {
+                "vulnerable": True,
+                "data": {"version": "8.0", "user": "root"},
+                "technique": "time",
+                "dbms": "mysql",
+            }
+        )
         assert "time_confidence:0.75" in result["confidence_votes"]
         assert "multi_field:0.50" in result["confidence_votes"]
 
     def test_error_confidence(self):
         injector = self._injector()
-        result = injector._compute_confidence({
-            "vulnerable": True, "data": {"version": "5.7"},
-            "technique": "error", "dbms": "mysql",
-        })
+        result = injector._compute_confidence(
+            {
+                "vulnerable": True,
+                "data": {"version": "5.7"},
+                "technique": "error",
+                "dbms": "mysql",
+            }
+        )
         assert "error_extract:0.85" in result["confidence_votes"]
 
     def test_not_vulnerable(self):
         injector = self._injector()
-        result = injector._compute_confidence({
-            "vulnerable": False, "data": {}, "technique": None, "dbms": None,
-        })
+        result = injector._compute_confidence(
+            {
+                "vulnerable": False,
+                "data": {},
+                "technique": None,
+                "dbms": None,
+            }
+        )
         assert result["confidence_score"] == 0.0
         assert result["confidence"] == "low"
 
@@ -604,15 +637,17 @@ class TestRun:
 
         def fake_try(url, param, dbms, result, variants=None, custom_queries=None):
             calls.append(dbms)
-            result.update({
-                "vulnerable": True, "data": {"version": "8.0"}, "technique": "error",
-            })
+            result.update(
+                {
+                    "vulnerable": True,
+                    "data": {"version": "8.0"},
+                    "technique": "error",
+                }
+            )
             return True
 
         injector._try_dbms_queries = fake_try
-        result = injector.run(
-            "http://t.test/x?q=1", "q", forced_dbms="oracle", max_len=4
-        )
+        result = injector.run("http://t.test/x?q=1", "q", forced_dbms="oracle", max_len=4)
         assert result["vulnerable"] is True
         assert calls == ["oracle"]
         assert "confidence_score" in result
@@ -624,9 +659,13 @@ class TestRun:
         def fake_try(url, param, dbms, result, variants=None, custom_queries=None):
             tried.append(dbms)
             if dbms == "mssql":
-                result.update({
-                    "vulnerable": True, "data": {"version": "x"}, "technique": "error",
-                })
+                result.update(
+                    {
+                        "vulnerable": True,
+                        "data": {"version": "x"},
+                        "technique": "error",
+                    }
+                )
                 return True
             return False
 
@@ -657,7 +696,10 @@ class TestRun:
         injector._auto_detect_dbms = lambda url, param: None
         injector._try_dbms_queries = lambda *a, **k: False
         result = injector.run(
-            "http://t.test/x?q=1", "q", max_len=4, waf_name="cloudflare",
+            "http://t.test/x?q=1",
+            "q",
+            max_len=4,
+            waf_name="cloudflare",
         )
         assert result["waf_detected"] == "cloudflare"
         assert len(seen) == 2
@@ -676,7 +718,8 @@ class TestOobDns:
 
     def test_unknown_dbms(self, monkeypatch):
         monkeypatch.setattr(
-            sqli_blind.BlindInjector, "_auto_detect_dbms",
+            sqli_blind.BlindInjector,
+            "_auto_detect_dbms",
             lambda self, url, param: "db2",
         )
         result = check_oob_dns(
@@ -687,13 +730,12 @@ class TestOobDns:
 
     def test_sends_payloads(self, monkeypatch):
         monkeypatch.setattr(
-            sqli_blind.BlindInjector, "_auto_detect_dbms",
+            sqli_blind.BlindInjector,
+            "_auto_detect_dbms",
             lambda self, url, param: "mysql",
         )
         sess = FakeSession(lambda u, k: FakeResp(200, "ok"))
-        result = check_oob_dns(
-            "http://t.test/x", "q", "oob.example", sess=sess, timeout=1.0
-        )
+        result = check_oob_dns("http://t.test/x", "q", "oob.example", sess=sess, timeout=1.0)
         assert result["vulnerable"] is True
         assert len(result["findings"]) == 3
         assert len(sess.calls) == 3
@@ -701,22 +743,19 @@ class TestOobDns:
 
     def test_send_exception(self, monkeypatch):
         monkeypatch.setattr(
-            sqli_blind.BlindInjector, "_auto_detect_dbms",
+            sqli_blind.BlindInjector,
+            "_auto_detect_dbms",
             lambda self, url, param: "mysql",
         )
         sess = _raising_session()
-        result = check_oob_dns(
-            "http://t.test/x", "q", "oob.example", sess=sess, timeout=1.0
-        )
+        result = check_oob_dns("http://t.test/x", "q", "oob.example", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["findings"] == []
 
 
 class TestCheck:
     def test_defaults_when_run_returns_empty(self, monkeypatch):
-        monkeypatch.setattr(
-            sqli_blind.BlindInjector, "run", lambda self, *a, **k: {}
-        )
+        monkeypatch.setattr(sqli_blind.BlindInjector, "run", lambda self, *a, **k: {})
         monkeypatch.setattr(
             sqli_blind, "fingerprint_waf", lambda url, sess, timeout: {"name": None}
         )
@@ -732,8 +771,9 @@ class TestCheck:
             seen["waf_name"] = waf_name
             return {}
 
-        monkeypatch.setattr(sqli_blind, "fingerprint_waf",
-                            lambda url, sess, timeout: {"name": "cloudflare"})
+        monkeypatch.setattr(
+            sqli_blind, "fingerprint_waf", lambda url, sess, timeout: {"name": "cloudflare"}
+        )
         monkeypatch.setattr(sqli_blind.BlindInjector, "run", fake_run)
         check("http://t.test/x?q=1", "q", sess=FakeSession(), timeout=1.0)
         assert seen["waf_name"] == "cloudflare"
@@ -757,7 +797,10 @@ class TestCheck:
         monkeypatch.setattr(sqli_blind, "fingerprint_waf", fake_fingerprint)
         monkeypatch.setattr(sqli_blind.BlindInjector, "run", lambda self, *a, **k: {})
         check(
-            "http://t.test/x?q=1", "q", sess=FakeSession(), timeout=1.0,
+            "http://t.test/x?q=1",
+            "q",
+            sess=FakeSession(),
+            timeout=1.0,
             auto_detect_waf=False,
         )
         assert called["n"] == 0
@@ -772,7 +815,8 @@ class TestCheck:
 
     def test_oob_dns_session_created(self, monkeypatch):
         monkeypatch.setattr(
-            sqli_blind.BlindInjector, "_auto_detect_dbms",
+            sqli_blind.BlindInjector,
+            "_auto_detect_dbms",
             lambda self, url, param: None,
         )
         result = check_oob_dns("http://t.test/x", "q", "oob.example", timeout=1.0)

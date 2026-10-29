@@ -9,17 +9,23 @@ from tools.settings import settings
 logger = get_logger("graphql_scanner")
 
 GRAPHQL_PATHS = [
-    '/graphql', '/graphiql', '/v1/graphql', '/v2/graphql',
-    '/api/graphql', '/query',
+    "/graphql",
+    "/graphiql",
+    "/v1/graphql",
+    "/v2/graphql",
+    "/api/graphql",
+    "/query",
 ]
 
-INTROSPECTION_QUERY = json.dumps({
-    "query": "query { __schema { types { name fields { name type { name kind ofType { name kind } } } } } }"
-})
+INTROSPECTION_QUERY = json.dumps(
+    {
+        "query": "query { __schema { types { name fields { name type { name kind ofType { name kind } } } } } }"
+    }
+)
 
 COMMON_MUTATIONS = [
-    '{"query":"mutation { login(username: \\\"test\\\", password: \\\"test\\\") { token } }"}',
-    '{"query":"mutation { createUser(username: \\\"admin\\\", password: \\\"admin\\\") { id } }"}',
+    '{"query":"mutation { login(username: \\"test\\", password: \\"test\\") { token } }"}',
+    '{"query":"mutation { createUser(username: \\"admin\\", password: \\"admin\\") { id } }"}',
     '{"query":"{ __typename }"}',
 ]
 
@@ -39,8 +45,9 @@ def has_graphql_schema(body: str) -> bool:
     return False
 
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -60,8 +67,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
 
     for endpoint in set(endpoints_to_test):
         try:
-            r = sess.post(endpoint, json=json.loads(INTROSPECTION_QUERY),
-                          timeout=timeout)
+            r = sess.post(endpoint, json=json.loads(INTROSPECTION_QUERY), timeout=timeout)
             if r.status_code == 200 and has_graphql_schema(r.text):
                 result["endpoints"].append(endpoint)
                 result["introspection"] = True
@@ -91,8 +97,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
     if not result["vulnerable"]:
         for mutation in COMMON_MUTATIONS:
             try:
-                r = sess.post(graphql_url, json=json.loads(mutation),
-                              timeout=timeout)
+                r = sess.post(graphql_url, json=json.loads(mutation), timeout=timeout)
                 if r.status_code == 200:
                     try:
                         j = r.json()

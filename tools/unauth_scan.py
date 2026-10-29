@@ -11,6 +11,7 @@ Mongo isMaster, MySQL/Postgres 握手 banner。不写、不删、不利用。
     from tools.unauth_scan import check
     result = check(["167.235.142.43", "212.132.104.109:6379"], services=["redis"])
 """
+
 import concurrent.futures
 import socket
 import struct
@@ -37,8 +38,9 @@ DEFAULT_PORTS = {
 _lock = threading.Lock()
 
 
-def _sock_send(ip: str, port: int, data: bytes, timeout: float = 5.0,
-               read_size: int = 65536) -> bytes:
+def _sock_send(
+    ip: str, port: int, data: bytes, timeout: float = 5.0, read_size: int = 65536
+) -> bytes:
     """Send raw bytes and drain the reply until quiet or size bound."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
@@ -64,8 +66,16 @@ def _sock_send(ip: str, port: int, data: bytes, timeout: float = 5.0,
 
 
 def check_redis(ip: str, port: int, timeout: float = 5.0) -> Dict:
-    result = {"service": "redis", "ip": ip, "port": port, "unauth": False,
-              "honey": False, "version": "", "keyspace": "", "dbsize": None}
+    result = {
+        "service": "redis",
+        "ip": ip,
+        "port": port,
+        "unauth": False,
+        "honey": False,
+        "version": "",
+        "keyspace": "",
+        "dbsize": None,
+    }
     resp = _sock_send(ip, port, b"PING\r\n", timeout=timeout)
     if b"ERR:" in resp[:4]:
         result["note"] = resp.decode(errors="replace").strip()
@@ -78,8 +88,13 @@ def check_redis(ip: str, port: int, timeout: float = 5.0) -> Dict:
             result["note"] = "no +PONG (auth required or not Redis)"
         return result
     result["unauth"] = True
-    info = _sock_send(ip, port, b"INFO server\r\nINFO keyspace\r\nINFO replication\r\n",
-                      timeout=timeout, read_size=65536)
+    info = _sock_send(
+        ip,
+        port,
+        b"INFO server\r\nINFO keyspace\r\nINFO replication\r\n",
+        timeout=timeout,
+        read_size=65536,
+    )
     for line in info.decode(errors="replace").splitlines():
         if line.startswith("redis_version:"):
             result["version"] = line.split(":", 1)[1].strip()
@@ -95,12 +110,18 @@ def check_redis(ip: str, port: int, timeout: float = 5.0) -> Dict:
 
 
 def check_es(ip: str, port: int, timeout: float = 5.0) -> Dict:
-    result = {"service": "es", "ip": ip, "port": port, "unauth": False,
-              "honey": False, "version": "", "cluster": ""}
+    result = {
+        "service": "es",
+        "ip": ip,
+        "port": port,
+        "unauth": False,
+        "honey": False,
+        "version": "",
+        "cluster": "",
+    }
     for scheme in ("http", "https"):
         try:
-            r = requests.get("%s://%s:%d/" % (scheme, ip, port), timeout=timeout,
-                             verify=False)  # nosec B501 - target TLS is out of our control
+            r = requests.get("%s://%s:%d/" % (scheme, ip, port), timeout=timeout, verify=False)  # nosec B501 - target TLS is out of our control
             if r.status_code != 200:
                 continue
             j = r.json()
@@ -114,8 +135,14 @@ def check_es(ip: str, port: int, timeout: float = 5.0) -> Dict:
 
 
 def check_mongo(ip: str, port: int, timeout: float = 5.0) -> Dict:
-    result = {"service": "mongo", "ip": ip, "port": port, "unauth": False,
-              "honey": False, "version": ""}
+    result = {
+        "service": "mongo",
+        "ip": ip,
+        "port": port,
+        "unauth": False,
+        "honey": False,
+        "version": "",
+    }
     # OP_QUERY admin.$cmd isMaster:1 (read-only handshake)
     ns = b"admin.$cmd\x00"
     doc = b"\x10isMaster\x00\x01\x00\x00\x00\x00"
@@ -149,8 +176,14 @@ def check_mongo(ip: str, port: int, timeout: float = 5.0) -> Dict:
 
 
 def check_mysql(ip: str, port: int, timeout: float = 5.0) -> Dict:
-    result = {"service": "mysql", "ip": ip, "port": port, "unauth": False,
-              "honey": False, "version": ""}
+    result = {
+        "service": "mysql",
+        "ip": ip,
+        "port": port,
+        "unauth": False,
+        "honey": False,
+        "version": "",
+    }
     resp = _sock_send(ip, port, b"", timeout=timeout)
     if b"ERR:" in resp[:4]:
         result["note"] = resp.decode(errors="replace").strip()
@@ -164,8 +197,14 @@ def check_mysql(ip: str, port: int, timeout: float = 5.0) -> Dict:
 
 
 def check_pg(ip: str, port: int, timeout: float = 5.0) -> Dict:
-    result = {"service": "pg", "ip": ip, "port": port, "unauth": False,
-              "honey": False, "version": ""}
+    result = {
+        "service": "pg",
+        "ip": ip,
+        "port": port,
+        "unauth": False,
+        "honey": False,
+        "version": "",
+    }
     # Startup: protocol 3.0, empty params (read-only; server replies with
     # auth request or error, never runs anything).
     startup = struct.pack(">i", 8) + struct.pack(">i", 196608)
@@ -212,8 +251,9 @@ def _parse_host(entry: str) -> List[Dict]:
     return [{"ip": ip, "port": port, "svc": svc}]
 
 
-def check(hosts: List[str], services: List[str] = None,
-          threads: int = 30, timeout: float = 5.0) -> Dict:
+def check(
+    hosts: List[str], services: List[str] = None, threads: int = 30, timeout: float = 5.0
+) -> Dict:
     """Batch check for unauthorized middleware access.
 
     hosts: list of "ip" / "ip:port" / "scheme://ip:port".
@@ -245,8 +285,14 @@ def check(hosts: List[str], services: List[str] = None,
         try:
             return CHECKERS[svc](ip, port, timeout=timeout)
         except Exception as e:
-            return {"service": svc, "ip": ip, "port": port,
-                    "unauth": False, "honey": False, "note": str(e)[:60]}
+            return {
+                "service": svc,
+                "ip": ip,
+                "port": port,
+                "unauth": False,
+                "honey": False,
+                "note": str(e)[:60],
+            }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as ex:
         for r in ex.map(_run, jobs):

@@ -9,9 +9,20 @@ class TestReverseShell:
     def test_generate_shells_covers_major_languages(self):
         r = run(lhost="10.0.0.1", lport=4444)
         names = [s["name"] for s in r["shells"]]
-        for lang in ("bash_tcp", "python_tcp", "php_tcp", "nc_tcp",
-                     "perl_tcp", "ruby_tcp", "node_tcp", "powershell_tcp",
-                     "golang_tcp", "awk_tcp", "lua_tcp", "socat_tty"):
+        for lang in (
+            "bash_tcp",
+            "python_tcp",
+            "php_tcp",
+            "nc_tcp",
+            "perl_tcp",
+            "ruby_tcp",
+            "node_tcp",
+            "powershell_tcp",
+            "golang_tcp",
+            "awk_tcp",
+            "lua_tcp",
+            "socat_tty",
+        ):
             assert lang in names, lang
         assert r["listeners"]
         assert r["msfvenom"]

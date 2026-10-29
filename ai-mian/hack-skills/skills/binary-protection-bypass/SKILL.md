@@ -115,12 +115,12 @@ NX (No-eXecute) / DEP (Data Execution Prevention) prevents execution of code on 
 
 ```python
 # Make stack executable, then jump to shellcode
-rop = b'A' * offset
-rop += p64(pop_rdi) + p64(stack_page)     # page-aligned address
-rop += p64(pop_rsi) + p64(0x1000)         # size
-rop += p64(pop_rdx) + p64(7)              # PROT_READ|PROT_WRITE|PROT_EXEC
+rop = b"A" * offset
+rop += p64(pop_rdi) + p64(stack_page)  # page-aligned address
+rop += p64(pop_rsi) + p64(0x1000)  # size
+rop += p64(pop_rdx) + p64(7)  # PROT_READ|PROT_WRITE|PROT_EXEC
 rop += p64(mprotect_addr)
-rop += p64(shellcode_addr)                 # jump to shellcode on now-executable stack
+rop += p64(shellcode_addr)  # jump to shellcode on now-executable stack
 ```
 
 ---

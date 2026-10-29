@@ -31,6 +31,7 @@ def fake_kali_cmd(monkeypatch):
 # fakes
 # ---------------------------------------------------------------------------
 
+
 class ServerInfo:
     naming_contexts = ["DC=corp,DC=local"]
     other = {"defaultNamingContext": ["DC=corp,DC=local"]}
@@ -69,8 +70,9 @@ def make_ldap3(bind=True, entries=None, search_error=None, raise_on_connect=Fals
             self.info = ServerInfo()
 
     class Connection:
-        def __init__(self, server, user=None, password=None,
-                     receive_timeout=None, authentication=None):
+        def __init__(
+            self, server, user=None, password=None, receive_timeout=None, authentication=None
+        ):
             if raise_on_connect:
                 raise RuntimeError("ldap down")
             self.server = server
@@ -99,8 +101,7 @@ def make_ldap3(bind=True, entries=None, search_error=None, raise_on_connect=Fals
 
 def install_fake_impacket(monkeypatch, send_impl):
     constants = types.ModuleType("impacket.krb5.constants")
-    constants.PrincipalNameType = types.SimpleNamespace(
-        NT_PRINCIPAL=types.SimpleNamespace(value=1))
+    constants.PrincipalNameType = types.SimpleNamespace(NT_PRINCIPAL=types.SimpleNamespace(value=1))
 
     class KerberosError(Exception):
         def __init__(self, code):
@@ -164,6 +165,7 @@ def make_socket_factory(resp=b"", connect_error=None, recv_error=None):
 # constants / flags
 # ---------------------------------------------------------------------------
 
+
 def test_constants():
     assert dh.ASREP_ENCRYPTION_TYPES[23] == "rc4"
     assert dh.ASREP_ENCRYPTION_TYPES[17] == "aes128"
@@ -174,12 +176,14 @@ def test_constants():
 # enum_dc
 # ---------------------------------------------------------------------------
 
+
 def test_enum_dc_without_kali_uses_socket(monkeypatch):
     # 修复后不再依赖不存在的 run_kali_cmd; Kali 不可用时走 socket 兜底
     monkeypatch.setattr(dh, "HAVE_LDAP3", False)
     monkeypatch.setattr(ke, "get_kali", lambda: None)
-    monkeypatch.setattr(dh.socket, "getaddrinfo",
-                        lambda *a: [("AF_INET", 1, 6, "", ("10.0.0.1", 389))])
+    monkeypatch.setattr(
+        dh.socket, "getaddrinfo", lambda *a: [("AF_INET", 1, 6, "", ("10.0.0.1", 389))]
+    )
     r = dh.enum_dc("corp.local", "10.0.0.10")
     assert r["dns"]["ldap_srv"] == [("AF_INET", 1, 6, "", ("10.0.0.1", 389))]
 
@@ -199,7 +203,9 @@ def test_enum_dc_dns_success_without_dc_ip(fake_kali_cmd, monkeypatch):
 
 def test_enum_dc_socket_fallback(monkeypatch):
     monkeypatch.setattr(dh, "HAVE_LDAP3", False)
-    monkeypatch.setattr(dh.socket, "getaddrinfo", lambda *a: [("AF_INET", 1, 6, "", ("10.0.0.1", 389))])
+    monkeypatch.setattr(
+        dh.socket, "getaddrinfo", lambda *a: [("AF_INET", 1, 6, "", ("10.0.0.1", 389))]
+    )
     monkeypatch.setattr(ke, "get_kali", lambda: None)
     r = dh.enum_dc("corp.local")
     assert r["dns"]["ldap_srv"] == [("AF_INET", 1, 6, "", ("10.0.0.1", 389))]
@@ -248,6 +254,7 @@ def test_enum_dc_ldap_exception(fake_kali_cmd, monkeypatch):
 # ldap_anonymous_enum
 # ---------------------------------------------------------------------------
 
+
 def test_ldap_anonymous_enum_without_ldap3(monkeypatch):
     monkeypatch.setattr(dh, "HAVE_LDAP3", False)
     r = dh.ldap_anonymous_enum("10.0.0.10")
@@ -256,23 +263,28 @@ def test_ldap_anonymous_enum_without_ldap3(monkeypatch):
 
 
 def test_ldap_anonymous_enum_success(monkeypatch):
-    entry = LdapEntry("CN=alice,DC=corp", {
-        "sAMAccountName": Attr("alice"),
-        "objectClass": Attr(["user", "person"]),
-        "description": "plain text",
-    })
+    entry = LdapEntry(
+        "CN=alice,DC=corp",
+        {
+            "sAMAccountName": Attr("alice"),
+            "objectClass": Attr(["user", "person"]),
+            "description": "plain text",
+        },
+    )
     mod, _ = make_ldap3(bind=True, entries=[entry])
     monkeypatch.setattr(dh, "ldap3", mod, raising=False)
     monkeypatch.setattr(dh, "HAVE_LDAP3", True)
     r = dh.ldap_anonymous_enum("10.0.0.10")
     assert r["success"] is True
     assert r["base_dn"] == "DC=corp,DC=local"
-    assert r["entries"] == [{
-        "dn": "CN=alice,DC=corp",
-        "sAMAccountName": "alice",
-        "objectClass": "['user', 'person']",
-        "description": "plain text",
-    }]
+    assert r["entries"] == [
+        {
+            "dn": "CN=alice,DC=corp",
+            "sAMAccountName": "alice",
+            "objectClass": "['user', 'person']",
+            "description": "plain text",
+        }
+    ]
 
 
 def test_ldap_anonymous_enum_explicit_base_dn(monkeypatch):
@@ -294,11 +306,17 @@ def test_ldap_anonymous_enum_bind_failure(monkeypatch):
 
 def test_ldap_anonymous_enum_no_base_dn(monkeypatch):
     mod, _ = make_ldap3(bind=True)
-    mod.Server = type("Server", (), {
-        "__init__": lambda self, *a, **k: setattr(
-            self, "info", types.SimpleNamespace(
-                naming_contexts=[], other={"defaultNamingContext": [""]})),
-    })
+    mod.Server = type(
+        "Server",
+        (),
+        {
+            "__init__": lambda self, *a, **k: setattr(
+                self,
+                "info",
+                types.SimpleNamespace(naming_contexts=[], other={"defaultNamingContext": [""]}),
+            ),
+        },
+    )
     monkeypatch.setattr(dh, "ldap3", mod, raising=False)
     monkeypatch.setattr(dh, "HAVE_LDAP3", True)
     r = dh.ldap_anonymous_enum("10.0.0.10")
@@ -325,6 +343,7 @@ def test_ldap_anonymous_enum_connection_error(monkeypatch):
 # asrep_roast
 # ---------------------------------------------------------------------------
 
+
 def test_asrep_roast_without_impacket(monkeypatch):
     monkeypatch.setattr(dh, "HAVE_IMPACKET", False)
     r = dh.asrep_roast("10.0.0.10", "corp.local", ["alice"])
@@ -345,8 +364,7 @@ def test_asrep_roast_finds_roastable_users(monkeypatch):
         raise ValueError("boom")
 
     classes["error"] = install_fake_impacket(monkeypatch, send_impl)
-    r = dh.asrep_roast("10.0.0.10", "corp.local",
-                       ["vuln", "nochange", "kerr", "explode"])
+    r = dh.asrep_roast("10.0.0.10", "corp.local", ["vuln", "nochange", "kerr", "explode"])
     assert r["success"] is True
     assert len(r["asrep_users"]) == 1
     user = r["asrep_users"][0]
@@ -380,18 +398,19 @@ def test_asrep_roast_outer_exception(monkeypatch):
 # kerberoast
 # ---------------------------------------------------------------------------
 
+
 def test_kerberoast_without_ldap3(monkeypatch):
     monkeypatch.setattr(dh, "HAVE_LDAP3", False)
     r = dh.kerberoast("10.0.0.10", "corp.local", "bob", "pw")
     assert r["error"] == "ldap3 required for SPN enumeration"
-    assert r["commands"] == [
-        "impacket-GetUserSPNs -request -dc-ip 10.0.0.10 corp.local/bob:pw"]
+    assert r["commands"] == ["impacket-GetUserSPNs -request -dc-ip 10.0.0.10 corp.local/bob:pw"]
 
 
 def test_kerberoast_finds_spns(monkeypatch):
     entry = types.SimpleNamespace(
         servicePrincipalName=types.SimpleNamespace(
-            values=["MSSQLSvc/db.corp.local:1433", b"HTTP/web.corp.local"]),
+            values=["MSSQLSvc/db.corp.local:1433", b"HTTP/web.corp.local"]
+        ),
         sAMAccountName=types.SimpleNamespace(value="svc_sql"),
     )
     mod, state = make_ldap3(bind=True, entries=[entry])
@@ -400,7 +419,9 @@ def test_kerberoast_finds_spns(monkeypatch):
     r = dh.kerberoast("10.0.0.10", "corp.local", "bob", "pw")
     assert r["success"] is True
     assert [h["spn"] for h in r["tgs_hashes"]] == [
-        "MSSQLSvc/db.corp.local:1433", "HTTP/web.corp.local"]
+        "MSSQLSvc/db.corp.local:1433",
+        "HTTP/web.corp.local",
+    ]
     assert r["tgs_hashes"][0]["user"] == "svc_sql"
     assert r["tgs_hashes"][0]["hash_cmd"].endswith("corp.local/bob:pw")
     assert state["conns"][0].user == "corp.local\\bob"
@@ -437,6 +458,7 @@ def test_kerberoast_connection_error(monkeypatch):
 # ---------------------------------------------------------------------------
 # smb_enum
 # ---------------------------------------------------------------------------
+
 
 class FakeSMBConnection:
     instances = []
@@ -546,11 +568,13 @@ def test_smb_enum_connection_error(monkeypatch):
 # bloodhound / adcs / gpp
 # ---------------------------------------------------------------------------
 
+
 def test_bloodhound_collect_command():
     r = dh.bloodhound_collect("10.0.0.10", "corp.local", "bob", "pw")
     assert r["success"] is True
     assert r["commands"] == [
-        "bloodhound-python -d corp.local -u bob -p 'pw' -dc 10.0.0.10 -c All -ns 10.0.0.10"]
+        "bloodhound-python -d corp.local -u bob -p 'pw' -dc 10.0.0.10 -c All -ns 10.0.0.10"
+    ]
     assert r["output_file"] == "corp.local_bloodhound.zip"
 
 
@@ -596,8 +620,7 @@ def test_check_gpp_password_with_impacket(monkeypatch):
     monkeypatch.setattr(dh, "HAVE_IMPACKET", True)
     r = dh.check_gpp_password("10.0.0.10", "bob", "pw")
     assert r["success"] is False
-    assert r["commands"] == [
-        "impacket-Get-GPPPassword -dc-ip 10.0.0.10 DOMAIN/bob:pw"]
+    assert r["commands"] == ["impacket-Get-GPPPassword -dc-ip 10.0.0.10 DOMAIN/bob:pw"]
 
 
 def test_check_gpp_password_format_error(monkeypatch):
@@ -613,6 +636,7 @@ def test_check_gpp_password_format_error(monkeypatch):
 # ---------------------------------------------------------------------------
 # socket based probes
 # ---------------------------------------------------------------------------
+
 
 def test_check_ms17_010_vulnerable(monkeypatch):
     factory = make_socket_factory(resp=b"\x00" * 12)
@@ -678,6 +702,7 @@ def test_enum_mssql_port_closed(monkeypatch):
 # domain_audit_summary
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def audit(monkeypatch):
     calls = {}
@@ -695,9 +720,11 @@ def audit(monkeypatch):
         "adcs_scan": lambda *a, **k: {"success": False},
     }
     for name, fn in defaults.items():
+
         def wrapper(*a, _fn=fn, _name=name, **k):
             calls[_name] = (a, k)
             return _fn(*a, **k)
+
         monkeypatch.setattr(dh, name, wrapper)
     return calls
 
@@ -726,10 +753,10 @@ def test_domain_audit_summary_dc_only(audit):
 
 
 def test_domain_audit_summary_critical_findings(audit, monkeypatch):
-    monkeypatch.setattr(dh, "ldap_anonymous_enum",
-                        lambda *a, **k: {"success": True, "entries": [{"dn": "x"}]})
-    monkeypatch.setattr(dh, "smb_enum",
-                        lambda *a, **k: {"null_session": True, "signing": False})
+    monkeypatch.setattr(
+        dh, "ldap_anonymous_enum", lambda *a, **k: {"success": True, "entries": [{"dn": "x"}]}
+    )
+    monkeypatch.setattr(dh, "smb_enum", lambda *a, **k: {"null_session": True, "signing": False})
     monkeypatch.setattr(dh, "check_gpp_password", lambda *a, **k: {"success": True})
     monkeypatch.setattr(dh, "check_ms17_010", lambda *a, **k: {"vulnerable": True})
     monkeypatch.setattr(dh, "check_zerologon", lambda *a, **k: {"vulnerable": True})
@@ -745,13 +772,16 @@ def test_domain_audit_summary_critical_findings(audit, monkeypatch):
 
 
 def test_domain_audit_summary_kerberos_findings(audit, monkeypatch):
-    monkeypatch.setattr(dh, "asrep_roast", lambda *a, **k: {
-        "success": True, "asrep_users": [{"username": "a"}, {"username": "b"}]})
-    monkeypatch.setattr(dh, "kerberoast", lambda *a, **k: {
-        "success": True, "tgs_hashes": [1, 2, 3]})
+    monkeypatch.setattr(
+        dh,
+        "asrep_roast",
+        lambda *a, **k: {"success": True, "asrep_users": [{"username": "a"}, {"username": "b"}]},
+    )
+    monkeypatch.setattr(
+        dh, "kerberoast", lambda *a, **k: {"success": True, "tgs_hashes": [1, 2, 3]}
+    )
     monkeypatch.setattr(dh, "adcs_scan", lambda *a, **k: {"success": True})
-    r = dh.domain_audit_summary("corp.local", "10.0.0.10", "bob", "pw",
-                                usernames=["a", "b", "c"])
+    r = dh.domain_audit_summary("corp.local", "10.0.0.10", "bob", "pw", usernames=["a", "b", "c"])
     recs = r["recommendations"]
     assert "HIGH: 2 AS-REP roastable users found" in recs
     assert "MEDIUM: 3 kerberoastable SPNs found" in recs
@@ -770,6 +800,7 @@ def test_domain_audit_summary_without_dc_ip(audit):
 # run
 # ---------------------------------------------------------------------------
 
+
 def test_run_resolves_domain_and_dc_ip(monkeypatch):
     captured = {}
 
@@ -787,8 +818,7 @@ def test_run_resolves_domain_and_dc_ip(monkeypatch):
 
 def test_run_dns_resolution_failure(monkeypatch):
     captured = {}
-    monkeypatch.setattr(dh, "domain_audit_summary",
-                        lambda **k: captured.update(k) or {})
+    monkeypatch.setattr(dh, "domain_audit_summary", lambda **k: captured.update(k) or {})
 
     def boom(host):
         raise OSError("dns")
@@ -800,12 +830,20 @@ def test_run_dns_resolution_failure(monkeypatch):
 
 def test_run_explicit_parameters(monkeypatch):
     captured = {}
-    monkeypatch.setattr(dh, "domain_audit_summary",
-                        lambda **k: captured.update(k) or {})
+    monkeypatch.setattr(dh, "domain_audit_summary", lambda **k: captured.update(k) or {})
     monkeypatch.setattr(dh.socket, "gethostbyname", lambda host: "should-not-be-used")
-    dh.run("10.0.0.10", dc_ip="10.0.0.10", domain="corp.local",
-           username="bob", password="pw", userlist=["a"])
+    dh.run(
+        "10.0.0.10",
+        dc_ip="10.0.0.10",
+        domain="corp.local",
+        username="bob",
+        password="pw",
+        userlist=["a"],
+    )
     assert captured == {
-        "domain": "corp.local", "dc_ip": "10.0.0.10", "username": "bob",
-        "password": "pw", "usernames": ["a"],
+        "domain": "corp.local",
+        "dc_ip": "10.0.0.10",
+        "username": "bob",
+        "password": "pw",
+        "usernames": ["a"],
     }

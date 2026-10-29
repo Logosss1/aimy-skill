@@ -105,7 +105,7 @@ For each case/handler, determine:
 # Typical extraction from binary
 import struct
 
-with open('challenge', 'rb') as f:
+with open("challenge", "rb") as f:
     f.seek(bytecode_offset)
     bytecode = f.read(bytecode_length)
 
@@ -117,23 +117,24 @@ with open('challenge', 'rb') as f:
 
 ```python
 OPCODES = {
-    0x00: ("nop",  0),    # (mnemonic, operand_bytes)
-    0x01: ("push", 1),    # push immediate byte
-    0x02: ("pop",  0),
-    0x03: ("add",  0),
-    0x04: ("sub",  0),
-    0x05: ("xor",  0),
-    0x06: ("cmp",  0),
-    0x07: ("jmp",  2),    # jump to 16-bit address
-    0x08: ("je",   2),
-    0x09: ("jne",  2),
-    0x0A: ("mov",  2),    # mov reg, imm
-    0x0B: ("load", 1),    # load from memory[operand]
-    0x0C: ("store",1),    # store to memory[operand]
-    0x0D: ("print",0),
-    0x0E: ("read", 0),    # read input
+    0x00: ("nop", 0),  # (mnemonic, operand_bytes)
+    0x01: ("push", 1),  # push immediate byte
+    0x02: ("pop", 0),
+    0x03: ("add", 0),
+    0x04: ("sub", 0),
+    0x05: ("xor", 0),
+    0x06: ("cmp", 0),
+    0x07: ("jmp", 2),  # jump to 16-bit address
+    0x08: ("je", 2),
+    0x09: ("jne", 2),
+    0x0A: ("mov", 2),  # mov reg, imm
+    0x0B: ("load", 1),  # load from memory[operand]
+    0x0C: ("store", 1),  # store to memory[operand]
+    0x0D: ("print", 0),
+    0x0E: ("read", 0),  # read input
     0xFF: ("halt", 0),
 }
+
 
 def disassemble(bytecode):
     pc = 0
@@ -145,10 +146,11 @@ def disassemble(bytecode):
             continue
 
         mnemonic, operand_size = OPCODES[op]
-        operands = bytecode[pc+1:pc+1+operand_size]
-        operand_str = ' '.join(f'{b:#04x}' for b in operands)
+        operands = bytecode[pc + 1 : pc + 1 + operand_size]
+        operand_str = " ".join(f"{b:#04x}" for b in operands)
         print(f"  {pc:04x}: {mnemonic:8s} {operand_str}")
         pc += 1 + operand_size
+
 
 disassemble(bytecode)
 ```
@@ -241,11 +243,16 @@ for row in range(HEIGHT):
     line = ""
     for col in range(WIDTH):
         cell = bytecode[MAZE_ADDR + row * WIDTH + col - base_addr]
-        if cell == 0: line += "."    # path
-        elif cell == 1: line += "#"  # wall
-        elif cell == 2: line += "S"  # start
-        elif cell == 3: line += "E"  # end
-        else: line += "?"
+        if cell == 0:
+            line += "."  # path
+        elif cell == 1:
+            line += "#"  # wall
+        elif cell == 2:
+            line += "S"  # start
+        elif cell == 3:
+            line += "E"  # end
+        else:
+            line += "?"
     maze.append(line)
     print(line)
 ```
@@ -255,10 +262,11 @@ for row in range(HEIGHT):
 ```python
 from collections import deque
 
+
 def solve_maze(maze, start, end):
     """BFS solver returns direction string."""
     rows, cols = len(maze), len(maze[0])
-    directions = {'U': (-1, 0), 'D': (1, 0), 'L': (0, -1), 'R': (0, 1)}
+    directions = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
     queue = deque([(start, "")])
     visited = {start}
 
@@ -269,18 +277,25 @@ def solve_maze(maze, start, end):
 
         for name, (dr, dc) in directions.items():
             nr, nc = r + dr, c + dc
-            if (0 <= nr < rows and 0 <= nc < cols and
-                maze[nr][nc] != '#' and (nr, nc) not in visited):
+            if (
+                0 <= nr < rows
+                and 0 <= nc < cols
+                and maze[nr][nc] != "#"
+                and (nr, nc) not in visited
+            ):
                 visited.add((nr, nc))
                 queue.append(((nr, nc), path + name))
 
     return None
 
+
 # Find start and end positions
 for r, row in enumerate(maze):
     for c, cell in enumerate(row):
-        if cell == 'S': start = (r, c)
-        if cell == 'E': end = (r, c)
+        if cell == "S":
+            start = (r, c)
+        if cell == "E":
+            end = (r, c)
 
 solution = solve_maze(maze, start, end)
 print(f"Path: {solution}")

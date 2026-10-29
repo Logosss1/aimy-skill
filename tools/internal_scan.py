@@ -20,7 +20,9 @@ def ping_sweep(subnet: str, timeout: float = 2.0, threads: int = 50) -> List[str
         try:
             r = subprocess.run(
                 ["ping", "-c1", "-W", str(int(timeout)), host],
-                capture_output=True, text=True, timeout=timeout + 1,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 1,
             )
             if r.returncode == 0:
                 return host
@@ -40,13 +42,17 @@ def ping_sweep(subnet: str, timeout: float = 2.0, threads: int = 50) -> List[str
 def arp_scan(interface: str = "") -> List[Dict]:
     entries = []
     try:
-        r = subprocess.run(["arp", "-a", interface] if interface else ["arp", "-a"],
-                           capture_output=True, text=True, timeout=10)
+        r = subprocess.run(
+            ["arp", "-a", interface] if interface else ["arp", "-a"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
         for line in r.stdout.split("\n"):
-            m = re.search(r'\(?(\d+\.\d+\.\d+\.\d+)\)?\s+.*?(\S[\w:]{14,}\S)', line)
+            m = re.search(r"\(?(\d+\.\d+\.\d+\.\d+)\)?\s+.*?(\S[\w:]{14,}\S)", line)
             if m:
                 entries.append({"ip": m.group(1), "mac": m.group(2)})
-            m2 = re.search(r'(\d+\.\d+\.\d+\.\d+)\s+.*?(\S[\w:]{14,}\S)', line)
+            m2 = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+.*?(\S[\w:]{14,}\S)", line)
             if m2:
                 entries.append({"ip": m2.group(1), "mac": m2.group(2)})
     except Exception as e:
@@ -73,7 +79,7 @@ def get_local_networks() -> List[str]:
         pass
     try:
         r = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=5)
-        for m in re.finditer(r'inet (\d+\.\d+\.\d+)\.', r.stdout):
+        for m in re.finditer(r"inet (\d+\.\d+\.\d+)\.", r.stdout):
             net = f"{m.group(1)}.0/24"
             if net not in nets:
                 nets.append(net)
@@ -82,15 +88,67 @@ def get_local_networks() -> List[str]:
     return nets or ["192.168.1.0/24", "10.0.0.0/24", "172.16.0.0/24"]
 
 
-def scan_host(host: str, ports: Optional[List[int]] = None,
-              timeout: float = 2.0, threads: int = 100) -> Dict:
+def scan_host(
+    host: str, ports: Optional[List[int]] = None, timeout: float = 2.0, threads: int = 100
+) -> Dict:
     if ports is None:
-        ports = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389,
-                 443, 445, 993, 995, 1433, 1521, 2049, 2375, 2376, 3306,
-                 3389, 5432, 5555, 5900, 5985, 5986, 6379, 6443, 7001,
-                 7070, 8000, 8009, 8080, 8161, 8200, 8443, 8500, 8686,
-                 8761, 8888, 9000, 9090, 9092, 9100, 9200, 10000, 11211,
-                 15672, 16379, 27017, 28017, 50070, 61616]
+        ports = [
+            21,
+            22,
+            23,
+            25,
+            53,
+            80,
+            110,
+            111,
+            135,
+            139,
+            143,
+            389,
+            443,
+            445,
+            993,
+            995,
+            1433,
+            1521,
+            2049,
+            2375,
+            2376,
+            3306,
+            3389,
+            5432,
+            5555,
+            5900,
+            5985,
+            5986,
+            6379,
+            6443,
+            7001,
+            7070,
+            8000,
+            8009,
+            8080,
+            8161,
+            8200,
+            8443,
+            8500,
+            8686,
+            8761,
+            8888,
+            9000,
+            9090,
+            9092,
+            9100,
+            9200,
+            10000,
+            11211,
+            15672,
+            16379,
+            27017,
+            28017,
+            50070,
+            61616,
+        ]
     results = []
     with ThreadPoolExecutor(max_workers=threads) as ex:
         futures = {ex.submit(_scan_port, host, p, timeout): p for p in ports}

@@ -11,7 +11,7 @@
 ```python
 import angr
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
 
@@ -30,13 +30,12 @@ if simgr.found:
 ```python
 import angr
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
 
 simgr.explore(
-    find=lambda s: b"Correct" in s.posix.dumps(1),
-    avoid=lambda s: b"Wrong" in s.posix.dumps(1)
+    find=lambda s: b"Correct" in s.posix.dumps(1), avoid=lambda s: b"Wrong" in s.posix.dumps(1)
 )
 
 if simgr.found:
@@ -53,7 +52,7 @@ if simgr.found:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 FLAG_LEN = 32
 flag = claripy.BVS("flag", 8 * FLAG_LEN)
@@ -63,7 +62,7 @@ state = proj.factory.entry_state(stdin=flag)
 for i in range(FLAG_LEN):
     byte = flag.get_byte(i)
     state.solver.add(byte >= 0x20)
-    state.solver.add(byte <= 0x7e)
+    state.solver.add(byte <= 0x7E)
 
 simgr = proj.factory.simulation_manager(state)
 simgr.explore(find=0x401234, avoid=[0x401300])
@@ -83,17 +82,14 @@ if simgr.found:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 flag = claripy.BVS("flag", 8 * 32)
-state = proj.factory.full_init_state(
-    args=['./challenge', flag],
-    add_options=angr.options.unicorn
-)
+state = proj.factory.full_init_state(args=["./challenge", flag], add_options=angr.options.unicorn)
 
 for i in range(32):
     b = flag.get_byte(i)
-    state.solver.add(b >= 0x20, b <= 0x7e)
+    state.solver.add(b >= 0x20, b <= 0x7E)
 
 simgr = proj.factory.simulation_manager(state)
 simgr.explore(find=0x401234, avoid=[0x401300])
@@ -112,12 +108,12 @@ if simgr.found:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 flag = claripy.BVS("flag", 8 * 64)
 sim_file = angr.SimFile("flag.txt", content=flag)
 
-state = proj.factory.entry_state(fs={'/tmp/flag.txt': sim_file})
+state = proj.factory.entry_state(fs={"/tmp/flag.txt": sim_file})
 
 simgr = proj.factory.simulation_manager(state)
 simgr.explore(find=0x401234, avoid=[0x401300])
@@ -136,15 +132,17 @@ if simgr.found:
 import angr
 import claripy
 
+
 class MyScanf(angr.SimProcedure):
     def run(self, fmt, ptr):
         buf = claripy.BVS("scanf_input", 8 * 32)
         self.state.memory.store(ptr, buf)
-        self.state.globals['scanf_buf'] = buf
+        self.state.globals["scanf_buf"] = buf
         return 1
 
-proj = angr.Project('./challenge', auto_load_libs=False)
-proj.hook_symbol('__isoc99_scanf', MyScanf())
+
+proj = angr.Project("./challenge", auto_load_libs=False)
+proj.hook_symbol("__isoc99_scanf", MyScanf())
 
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
@@ -152,7 +150,7 @@ simgr.explore(find=0x401234, avoid=[0x401300])
 
 if simgr.found:
     found = simgr.found[0]
-    buf = found.globals['scanf_buf']
+    buf = found.globals["scanf_buf"]
     print(found.solver.eval(buf, cast_to=bytes))
 ```
 
@@ -166,17 +164,19 @@ if simgr.found:
 import angr
 import claripy
 
+
 class LeakStrcmp(angr.SimProcedure):
     def run(self, s1, s2):
         # Read both strings up to null
         str1 = self.state.memory.load(s1, 64)
         str2 = self.state.memory.load(s2, 64)
-        self.state.globals['cmp_s1'] = s1
-        self.state.globals['cmp_s2'] = s2
+        self.state.globals["cmp_s1"] = s1
+        self.state.globals["cmp_s2"] = s2
         return claripy.If(str1 == str2, claripy.BVV(0, 32), claripy.BVV(1, 32))
 
-proj = angr.Project('./challenge', auto_load_libs=False)
-proj.hook_symbol('strcmp', LeakStrcmp())
+
+proj = angr.Project("./challenge", auto_load_libs=False)
+proj.hook_symbol("strcmp", LeakStrcmp())
 
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
@@ -184,7 +184,7 @@ simgr.explore(find=0x401234)
 
 if simgr.found:
     found = simgr.found[0]
-    s2_addr = found.solver.eval(found.globals['cmp_s2'])
+    s2_addr = found.solver.eval(found.globals["cmp_s2"])
     expected = found.memory.load(s2_addr, 32)
     print(found.solver.eval(expected, cast_to=bytes))
 ```
@@ -199,7 +199,7 @@ if simgr.found:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 CHECK_FUNC = 0x401500
 BUF_ADDR = 0x600000
@@ -209,15 +209,12 @@ flag = claripy.BVS("flag", 8 * 32)
 state = proj.factory.blank_state(addr=CHECK_FUNC)
 state.memory.store(BUF_ADDR, flag)
 state.regs.rdi = BUF_ADDR  # first arg = buffer pointer (System V ABI)
-state.regs.rsi = 32         # second arg = length
+state.regs.rsi = 32  # second arg = length
 
 state.stack_push(0xDEADBEEF)  # fake return address
 
 simgr = proj.factory.simulation_manager(state)
-simgr.explore(
-    find=lambda s: b"OK" in s.posix.dumps(1),
-    avoid=lambda s: b"FAIL" in s.posix.dumps(1)
-)
+simgr.explore(find=lambda s: b"OK" in s.posix.dumps(1), avoid=lambda s: b"FAIL" in s.posix.dumps(1))
 
 if simgr.found:
     print(simgr.found[0].solver.eval(flag, cast_to=bytes))
@@ -232,7 +229,7 @@ if simgr.found:
 ```python
 import angr
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
 
@@ -252,7 +249,7 @@ if simgr.found:
 ```python
 import angr
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 state = proj.factory.entry_state(
     add_options=angr.options.unicorn  # enable Unicorn backend
 )
@@ -273,7 +270,7 @@ if simgr.found:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 stages = [
     {"find": 0x401100, "avoid": [0x401150]},
@@ -290,9 +287,9 @@ for i, stage in enumerate(stages):
     if simgr.found:
         state = simgr.found[0]
         partial = state.solver.eval(flag, cast_to=bytes)
-        print(f"Stage {i+1}: {partial}")
+        print(f"Stage {i + 1}: {partial}")
     else:
-        print(f"Stage {i+1} failed")
+        print(f"Stage {i + 1} failed")
         break
 ```
 
@@ -306,7 +303,7 @@ for i, stage in enumerate(stages):
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 FLAG_LEN = 40
 flag = claripy.BVS("flag", 8 * FLAG_LEN)
@@ -315,16 +312,17 @@ state = proj.factory.entry_state(stdin=flag)
 prefix = b"flag{"
 for i, c in enumerate(prefix):
     state.solver.add(flag.get_byte(i) == c)
-state.solver.add(flag.get_byte(FLAG_LEN - 1) == ord('}'))
+state.solver.add(flag.get_byte(FLAG_LEN - 1) == ord("}"))
 
 for i in range(len(prefix), FLAG_LEN - 1):
     b = flag.get_byte(i)
     state.solver.add(
         claripy.Or(
-            claripy.And(b >= ord('0'), b <= ord('9')),
-            claripy.And(b >= ord('a'), b <= ord('z')),
-            claripy.And(b >= ord('A'), b <= ord('Z')),
-            b == ord('_'), b == ord('-')
+            claripy.And(b >= ord("0"), b <= ord("9")),
+            claripy.And(b >= ord("a"), b <= ord("z")),
+            claripy.And(b >= ord("A"), b <= ord("Z")),
+            b == ord("_"),
+            b == ord("-"),
         )
     )
 
@@ -344,13 +342,15 @@ if simgr.found:
 ```python
 import angr
 
+
 class ConcreteRand(angr.SimProcedure):
     def run(self):
         return 42  # deterministic
 
-proj = angr.Project('./challenge', auto_load_libs=False)
-proj.hook_symbol('rand', ConcreteRand())
-proj.hook_symbol('srand', angr.SIM_PROCEDURES['libc']['srand']())
+
+proj = angr.Project("./challenge", auto_load_libs=False)
+proj.hook_symbol("rand", ConcreteRand())
+proj.hook_symbol("srand", angr.SIM_PROCEDURES["libc"]["srand"]())
 
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
@@ -370,13 +370,15 @@ if simgr.found:
 import angr
 import signal
 
+
 def timeout_handler(signum, frame):
     raise TimeoutError("angr timed out")
+
 
 signal.signal(signal.SIGALRM, timeout_handler)
 signal.alarm(300)  # 5-minute timeout
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 state = proj.factory.entry_state()
 simgr = proj.factory.simulation_manager(state)
 
@@ -400,7 +402,7 @@ except TimeoutError:
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 GLOBAL_BUF = 0x604080
 CHECK_START = 0x401200
@@ -412,7 +414,7 @@ state.memory.store(GLOBAL_BUF, flag)
 
 for i in range(FLAG_LEN):
     b = flag.get_byte(i)
-    state.solver.add(b >= 0x20, b <= 0x7e)
+    state.solver.add(b >= 0x20, b <= 0x7E)
 
 simgr = proj.factory.simulation_manager(state)
 simgr.explore(find=0x401300, avoid=[0x401400])

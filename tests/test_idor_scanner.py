@@ -45,9 +45,15 @@ class TestIdorCheck:
         # B's session view of id=1002 also returns user1002 -> A's read matches
         sess_a = requests.Session()
         sess_b = requests.Session()
-        result = check("http://test.com/api/user?id={id}", "id",
-                       sess_a=sess_a, sess_b=sess_b,
-                       my_id="1001", other_id="1002", timeout=5)
+        result = check(
+            "http://test.com/api/user?id={id}",
+            "id",
+            sess_a=sess_a,
+            sess_b=sess_b,
+            my_id="1001",
+            other_id="1002",
+            timeout=5,
+        )
         assert result["vulnerable"] is True
         assert "user1002" in result.get("response_preview", "")
 
@@ -56,16 +62,24 @@ class TestIdorCheck:
         responses.add(
             responses.GET,
             re.compile(r"http://test\.com/api/user\?id=1001$"),
-            body='{"id": 1001}', status=200,
+            body='{"id": 1001}',
+            status=200,
         )
         responses.add(
             responses.GET,
             re.compile(r"http://test\.com/api/user\?id=1002$"),
-            body="Forbidden", status=403,
+            body="Forbidden",
+            status=403,
         )
         sess_a = requests.Session()
-        result = check("http://test.com/api/user?id={id}", "id",
-                       sess_a=sess_a, my_id="1001", other_id="1002", timeout=5)
+        result = check(
+            "http://test.com/api/user?id={id}",
+            "id",
+            sess_a=sess_a,
+            my_id="1001",
+            other_id="1002",
+            timeout=5,
+        )
         assert result["vulnerable"] is False
 
     @responses.activate
@@ -73,6 +87,7 @@ class TestIdorCheck:
         def json_cb(request):
             body = request.body or "{}"
             import json as _json
+
             try:
                 uid = _json.loads(body).get("userId", "")
             except Exception:
@@ -85,9 +100,16 @@ class TestIdorCheck:
             callback=json_cb,
         )
         sess_a = requests.Session()
-        result = check("http://test.com/api/order", "id",
-                       sess_a=sess_a, my_id="A1", other_id="B2",
-                       method="POST", json_param="userId", timeout=5)
+        result = check(
+            "http://test.com/api/order",
+            "id",
+            sess_a=sess_a,
+            my_id="A1",
+            other_id="B2",
+            method="POST",
+            json_param="userId",
+            timeout=5,
+        )
         assert result["vulnerable"] is True
         assert "data-B2" in result.get("response_preview", "")
 
@@ -98,7 +120,8 @@ class TestUnauthorized:
         responses.add(
             responses.GET,
             "http://test.com/admin/api/users",
-            body='[{"name": "admin"}]', status=200,
+            body='[{"name": "admin"}]',
+            status=200,
         )
         result = check_unauthorized("http://test.com/admin/api/users")
         assert result["vulnerable"] is True
@@ -108,7 +131,8 @@ class TestUnauthorized:
         responses.add(
             responses.GET,
             "http://test.com/admin/api/users",
-            body="redirecting", status=302,
+            body="redirecting",
+            status=302,
             headers={"Location": "/login"},
         )
         result = check_unauthorized("http://test.com/admin/api/users")

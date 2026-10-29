@@ -37,10 +37,11 @@ ROLE_FUZZ_STRATEGIES: Dict[str, Dict[str, Any]] = {
         "label": "IDOR / BOLA",
         "payloads": [
             ("numeric_id", ["1", "2", "999999", "-1", "0", "1.0"]),
-            ("uuid_id", ["00000000-0000-0000-0000-000000000000",
-                         "ffffffff-ffff-ffff-ffff-ffffffffffff"]),
-            ("string_id", ["admin", "null", "undefined", "none",
-                           "../admin", "."]),
+            (
+                "uuid_id",
+                ["00000000-0000-0000-0000-000000000000", "ffffffff-ffff-ffff-ffff-ffffffffffff"],
+            ),
+            ("string_id", ["admin", "null", "undefined", "none", "../admin", "."]),
         ],
     },
     "filter": {
@@ -110,15 +111,17 @@ class SmartFuzzer:
         self.response_analyzer = ResponseAnalyzer()
         self.diff_engine = SemanticDiffEngine()
 
-    def fuzz_point(self, url: str, param: str,
-                   sample_value: str = "1",
-                   method: str = "GET",
-                   post_data: Optional[dict] = None,
-                   timeout: float = 10.0) -> List[FuzzResult]:
+    def fuzz_point(
+        self,
+        url: str,
+        param: str,
+        sample_value: str = "1",
+        method: str = "GET",
+        post_data: Optional[dict] = None,
+        timeout: float = 10.0,
+    ) -> List[FuzzResult]:
         results = []
-        profile = self.param_classifier.classify(
-            param, sample_value, urlparse(url).path, method
-        )
+        profile = self.param_classifier.classify(param, sample_value, urlparse(url).path, method)
 
         if profile.role == "unknown":
             profile.role = self._infer_role_from_context(param, url)
@@ -127,32 +130,34 @@ class SmartFuzzer:
         if not strategies:
             strategies = ROLE_FUZZ_STRATEGIES["content"]
 
-        baseline = self._baseline_request(url, param, sample_value,
-                                           method, post_data, timeout)
+        baseline = self._baseline_request(url, param, sample_value, method, post_data, timeout)
 
         for attack_type, payloads in strategies["payloads"]:
             for payload in payloads[:3]:
                 result = self._test_payload(
-                    url, param, payload, attack_type,
-                    profile, baseline, method, post_data, timeout
+                    url, param, payload, attack_type, profile, baseline, method, post_data, timeout
                 )
                 if result is not None:
                     results.append(result)
 
         return results
 
-    def _baseline_request(self, url: str, param: str,
-                          sample_value: str, method: str,
-                          post_data: Optional[dict],
-                          timeout: float) -> Dict:
+    def _baseline_request(
+        self,
+        url: str,
+        param: str,
+        sample_value: str,
+        method: str,
+        post_data: Optional[dict],
+        timeout: float,
+    ) -> Dict:
         try:
             if method.upper() == "POST" and post_data:
                 d = post_data.copy()
                 d[param] = sample_value
                 r = self.sess.post(url, data=d, timeout=timeout)
             else:
-                r = self.sess.get(build_url(url, param, sample_value),
-                                  timeout=timeout)
+                r = self.sess.get(build_url(url, param, sample_value), timeout=timeout)
             return {
                 "status": r.status_code,
                 "length": len(r.text),
@@ -163,11 +168,18 @@ class SmartFuzzer:
             logger.debug("baseline %s?%s: %s", url, param, e)
             return {"status": 0, "length": 0, "text": "", "headers": {}}
 
-    def _test_payload(self, url: str, param: str, payload: str,
-                      attack_type: str, profile: ParameterProfile,
-                      baseline: Dict, method: str,
-                      post_data: Optional[dict],
-                      timeout: float) -> Optional[FuzzResult]:
+    def _test_payload(
+        self,
+        url: str,
+        param: str,
+        payload: str,
+        attack_type: str,
+        profile: ParameterProfile,
+        baseline: Dict,
+        method: str,
+        post_data: Optional[dict],
+        timeout: float,
+    ) -> Optional[FuzzResult]:
         result = FuzzResult(
             param=param,
             role=profile.role,
@@ -182,8 +194,7 @@ class SmartFuzzer:
                 d[param] = payload
                 r = self.sess.post(url, data=d, timeout=timeout + 3)
             else:
-                r = self.sess.get(build_url(url, param, payload),
-                                  timeout=timeout + 3)
+                r = self.sess.get(build_url(url, param, payload), timeout=timeout + 3)
             elapsed = time.time() - start
         except requests.Timeout:
             if attack_type in ("sqli_time", "cmdi"):
@@ -225,9 +236,7 @@ class SmartFuzzer:
                 result.confidence = "medium"
                 return result
 
-        analysis = self.response_analyzer.analyze(
-            url, r.status_code, dict(r.headers), r.text
-        )
+        analysis = self.response_analyzer.analyze(url, r.status_code, dict(r.headers), r.text)
         if analysis.is_error:
             result.vulnerable = True
             result.evidence = f"error: {analysis.error_type}"
@@ -236,12 +245,17 @@ class SmartFuzzer:
 
         return None
 
-    def _check_sqli(self, result: FuzzResult, body: str,
-                    baseline: Dict) -> Optional[FuzzResult]:
+    def _check_sqli(self, result: FuzzResult, body: str, baseline: Dict) -> Optional[FuzzResult]:
         errors = [
-            r"sql syntax", r"mysql_fetch", r"ora-\d{5}", r"sqlite",
-            r"postgresql.*error", r"driver.*error", r"unclosed quotation",
-            r"microsoft.*odbc", r"division by zero",
+            r"sql syntax",
+            r"mysql_fetch",
+            r"ora-\d{5}",
+            r"sqlite",
+            r"postgresql.*error",
+            r"driver.*error",
+            r"unclosed quotation",
+            r"microsoft.*odbc",
+            r"division by zero",
         ]
         for pat in errors:
             if re.search(pat, body, re.I):
@@ -281,6 +295,7 @@ class SmartFuzzer:
 # Response-Learning Fuzzer — sends payloads, scores response differences,
 # learns which parameters/attacks produce interesting results
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ResponseFingerprint:
@@ -338,8 +353,9 @@ class LearningFuzzer:
                 self._baselines[url] = ResponseFingerprint(0, 0, 0, 0, "", has_error=True)
         return self._baselines[url]
 
-    def fuzz_param(self, url: str, param: str, payloads: List[str],
-                   attack_type: str = "generic") -> List[Dict]:
+    def fuzz_param(
+        self, url: str, param: str, payloads: List[str], attack_type: str = "generic"
+    ) -> List[Dict]:
         baseline = self._get_baseline(url)
         results = []
         for payload in payloads:
@@ -373,8 +389,9 @@ class LearningFuzzer:
     def top_findings(self, threshold: float = 3.0) -> List[Dict]:
         return [f for f in self._interesting if f["diff_score"] >= threshold]
 
-    def learn_and_refine(self, url: str, params: List[str],
-                          base_payloads: Dict[str, List[str]]) -> Dict:
+    def learn_and_refine(
+        self, url: str, params: List[str], base_payloads: Dict[str, List[str]]
+    ) -> Dict:
         findings = {}
         for param in params:
             for atype, payloads in base_payloads.items():

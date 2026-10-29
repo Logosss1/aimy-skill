@@ -54,7 +54,7 @@ Project(binary)
 import angr
 import claripy
 
-proj = angr.Project('./challenge', auto_load_libs=False)
+proj = angr.Project("./challenge", auto_load_libs=False)
 
 # Entry state: start from program entry point
 state = proj.factory.entry_state()
@@ -63,7 +63,7 @@ state = proj.factory.entry_state()
 state = proj.factory.blank_state(addr=0x401000)
 
 # Full init state: with command-line args
-state = proj.factory.full_init_state(args=['./challenge', arg1_sym])
+state = proj.factory.full_init_state(args=["./challenge", arg1_sym])
 
 simgr = proj.factory.simulation_manager(state)
 simgr.explore(find=0x401234, avoid=[0x401300])
@@ -78,18 +78,18 @@ if simgr.found:
 
 ```python
 # Bitvector (fixed-size integer)
-sym_input = claripy.BVS("input", 64)        # 64-bit symbolic
-sym_byte = claripy.BVS("byte", 8)           # 8-bit symbolic
-sym_buf = claripy.BVS("buffer", 8 * 32)     # 32-byte buffer
+sym_input = claripy.BVS("input", 64)  # 64-bit symbolic
+sym_byte = claripy.BVS("byte", 8)  # 8-bit symbolic
+sym_buf = claripy.BVS("buffer", 8 * 32)  # 32-byte buffer
 
 # Concrete bitvector
-concrete = claripy.BVV(0x41, 8)             # concrete value 0x41
+concrete = claripy.BVV(0x41, 8)  # concrete value 0x41
 
 # Constraints
 state.solver.add(sym_input > 0)
 state.solver.add(sym_input < 100)
-state.solver.add(sym_byte >= 0x20)           # printable ASCII
-state.solver.add(sym_byte <= 0x7e)
+state.solver.add(sym_byte >= 0x20)  # printable ASCII
+state.solver.add(sym_byte <= 0x7E)
 
 # Evaluate
 value = state.solver.eval(sym_input)
@@ -108,7 +108,7 @@ state = proj.factory.entry_state(stdin=sym_stdin)
 for i in range(flag_len):
     byte = sym_stdin.get_byte(i)
     state.solver.add(byte >= 0x20)
-    state.solver.add(byte <= 0x7e)
+    state.solver.add(byte <= 0x7E)
 ```
 
 ### 1.5 Hooking Functions
@@ -119,28 +119,30 @@ for i in range(flag_len):
 def skip_check(state):
     state.regs.eax = 1  # force success
 
+
 # SimProcedure: replace library function
 class MyStrcmp(angr.SimProcedure):
     def run(self, s1, s2):
         return claripy.If(
             self.state.memory.load(s1, 32) == self.state.memory.load(s2, 32),
             claripy.BVV(0, 32),
-            claripy.BVV(1, 32)
+            claripy.BVV(1, 32),
         )
 
-proj.hook_symbol('strcmp', MyStrcmp())
+
+proj.hook_symbol("strcmp", MyStrcmp())
 
 # Hook common problematic functions
-proj.hook_symbol('printf', angr.SIM_PROCEDURES['libc']['printf']())
-proj.hook_symbol('scanf', angr.SIM_PROCEDURES['libc']['scanf']())
-proj.hook_symbol('puts', angr.SIM_PROCEDURES['libc']['puts']())
+proj.hook_symbol("printf", angr.SIM_PROCEDURES["libc"]["printf"]())
+proj.hook_symbol("scanf", angr.SIM_PROCEDURES["libc"]["scanf"]())
+proj.hook_symbol("puts", angr.SIM_PROCEDURES["libc"]["puts"]())
 ```
 
 ### 1.6 Memory Operations
 
 ```python
 # Read memory (symbolic-aware)
-data = state.memory.load(addr, size)          # returns BV
+data = state.memory.load(addr, size)  # returns BV
 data_concrete = state.solver.eval(data, cast_to=bytes)
 
 # Write memory
@@ -162,9 +164,9 @@ state.regs.rdi = claripy.BVV(0x1000, 64)
 from z3 import *
 
 # Sorts
-x = BitVec('x', 32)    # 32-bit bitvector
-y = Int('y')             # arbitrary precision integer
-b = Bool('b')            # boolean
+x = BitVec("x", 32)  # 32-bit bitvector
+y = Int("y")  # arbitrary precision integer
+b = Bool("b")  # boolean
 
 # Solver
 s = Solver()
@@ -181,24 +183,24 @@ if s.check() == sat:
 
 ```python
 # Serial key validation: each char satisfies constraints
-key = [BitVec(f'k{i}', 8) for i in range(16)]
+key = [BitVec(f"k{i}", 8) for i in range(16)]
 s = Solver()
 for k in key:
-    s.add(k >= 0x30, k <= 0x7a)  # alphanumeric-ish
+    s.add(k >= 0x30, k <= 0x7A)  # alphanumeric-ish
 
 # XOR key recovery
 plaintext = b"known_plaintext"
 ciphertext = b"\x12\x34..."
-key_byte = BitVec('key', 8)
+key_byte = BitVec("key", 8)
 s = Solver()
 for p, c in zip(plaintext, ciphertext):
     s.add(p ^ key_byte == c)
 
 # System of linear equations (modular)
-a, b, c = BitVecs('a b c', 32)
+a, b, c = BitVecs("a b c", 32)
 s = Solver()
-s.add(3*a + 5*b + 7*c == 0x12345678)
-s.add(2*a + 4*b + 6*c == 0xDEADBEEF)
+s.add(3 * a + 5 * b + 7 * c == 0x12345678)
+s.add(2 * a + 4 * b + 6 * c == 0xDEADBEEF)
 s.add(a ^ b ^ c == 0xCAFEBABE)
 ```
 
@@ -208,7 +210,7 @@ s.add(a ^ b ^ c == 0xCAFEBABE)
 from z3 import Optimize
 
 opt = Optimize()
-x = BitVec('x', 32)
+x = BitVec("x", 32)
 opt.add(x > 0)
 opt.add(x < 1000)
 opt.minimize(x)  # find smallest satisfying value
@@ -230,7 +232,7 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 mu = Uc(UC_ARCH_X86, UC_MODE_64)
 
 CODE_ADDR = 0x400000
-STACK_ADDR = 0x7fff0000
+STACK_ADDR = 0x7FFF0000
 STACK_SIZE = 0x10000
 
 mu.mem_map(CODE_ADDR, 0x10000)
@@ -255,7 +257,9 @@ def hook_mem(uc, access, address, size, value, user_data):
     elif access == UC_MEM_READ:
         print(f"Read from {address:#x}")
 
+
 mu.hook_add(UC_HOOK_MEM_READ | UC_HOOK_MEM_WRITE, hook_mem)
+
 
 # Hook specific instruction (for tracing)
 def hook_code(uc, address, size, user_data):
@@ -263,6 +267,7 @@ def hook_code(uc, address, size, user_data):
     md = Cs(CS_ARCH_X86, CS_MODE_64)
     for insn in md.disasm(bytes(code), address):
         print(f"  {insn.address:#x}: {insn.mnemonic} {insn.op_str}")
+
 
 mu.hook_add(UC_HOOK_CODE, hook_code)
 ```
@@ -285,8 +290,8 @@ mu.hook_add(UC_HOOK_CODE, hook_code)
 
 ```python
 simgr.explore(
-    find=lambda s: b"Correct" in s.posix.dumps(1),   # stdout contains "Correct"
-    avoid=lambda s: b"Wrong" in s.posix.dumps(1)      # avoid "Wrong" output
+    find=lambda s: b"Correct" in s.posix.dumps(1),  # stdout contains "Correct"
+    avoid=lambda s: b"Wrong" in s.posix.dumps(1),  # avoid "Wrong" output
 )
 ```
 

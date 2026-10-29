@@ -69,12 +69,15 @@ Takes a lattice basis B and produces a **reduced basis** B' where:
 
 ```python
 # SageMath
-M = matrix(ZZ, [
-    [1, 0, 0, large_value_1],
-    [0, 1, 0, large_value_2],
-    [0, 0, 1, large_value_3],
-    [0, 0, 0, modulus],
-])
+M = matrix(
+    ZZ,
+    [
+        [1, 0, 0, large_value_1],
+        [0, 1, 0, large_value_2],
+        [0, 0, 1, large_value_3],
+        [0, 0, 0, modulus],
+    ],
+)
 
 L = M.LLL()
 # Short vectors in L reveal the solution
@@ -120,6 +123,7 @@ L = M.BKZ(block_size=20)  # β = 20
 
 # fpylll
 from fpylll import BKZ
+
 BKZ.reduction(A, BKZ.Param(block_size=20))
 ```
 
@@ -222,7 +226,7 @@ If partial bits of k are known: reduces to CVP on a lattice.
 
 ```python
 # SageMath
-def ecdsa_nonce_attack(signatures, q, known_bits, bit_position='msb'):
+def ecdsa_nonce_attack(signatures, q, known_bits, bit_position="msb"):
     """
     signatures: list of (r, s, hash, known_nonce_bits)
     q: curve order
@@ -231,7 +235,7 @@ def ecdsa_nonce_attack(signatures, q, known_bits, bit_position='msb'):
     n = len(signatures)
 
     # Build lattice
-    B = 2^(q.nbits() - known_bits)  # bound on unknown part
+    B = 2 ^ (q.nbits() - known_bits)  # bound on unknown part
     M = matrix(QQ, n + 2, n + 2)
 
     for i in range(n):
@@ -241,10 +245,10 @@ def ecdsa_nonce_attack(signatures, q, known_bits, bit_position='msb'):
 
         M[i, i] = q
         M[n, i] = t_i
-        M[n+1, i] = u_i - a_i  # a_i = known nonce bits
+        M[n + 1, i] = u_i - a_i  # a_i = known nonce bits
 
     M[n, n] = B / q
-    M[n+1, n+1] = B
+    M[n + 1, n + 1] = B
 
     # LLL reduction
     L = M.LLL()
@@ -350,10 +354,7 @@ def ntru_lattice_attack(h, q, N):
         for j in range(N):
             H[i, j] = h[(j - i) % N]
 
-    M = block_matrix([
-        [q * identity_matrix(N), zero_matrix(N)],
-        [H, identity_matrix(N)]
-    ])
+    M = block_matrix([[q * identity_matrix(N), zero_matrix(N)], [H, identity_matrix(N)]])
 
     L = M.LLL()
 

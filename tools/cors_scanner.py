@@ -29,8 +29,7 @@ TEST_ORIGINS = [
 ]
 
 
-def check_single_origin(url: str, origin: str, sess: requests.Session,
-                        timeout: float) -> Dict:
+def check_single_origin(url: str, origin: str, sess: requests.Session, timeout: float) -> Dict:
     finding = {"origin": origin, "acao": "", "credentialed": False}
     try:
         r = sess.get(url, headers={"Origin": origin}, timeout=timeout)
@@ -46,8 +45,7 @@ def check_single_origin(url: str, origin: str, sess: requests.Session,
     return finding
 
 
-def check_options_preflight(url: str, sess: requests.Session,
-                            timeout: float) -> Dict:
+def check_options_preflight(url: str, sess: requests.Session, timeout: float) -> Dict:
     finding = {"method": "OPTIONS", "acao": "", "allow_methods": "", "expose_headers": ""}
     try:
         r = sess.options(url, timeout=timeout)
@@ -59,8 +57,9 @@ def check_options_preflight(url: str, sess: requests.Session,
     return finding
 
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -88,10 +87,9 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
         r = sess.get(url, timeout=timeout)
         vary = r.headers.get("Vary", "")
         if vary and "origin" not in vary.lower():
-            result["findings"].append({
-                "note": "Vary header missing 'Origin' (caching risk)",
-                "vary": vary
-            })
+            result["findings"].append(
+                {"note": "Vary header missing 'Origin' (caching risk)", "vary": vary}
+            )
     except Exception as e:
         logger.debug("cors vary check: %s", e)
 

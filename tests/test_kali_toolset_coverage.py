@@ -79,8 +79,9 @@ def test_no_kali_returns_error(monkeypatch, name, func, key):
 CHECKED_TOOL_WRAPPERS = [c for c in ALL_WRAPPERS if c[0] != "sqlmap_extract"]
 
 
-@pytest.mark.parametrize("name,func,key", CHECKED_TOOL_WRAPPERS,
-                         ids=[c[0] for c in CHECKED_TOOL_WRAPPERS])
+@pytest.mark.parametrize(
+    "name,func,key", CHECKED_TOOL_WRAPPERS, ids=[c[0] for c in CHECKED_TOOL_WRAPPERS]
+)
 def test_tool_missing_returns_error(monkeypatch, name, func, key):
     _no_kali(monkeypatch, missing=True)
     r = func()
@@ -129,10 +130,12 @@ def test_sqlmap_detect_command_construction(kali):
 
 
 def test_sqlmap_detect_not_injectable_short_circuit(kali):
-    kali.queue = [{
-        "success": True,
-        "stdout": "all tested parameters do not appear to be injectable ... not injectable",
-    }]
+    kali.queue = [
+        {
+            "success": True,
+            "stdout": "all tested parameters do not appear to be injectable ... not injectable",
+        }
+    ]
     r = kt.sqlmap_detect("http://t/", "p")
     assert r["vulnerable"] is False
     assert r["note"] == "sqlmap: not injectable"
@@ -153,8 +156,10 @@ def test_sqlmap_detect_vulnerable_parses_metadata(kali):
 
 def test_sqlmap_detect_reads_retrieved_values_from_log(kali):
     kali.queue = [{"success": True, "stdout": "is vulnerable\n"}]
-    kali.any_log_lines = ["[12:00:02] [INFO] retrieved: 'admin'",
-                          "[12:00:03] [INFO] retrieved: 's3cret'"]
+    kali.any_log_lines = [
+        "[12:00:02] [INFO] retrieved: 'admin'",
+        "[12:00:03] [INFO] retrieved: 's3cret'",
+    ]
     r = kt.sqlmap_detect("http://t/", "p")
     assert r["data"]["retrieved"] == ["admin", "s3cret"]
 
@@ -180,11 +185,7 @@ def test_sqlmap_detect_elapsed_measured(kali):
 
 EXTRACT_DBS_OUT = "[*] information_schema\n[*] app\n[*] *\n"
 EXTRACT_TABLES_OUT = "+-------+\n| users |\n| orders |\n+-------+\n"
-EXTRACT_DUMP_OUT = (
-    "Table: users\n"
-    "[2 entries]\n"
-    "+----+\n| a |\n| b |\n+----+\n"
-)
+EXTRACT_DUMP_OUT = "Table: users\n[2 entries]\n+----+\n| a |\n| b |\n+----+\n"
 
 
 def test_sqlmap_extract_full_flow(kali):
@@ -250,10 +251,12 @@ def test_nmap_full_service_scan_command(kali):
 
 
 def test_nmap_parses_open_and_filtered_states(kali):
-    kali.queue = [{
-        "success": True,
-        "stdout": "Host: x\tPorts: 443/open/tcp//https///, 123/filtered/tcp///\n" + "B" * 5000,
-    }]
+    kali.queue = [
+        {
+            "success": True,
+            "stdout": "Host: x\tPorts: 443/open/tcp//https///, 123/filtered/tcp///\n" + "B" * 5000,
+        }
+    ]
     r = kt.nmap_scan("x")
     assert r["ports"] == [
         {"port": 443, "state": "open", "protocol": "tcp"},
@@ -280,9 +283,12 @@ def test_nmap_quotes_dangerous_target(kali):
 # ffuf / nuclei / hydra / nikto / gobuster / wpscan
 # ---------------------------------------------------------------------------
 
+
 def test_ffuf_json_results(kali):
-    payload = ('{"results": [{"input": {"FUZZ": "admin"}, "status": 200, "length": 42},'
-               ' {"input": {"FUZZ": "api"}, "status": 301, "length": 0}]}')
+    payload = (
+        '{"results": [{"input": {"FUZZ": "admin"}, "status": 200, "length": 42},'
+        ' {"input": {"FUZZ": "api"}, "status": 301, "length": 0}]}'
+    )
     kali.queue = [{"success": True, "stdout": payload}]
     r = kt.ffuf_discover("http://t/", extensions="php,bak")
     cmd = kali.calls[0]["cmd"]
@@ -312,10 +318,15 @@ def test_nuclei_jsonl_findings(kali):
     ]
     kali.queue = [{"success": True, "stdout": "\n".join(lines)}]
     r = kt.nuclei_scan("http://t/")
-    assert r["findings"] == [{
-        "template": "CVE-2021-1", "name": "RCE", "severity": "critical",
-        "matched": "http://t/x", "type": "http",
-    }]
+    assert r["findings"] == [
+        {
+            "template": "CVE-2021-1",
+            "name": "RCE",
+            "severity": "critical",
+            "matched": "http://t/x",
+            "type": "http",
+        }
+    ]
     assert r["count"] == 1
 
 
@@ -347,14 +358,21 @@ def test_hydra_single_user_with_port(kali):
 
 
 def test_hydra_parses_credentials(kali):
-    kali.queue = [{
-        "success": False,
-        "stdout": "[2222][ftp] host: 10.0.0.5   login: root   password: toor\n",
-    }]
+    kali.queue = [
+        {
+            "success": False,
+            "stdout": "[2222][ftp] host: 10.0.0.5   login: root   password: toor\n",
+        }
+    ]
     r = kt.hydra_brute("10.0.0.5")
-    assert r["credentials"] == [{
-        "port": 2222, "service": "ftp", "username": "root", "password": "toor",
-    }]
+    assert r["credentials"] == [
+        {
+            "port": 2222,
+            "service": "ftp",
+            "username": "root",
+            "password": "toor",
+        }
+    ]
     assert r["success"] is True
     assert r["count"] == 1
 
@@ -367,17 +385,22 @@ def test_hydra_success_reflects_run_without_credentials(kali):
 
 
 def test_nikto_json_list(kali):
-    payload = ('[{"id": "999103", "method": "GET", "url": "/admin/",'
-               ' "msg": "Directory indexing found"}]')
+    payload = (
+        '[{"id": "999103", "method": "GET", "url": "/admin/", "msg": "Directory indexing found"}]'
+    )
     kali.queue = [{"success": True, "stdout": payload}]
     r = kt.nikto_scan("http://t/", max_time=30, ssl=True)
     assert "-ssl" in kali.calls[0]["cmd"]
     assert "-maxtime 30" in kali.calls[0]["cmd"]
     assert kali.calls[0]["timeout"] == 60
-    assert r["findings"] == [{
-        "id": "999103", "method": "GET", "url": "/admin/",
-        "description": "Directory indexing found",
-    }]
+    assert r["findings"] == [
+        {
+            "id": "999103",
+            "method": "GET",
+            "url": "/admin/",
+            "description": "Directory indexing found",
+        }
+    ]
 
 
 def test_nikto_text_fallback(kali):
@@ -406,16 +429,23 @@ def test_gobuster_without_extensions(kali):
 
 
 def test_wpscan_json_findings(kali):
-    payload = ('{"findings": [{"type": "plugin", "title": "XSS in Plugin",'
-               ' "severity": "high", "fixed_in": "1.2.3"}]}')
+    payload = (
+        '{"findings": [{"type": "plugin", "title": "XSS in Plugin",'
+        ' "severity": "high", "fixed_in": "1.2.3"}]}'
+    )
     kali.queue = [{"success": True, "stdout": payload}]
     r = kt.wpscan_scan("http://t/", enumerate_all=True, api_token="tok123")
     cmd = kali.calls[0]["cmd"]
     assert "--enumerate ap,at,tt,cb,dbe,u,m" in cmd
     assert "--api-token tok123" in cmd
-    assert r["vulnerabilities"] == [{
-        "type": "plugin", "title": "XSS in Plugin", "severity": "high", "fixed_in": "1.2.3",
-    }]
+    assert r["vulnerabilities"] == [
+        {
+            "type": "plugin",
+            "title": "XSS in Plugin",
+            "severity": "high",
+            "fixed_in": "1.2.3",
+        }
+    ]
 
 
 def test_wpscan_text_fallback_and_no_enumerate(kali):
@@ -430,14 +460,20 @@ def test_wpscan_text_fallback_and_no_enumerate(kali):
 # metasploit
 # ---------------------------------------------------------------------------
 
+
 def test_metasploit_run_builds_rc_file_and_cleans_up(kali):
     kali.queue = [
         {"success": True, "exit_code": 0, "stdout": "ok", "stderr": ""},
         {"success": True, "exit_code": 0, "stdout": "", "stderr": ""},
     ]
-    r = kt.metasploit_run("use exploit/x", payload="reverse_tcp",
-                          lhost="10.0.0.1", lport=4444,
-                          rhost="10.0.0.9", rport=8080)
+    r = kt.metasploit_run(
+        "use exploit/x",
+        payload="reverse_tcp",
+        lhost="10.0.0.1",
+        lport=4444,
+        rhost="10.0.0.9",
+        rport=8080,
+    )
     rc_path = list(kali.written)[0]
     rc = kali.written[rc_path]
     assert rc_path.startswith("/tmp/aimy_msf_") and rc_path.endswith(".rc")
@@ -473,14 +509,25 @@ def test_metasploit_exploit_builds_script(monkeypatch):
 
     def fake_run(resource_script, payload="", lhost="", lport=4444, rhost="", rport=80):
         captured["rc"] = resource_script
-        captured["kwargs"] = {"payload": payload, "lhost": lhost, "lport": lport,
-                              "rhost": rhost, "rport": rport}
+        captured["kwargs"] = {
+            "payload": payload,
+            "lhost": lhost,
+            "lport": lport,
+            "rhost": rhost,
+            "rport": rport,
+        }
         return {"success": True}
 
     monkeypatch.setattr(kt, "metasploit_run", fake_run)
-    kt.metasploit_exploit("exploit/multi/http/x", "10.0.0.9", rport=8443,
-                          payload="windows/meterpreter", lhost="10.0.0.1",
-                          lport=5555, ssl=True)
+    kt.metasploit_exploit(
+        "exploit/multi/http/x",
+        "10.0.0.9",
+        rport=8443,
+        payload="windows/meterpreter",
+        lhost="10.0.0.1",
+        lport=5555,
+        ssl=True,
+    )
     rc = captured["rc"]
     assert rc.splitlines()[0] == "use exploit/multi/http/x"
     assert "set RHOSTS 10.0.0.9" in rc
@@ -490,8 +537,13 @@ def test_metasploit_exploit_builds_script(monkeypatch):
     assert "set SSL true" in rc
     assert "set ExitOnSession false" in rc
     assert "run -j" in rc
-    assert captured["kwargs"] == {"payload": "windows/meterpreter", "lhost": "10.0.0.1",
-                                  "lport": 5555, "rhost": "10.0.0.9", "rport": 8443}
+    assert captured["kwargs"] == {
+        "payload": "windows/meterpreter",
+        "lhost": "10.0.0.1",
+        "lport": 5555,
+        "rhost": "10.0.0.9",
+        "rport": 8443,
+    }
 
 
 def test_metasploit_exploit_without_lhost_lport(monkeypatch):
@@ -512,6 +564,7 @@ def test_metasploit_exploit_without_lhost_lport(monkeypatch):
 # ---------------------------------------------------------------------------
 # autoexploit
 # ---------------------------------------------------------------------------
+
 
 def test_autoexploit_sqli(monkeypatch):
     m = mock.Mock(return_value={"vulnerable": True, "data": {"users": ["a"]}})
@@ -541,8 +594,9 @@ def test_autoexploit_http_uses_nikto(monkeypatch):
 def test_autoexploit_service_uses_hydra(monkeypatch):
     m = mock.Mock(return_value={"credentials": [{"user": "root"}]})
     monkeypatch.setattr(kt, "hydra_brute", m)
-    r = kt.autoexploit("http://t/", "service",
-                       extra={"service": "ftp", "user": "root", "target": "10.0.0.5"})
+    r = kt.autoexploit(
+        "http://t/", "service", extra={"service": "ftp", "user": "root", "target": "10.0.0.5"}
+    )
     assert r["success"] is True
     assert r["credentials"] == [{"user": "root"}]
     assert m.call_args.kwargs["service"] == "ftp"
@@ -556,11 +610,14 @@ def test_autoexploit_wordpress(monkeypatch):
     assert "wpscan" in r["exploits"]
 
 
-@pytest.mark.parametrize("url,expected_host,expected_port", [
-    ("http://target.com/x", "target.com", 80),
-    ("https://target.com/x", "target.com", 443),
-    ("https://target.com:8443/x", "target.com", 8443),
-])
+@pytest.mark.parametrize(
+    "url,expected_host,expected_port",
+    [
+        ("http://target.com/x", "target.com", 80),
+        ("https://target.com/x", "target.com", 443),
+        ("https://target.com:8443/x", "target.com", 8443),
+    ],
+)
 def test_autoexploit_cmdi_metasploit_url_mapping(monkeypatch, url, expected_host, expected_port):
     m = mock.Mock(return_value={"success": True})
     monkeypatch.setattr(kt, "metasploit_exploit", m)
@@ -587,6 +644,7 @@ def test_autoexploit_unknown_type():
 # whatweb
 # ---------------------------------------------------------------------------
 
+
 def test_whatweb_extracts_technologies(kali):
     kali.queue = [{"success": True, "stdout": "WordPress[5.8], Apache[2.4.41]\n"}]
     r = kt.whatweb_identify("http://t/")
@@ -604,6 +662,7 @@ def test_whatweb_no_technologies(kali):
 # ---------------------------------------------------------------------------
 # misc structural checks
 # ---------------------------------------------------------------------------
+
 
 def test_kali_exploit_map_contents():
     assert kt.KALI_EXPLOIT_MAP["sqli"]["func"] == "sqlmap_detect"

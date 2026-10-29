@@ -109,11 +109,15 @@ class SessionStore:
         if rows:
             sid = rows[0]["id"]
             if target:
-                cur.execute("UPDATE sessions SET target=?, updated_at=? WHERE id=?",
-                            (target, time.time(), sid))
+                cur.execute(
+                    "UPDATE sessions SET target=?, updated_at=? WHERE id=?",
+                    (target, time.time(), sid),
+                )
             return sid
-        cur.execute("INSERT INTO sessions (target, created_at, updated_at, mode) VALUES (?, ?, ?, ?)",
-                    (target, time.time(), time.time(), mode))
+        cur.execute(
+            "INSERT INTO sessions (target, created_at, updated_at, mode) VALUES (?, ?, ?, ?)",
+            (target, time.time(), time.time(), mode),
+        )
         self._conn.commit()
         return cur.lastrowid
 
@@ -121,23 +125,32 @@ class SessionStore:
         return self._ensure_session()
 
     # === Context KV ===
-    def save_context(self, key: str, value: Any, source: str = "unknown",
-                     confidence: float = 0.8, tags: Optional[List[str]] = None,
-                     session_id: Optional[int] = None):
+    def save_context(
+        self,
+        key: str,
+        value: Any,
+        source: str = "unknown",
+        confidence: float = 0.8,
+        tags: Optional[List[str]] = None,
+        session_id: Optional[int] = None,
+    ):
         sid = session_id or self._ensure_session()
         v = json.dumps(value) if not isinstance(value, str) else value
         tags_json = json.dumps(tags or [])
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO context_kv (session_id, key, value, source, confidence, timestamp, tags)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (sid, key, v, source, confidence, time.time(), tags_json))
+        """,
+            (sid, key, v, source, confidence, time.time(), tags_json),
+        )
         self._conn.commit()
 
     def load_all_context(self, session_id: Optional[int] = None) -> Dict[str, Dict]:
         sid = session_id or self._ensure_session()
         rows = self._conn.execute(
             "SELECT key, value, source, confidence, timestamp, tags FROM context_kv WHERE session_id=?",
-            (sid,)
+            (sid,),
         ).fetchall()
         result = {}
         for r in rows:
@@ -155,20 +168,43 @@ class SessionStore:
         return result
 
     # === Findings ===
-    def save_finding(self, finding_id: str, vuln_type: str, url: str,
-                     param: str = "", payload: str = "", severity: str = "medium",
-                     confidence: float = 0.5, detail: Optional[Dict] = None,
-                     session_id: Optional[int] = None):
+    def save_finding(
+        self,
+        finding_id: str,
+        vuln_type: str,
+        url: str,
+        param: str = "",
+        payload: str = "",
+        severity: str = "medium",
+        confidence: float = 0.5,
+        detail: Optional[Dict] = None,
+        session_id: Optional[int] = None,
+    ):
         sid = session_id or self._ensure_session()
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO findings (session_id, finding_id, vuln_type, url, param,
                 payload, severity, confidence, detail, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (sid, finding_id, vuln_type, url, param, payload, severity,
-              confidence, json.dumps(detail or {}), time.time()))
+        """,
+            (
+                sid,
+                finding_id,
+                vuln_type,
+                url,
+                param,
+                payload,
+                severity,
+                confidence,
+                json.dumps(detail or {}),
+                time.time(),
+            ),
+        )
         self._conn.commit()
 
-    def load_findings(self, session_id: Optional[int] = None, vuln_type: Optional[str] = None) -> List[Dict]:
+    def load_findings(
+        self, session_id: Optional[int] = None, vuln_type: Optional[str] = None
+    ) -> List[Dict]:
         sid = session_id or self._ensure_session()
         q = "SELECT * FROM findings WHERE session_id=?"
         params: List[Any] = [sid]
@@ -190,17 +226,19 @@ class SessionStore:
     def save_phase(self, phase: str, state: Any, session_id: Optional[int] = None):
         sid = session_id or self._ensure_session()
         s = json.dumps(state) if not isinstance(state, str) else state
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO phase_state (session_id, phase, state, updated_at)
             VALUES (?, ?, ?, ?)
-        """, (sid, phase, s, time.time()))
+        """,
+            (sid, phase, s, time.time()),
+        )
         self._conn.commit()
 
     def load_phase(self, phase: str, session_id: Optional[int] = None) -> Optional[Any]:
         sid = session_id or self._ensure_session()
         row = self._conn.execute(
-            "SELECT state FROM phase_state WHERE session_id=? AND phase=?",
-            (sid, phase)
+            "SELECT state FROM phase_state WHERE session_id=? AND phase=?", (sid, phase)
         ).fetchone()
         if row:
             try:
@@ -232,10 +270,13 @@ class SessionStore:
                 val = json.dumps(v)
             else:
                 val = str(v)
-            self._conn.execute("""
+            self._conn.execute(
+                """
                 INSERT OR REPLACE INTO vuln_context (session_id, field, value)
                 VALUES (?, ?, ?)
-            """, (sid, k, val))
+            """,
+                (sid, k, val),
+            )
         self._conn.commit()
 
     def load_vuln_context(self, session_id: Optional[int] = None) -> Dict[str, Any]:
@@ -260,9 +301,7 @@ class SessionStore:
 
     def load_report(self, session_id: Optional[int] = None) -> Optional[Dict]:
         sid = session_id or self._ensure_session()
-        row = self._conn.execute(
-            "SELECT report FROM sessions WHERE id=?", (sid,)
-        ).fetchone()
+        row = self._conn.execute("SELECT report FROM sessions WHERE id=?", (sid,)).fetchone()
         if row and row["report"]:
             try:
                 return json.loads(row["report"])

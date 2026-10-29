@@ -34,9 +34,9 @@ class ConstraintGraph:
         self._param_names: Set[str] = set()
         self._tested_params: Set[str] = set()
 
-    def ingest_request(self, url: str, body: Optional[str],
-                       params: Dict[str, str] = None):
+    def ingest_request(self, url: str, body: Optional[str], params: Dict[str, str] = None):
         from urllib.parse import parse_qs, urlparse
+
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
         for k, vals in qs.items():
@@ -77,9 +77,22 @@ class ConstraintGraph:
 
     def _extract_from_json(self, data: Any, prefix: str):
         if isinstance(data, dict):
-            numerical_fields = {"price", "amount", "total", "cost", "fee",
-                                "discount", "quantity", "qty", "count",
-                                "balance", "credit", "limit", "max", "min"}
+            numerical_fields = {
+                "price",
+                "amount",
+                "total",
+                "cost",
+                "fee",
+                "discount",
+                "quantity",
+                "qty",
+                "count",
+                "balance",
+                "credit",
+                "limit",
+                "max",
+                "min",
+            }
             for k, v in data.items():
                 self._param_names.add(k)
                 if isinstance(v, (int, float)) and k.lower() in numerical_fields:
@@ -92,11 +105,11 @@ class ConstraintGraph:
                 self._extract_from_json(item, prefix)
 
     def _extract_params_from_html(self, html: str):
-        for m in re.finditer(r'name=["\']([\w_]+)["\']\s*value=["\']([^"\']*)["\']',
-                             html, re.IGNORECASE):
+        for m in re.finditer(
+            r'name=["\']([\w_]+)["\']\s*value=["\']([^"\']*)["\']', html, re.IGNORECASE
+        ):
             self._add_param_value(m.group(1), m.group(2))
-        for m in re.finditer(r'["\']([\w_]+)["\']\s*:\s*["\']?([^"\'}\s,]+)',
-                             html):
+        for m in re.finditer(r'["\']([\w_]+)["\']\s*:\s*["\']?([^"\'}\s,]+)', html):
             name = m.group(1)
             val = m.group(2).strip("\"'")
             if len(name) > 1 and len(val) < 100:
@@ -126,11 +139,9 @@ class ConstraintGraph:
                 for pair_idx in range(min_len):
                     av, bv = a_vals[pair_idx], b_vals[pair_idx]
                     if bv != 0 and abs(av * 2 - bv) < 0.01:
-                        found.append(Relationship(
-                            a_name, b_name, "a*2=b", 0.8))
+                        found.append(Relationship(a_name, b_name, "a*2=b", 0.8))
                     if bv != 0 and abs(av * bv - 1) < 0.01:
-                        found.append(Relationship(
-                            a_name, b_name, "a*b=1", 0.8))
+                        found.append(Relationship(a_name, b_name, "a*b=1", 0.8))
         self.relationships.extend(found)
         return found
 
@@ -146,53 +157,66 @@ class ConstraintGraph:
 
         if found_limit:
             p = list(found_limit)[0]
-            constraints.append(Constraint(
-                type="limit_manipulation",
-                description=f"Parameter '{p}' may control a result/page limit",
-                params=[p],
-                severity="medium"))
+            constraints.append(
+                Constraint(
+                    type="limit_manipulation",
+                    description=f"Parameter '{p}' may control a result/page limit",
+                    params=[p],
+                    severity="medium",
+                )
+            )
             self._add_mutation_suggestion(p, ["0", "-1", "999999", "100000"])
 
         if found_price:
             p = list(found_price)[0]
-            constraints.append(Constraint(
-                type="price_tamper",
-                description=f"Parameter '{p}' may control pricing",
-                params=[p],
-                severity="high"))
+            constraints.append(
+                Constraint(
+                    type="price_tamper",
+                    description=f"Parameter '{p}' may control pricing",
+                    params=[p],
+                    severity="high",
+                )
+            )
             self._add_mutation_suggestion(p, ["0", "-1", "999999", "0.01"])
 
         if found_price and found_qty:
-            constraints.append(Constraint(
-                type="price_qty_mismatch",
-                description=f"Price ({','.join(found_price)}) and quantity "
-                            f"({','.join(found_qty)}) detected—test total calc",
-                params=list(found_price | found_qty),
-                severity="high"))
+            constraints.append(
+                Constraint(
+                    type="price_qty_mismatch",
+                    description=f"Price ({','.join(found_price)}) and quantity "
+                    f"({','.join(found_qty)}) detected—test total calc",
+                    params=list(found_price | found_qty),
+                    severity="high",
+                )
+            )
 
         for param in self._param_names:
             if "percent" in param.lower() or "discount" in param.lower():
-                constraints.append(Constraint(
-                    type="percentage_abuse",
-                    description=f"Percentage/discount param '{param}'",
-                    params=[param],
-                    severity="high"))
-                self._add_mutation_suggestion(param,
-                    ["100", "-100", "9999", "0", "1e10"])
+                constraints.append(
+                    Constraint(
+                        type="percentage_abuse",
+                        description=f"Percentage/discount param '{param}'",
+                        params=[param],
+                        severity="high",
+                    )
+                )
+                self._add_mutation_suggestion(param, ["100", "-100", "9999", "0", "1e10"])
 
-            if any(k in param.lower() for k in ("admin", "role", "is_",
-                                                  "permission", "group")):
-                constraints.append(Constraint(
-                    type="mass_assignment",
-                    description=f"Privilege-related param '{param}'",
-                    params=[param],
-                    severity="critical"))
+            if any(k in param.lower() for k in ("admin", "role", "is_", "permission", "group")):
+                constraints.append(
+                    Constraint(
+                        type="mass_assignment",
+                        description=f"Privilege-related param '{param}'",
+                        params=[param],
+                        severity="critical",
+                    )
+                )
 
         self.constraints = constraints
         return constraints
 
     def _add_mutation_suggestion(self, param: str, values: List[str]):
-        if not hasattr(self, '_mutation_suggestions'):
+        if not hasattr(self, "_mutation_suggestions"):
             self._mutation_suggestions: Dict[str, List[str]] = {}
         self._mutation_suggestions.setdefault(param, [])
         for v in values:
@@ -200,18 +224,25 @@ class ConstraintGraph:
                 self._mutation_suggestions[param].append(v)
 
     def get_mutation_suggestions(self) -> Dict[str, List[str]]:
-        return getattr(self, '_mutation_suggestions', {})
+        return getattr(self, "_mutation_suggestions", {})
 
     def summary(self) -> Dict:
         return {
             "params_discovered": len(self._param_names),
             "param_values": {k: v[:5] for k, v in self._param_values.items()},
-            "constraints": [{"type": c.type, "desc": c.description,
-                            "params": c.params, "severity": c.severity}
-                           for c in self.constraints],
-            "relationships": [{"a": r.source_param, "b": r.target_param,
-                              "relation": r.relation, "confidence": r.confidence}
-                             for r in self.relationships],
+            "constraints": [
+                {"type": c.type, "desc": c.description, "params": c.params, "severity": c.severity}
+                for c in self.constraints
+            ],
+            "relationships": [
+                {
+                    "a": r.source_param,
+                    "b": r.target_param,
+                    "relation": r.relation,
+                    "confidence": r.confidence,
+                }
+                for r in self.relationships
+            ],
             "mutation_suggestions": self.get_mutation_suggestions(),
         }
 
@@ -225,13 +256,15 @@ class ConstraintBreaker:
         suggestions = self.graph.get_mutation_suggestions()
         if param in suggestions:
             for val in suggestions[param]:
-                tests.append({
-                    "technique": "constraint_break",
-                    "param": param,
-                    "value": val,
-                    "url": url,
-                    "rationale": f"Suggested mutation for '{param}'",
-                })
+                tests.append(
+                    {
+                        "technique": "constraint_break",
+                        "param": param,
+                        "value": val,
+                        "url": url,
+                        "rationale": f"Suggested mutation for '{param}'",
+                    }
+                )
         param_lower = param.lower()
         if param_lower in ("price", "amount", "total", "cost", "fee"):
             for tactic in [
@@ -244,13 +277,15 @@ class ConstraintBreaker:
                 ("null", "null"),
                 ("string_injection", "true"),
             ]:
-                tests.append({
-                    "technique": "price_manipulation",
-                    "variant": tactic[0],
-                    "param": param,
-                    "value": tactic[1],
-                    "url": url,
-                })
+                tests.append(
+                    {
+                        "technique": "price_manipulation",
+                        "variant": tactic[0],
+                        "param": param,
+                        "value": tactic[1],
+                        "url": url,
+                    }
+                )
         if any(k in param_lower for k in ("qty", "quantity", "count")):
             for tactic in [
                 ("negative", "-1"),
@@ -259,18 +294,21 @@ class ConstraintBreaker:
                 ("fraction", "0.5"),
                 ("string", "null"),
             ]:
-                tests.append({
-                    "technique": "quantity_abuse",
-                    "variant": tactic[0],
-                    "param": param,
-                    "value": tactic[1],
-                    "url": url,
-                })
+                tests.append(
+                    {
+                        "technique": "quantity_abuse",
+                        "variant": tactic[0],
+                        "param": param,
+                        "value": tactic[1],
+                        "url": url,
+                    }
+                )
         return tests
 
 
 def check(url: str, param: str = None, sess=None, timeout: float = 10.0) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl

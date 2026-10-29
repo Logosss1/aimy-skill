@@ -28,12 +28,12 @@ LANG_CONFIGS = {
         "rules": {
             "SQL_INJECTION": {
                 "patterns": [
-                    r'(?:mysql|mysqli|pgsql|sqlite|oci)_query\s*\(\s*\$',
-                    r'\$.*->query\s*\(\s*\$',
-                    r'SELECT\s+.*\s+FROM\s+.*\$\s*\{?\s*',
-                    r'WHERE\s+.*=\s*\$_\s*(?:GET|POST|REQUEST|SERVER)',
-                    r'exec\s*\(\s*\$',
-                    r'pg_query\s*\(\s*\$',
+                    r"(?:mysql|mysqli|pgsql|sqlite|oci)_query\s*\(\s*\$",
+                    r"\$.*->query\s*\(\s*\$",
+                    r"SELECT\s+.*\s+FROM\s+.*\$\s*\{?\s*",
+                    r"WHERE\s+.*=\s*\$_\s*(?:GET|POST|REQUEST|SERVER)",
+                    r"exec\s*\(\s*\$",
+                    r"pg_query\s*\(\s*\$",
                 ],
                 "severity": "critical",
                 "cwe": "CWE-89",
@@ -41,14 +41,14 @@ LANG_CONFIGS = {
             },
             "COMMAND_INJECTION": {
                 "patterns": [
-                    r'shell_exec\s*\(\s*\$',
-                    r'exec\s*\(\s*\$',
-                    r'system\s*\(\s*\$',
-                    r'passthru\s*\(\s*\$',
-                    r'popen\s*\(\s*\$',
-                    r'`\s*\$',
-                    r'eval\s*\(\s*\$',
-                    r'assert\s*\(\s*\$',
+                    r"shell_exec\s*\(\s*\$",
+                    r"exec\s*\(\s*\$",
+                    r"system\s*\(\s*\$",
+                    r"passthru\s*\(\s*\$",
+                    r"popen\s*\(\s*\$",
+                    r"`\s*\$",
+                    r"eval\s*\(\s*\$",
+                    r"assert\s*\(\s*\$",
                 ],
                 "severity": "critical",
                 "cwe": "CWE-78",
@@ -56,14 +56,14 @@ LANG_CONFIGS = {
             },
             "FILE_OPERATION": {
                 "patterns": [
-                    r'include\s*\(\s*\$',
-                    r'require\s*\(\s*\$',
-                    r'include_once\s*\(\s*\$',
-                    r'require_once\s*\(\s*\$',
-                    r'fopen\s*\(\s*\$',
-                    r'file_get_contents\s*\(\s*\$',
-                    r'unlink\s*\(\s*\$',
-                    r'file_put_contents\s*\(\s*\$',
+                    r"include\s*\(\s*\$",
+                    r"require\s*\(\s*\$",
+                    r"include_once\s*\(\s*\$",
+                    r"require_once\s*\(\s*\$",
+                    r"fopen\s*\(\s*\$",
+                    r"file_get_contents\s*\(\s*\$",
+                    r"unlink\s*\(\s*\$",
+                    r"file_put_contents\s*\(\s*\$",
                 ],
                 "severity": "high",
                 "cwe": "CWE-98",
@@ -71,9 +71,9 @@ LANG_CONFIGS = {
             },
             "XSS": {
                 "patterns": [
-                    r'echo\s+\$_\s*(?:GET|POST|REQUEST|SERVER)',
-                    r'print\s+\$_\s*(?:GET|POST|REQUEST|SERVER)',
-                    r'echo\s+\$[a-z_]+\s*(?![;(])',
+                    r"echo\s+\$_\s*(?:GET|POST|REQUEST|SERVER)",
+                    r"print\s+\$_\s*(?:GET|POST|REQUEST|SERVER)",
+                    r"echo\s+\$[a-z_]+\s*(?![;(])",
                 ],
                 "severity": "high",
                 "cwe": "CWE-79",
@@ -81,7 +81,7 @@ LANG_CONFIGS = {
             },
             "DESERIALIZATION": {
                 "patterns": [
-                    r'unserialize\s*\(\s*\$',
+                    r"unserialize\s*\(\s*\$",
                 ],
                 "severity": "critical",
                 "cwe": "CWE-502",
@@ -89,9 +89,9 @@ LANG_CONFIGS = {
             },
             "SSRF": {
                 "patterns": [
-                    r'curl_exec\s*\(\s*\$',
-                    r'file_get_contents\s*\(\s*\$',
-                    r'fsockopen\s*\(\s*\$',
+                    r"curl_exec\s*\(\s*\$",
+                    r"file_get_contents\s*\(\s*\$",
+                    r"fsockopen\s*\(\s*\$",
                 ],
                 "severity": "high",
                 "cwe": "CWE-918",
@@ -104,51 +104,56 @@ LANG_CONFIGS = {
         "rules": {
             "SQL_INJECTION": {
                 "patterns": [
-                    r'Statement\s+\w+\s*=\s*.*\+',
-                    r'createStatement\s*\(\s*\)\s*.*execute',
+                    r"Statement\s+\w+\s*=\s*.*\+",
+                    r"createStatement\s*\(\s*\)\s*.*execute",
                     r'\.exec(?:ute)?Query\s*\(\s*"[^"]*\+\s*\w',
                     r'@Query\s*\(\s*value\s*=\s*"[^"]*:\s*\)',
                 ],
-                "severity": "critical", "cwe": "CWE-89",
+                "severity": "critical",
+                "cwe": "CWE-89",
                 "rec": "Use prepared statements (PreparedStatement) with parameterized queries",
             },
             "COMMAND_INJECTION": {
                 "patterns": [
-                    r'Runtime\.getRuntime\(\)\.exec\s*\(',
-                    r'ProcessBuilder\s*\([^)]*\$?\w*\s*\+',
+                    r"Runtime\.getRuntime\(\)\.exec\s*\(",
+                    r"ProcessBuilder\s*\([^)]*\$?\w*\s*\+",
                 ],
-                "severity": "critical", "cwe": "CWE-78",
+                "severity": "critical",
+                "cwe": "CWE-78",
                 "rec": "Avoid Runtime.exec() with user input; use ProcessBuilder with safe args",
             },
             "DESERIALIZATION": {
                 "patterns": [
-                    r'ObjectInputStream\s*',
-                    r'readObject\s*\(',
-                    r'XMLDecoder\s*\(',
-                    r'SnakeYAML.*load\s*\(',
-                    r'Jackson.*enableDefaultTyping',
+                    r"ObjectInputStream\s*",
+                    r"readObject\s*\(",
+                    r"XMLDecoder\s*\(",
+                    r"SnakeYAML.*load\s*\(",
+                    r"Jackson.*enableDefaultTyping",
                 ],
-                "severity": "critical", "cwe": "CWE-502",
+                "severity": "critical",
+                "cwe": "CWE-502",
                 "rec": "Validate serialized data; use safe deserialization libraries",
             },
             "XXE": {
                 "patterns": [
-                    r'DocumentBuilderFactory\.newInstance\s*\(',
-                    r'SAXParser',
-                    r'SAXReader',
-                    r'XMLReader',
-                    r'javax\.xml\.parsers',
+                    r"DocumentBuilderFactory\.newInstance\s*\(",
+                    r"SAXParser",
+                    r"SAXReader",
+                    r"XMLReader",
+                    r"javax\.xml\.parsers",
                 ],
-                "severity": "high", "cwe": "CWE-611",
+                "severity": "high",
+                "cwe": "CWE-611",
                 "rec": "Disable external entity processing: setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)",
             },
             "PATH_TRAVERSAL": {
                 "patterns": [
-                    r'new\s+File\s*\(\s*\$?\w*\s*\+',
-                    r'getAbsolutePath\s*\(',
-                    r'getCanonicalPath\s*\(',
+                    r"new\s+File\s*\(\s*\$?\w*\s*\+",
+                    r"getAbsolutePath\s*\(",
+                    r"getCanonicalPath\s*\(",
                 ],
-                "severity": "high", "cwe": "CWE-22",
+                "severity": "high",
+                "cwe": "CWE-22",
                 "rec": "Canonicalize and validate paths; block '..' sequences",
             },
         },
@@ -158,43 +163,47 @@ LANG_CONFIGS = {
         "rules": {
             "COMMAND_INJECTION": {
                 "patterns": [
-                    r'os\.system\s*\(',
-                    r'os\.popen\s*\(',
-                    r'subprocess\.call\s*\(.*shell=True',
-                    r'subprocess\.Popen\s*\(.*shell=True',
-                    r'eval\s*\(',
-                    r'exec\s*\(',
-                    r'__import__\s*\(',
-                    r'pickle\.loads?\s*\(',
+                    r"os\.system\s*\(",
+                    r"os\.popen\s*\(",
+                    r"subprocess\.call\s*\(.*shell=True",
+                    r"subprocess\.Popen\s*\(.*shell=True",
+                    r"eval\s*\(",
+                    r"exec\s*\(",
+                    r"__import__\s*\(",
+                    r"pickle\.loads?\s*\(",
                 ],
-                "severity": "critical", "cwe": "CWE-78",
+                "severity": "critical",
+                "cwe": "CWE-78",
                 "rec": "Use subprocess.run() with shell=False and argument lists",
             },
             "SQL_INJECTION": {
                 "patterns": [
                     r"execute\s*\(\s*f[" + "'" + r"]",
                     r"execute\s*\(\s*[" + "'" + r'][^"' + "'" + r"]*%[sd]",
-                    r'\.format\s*\(.*\)\s*.*execute',
+                    r"\.format\s*\(.*\)\s*.*execute",
                     r"cursor\.execute\s*\(\s*[" + "'" + r'][^"' + "'" + r"]*\+",
                 ],
-                "severity": "critical", "cwe": "CWE-89",
+                "severity": "critical",
+                "cwe": "CWE-89",
                 "rec": "Use parameterized queries: cursor.execute('SELECT * FROM t WHERE id=?', (id,))",
             },
             "SSRF": {
                 "patterns": [
-                    r'requests\.(?:get|post|put|patch)\s*\(\s*\w',
-                    r'urllib.*request.*urlopen\s*\(',
-                    r'httpx\.(?:get|post)\s*\(',
+                    r"requests\.(?:get|post|put|patch)\s*\(\s*\w",
+                    r"urllib.*request.*urlopen\s*\(",
+                    r"httpx\.(?:get|post)\s*\(",
                 ],
-                "severity": "high", "cwe": "CWE-918",
+                "severity": "high",
+                "cwe": "CWE-918",
                 "rec": "Validate URLs; block access to internal IP ranges",
             },
             "PATH_TRAVERSAL": {
                 "patterns": [
-                    r'open\s*\(\s*\w+\s*\+',
+                    r"open\s*\(\s*\w+\s*\+",
                     r"open\s*\(\s*f[" + "'" + r"]",
                 ],
-                "severity": "high", "cwe": "CWE-22",
+                "severity": "high",
+                "cwe": "CWE-22",
                 "rec": "Use os.path.realpath() and validate resolved paths",
             },
         },
@@ -204,42 +213,46 @@ LANG_CONFIGS = {
         "rules": {
             "COMMAND_INJECTION": {
                 "patterns": [
-                    r'exec\s*\(\s*`',
-                    r'execSync\s*\(\s*`',
-                    r'spawn\s*\(\s*.*shell:\s*true',
-                    r'eval\s*\(',
-                    r'Function\s*\(',
+                    r"exec\s*\(\s*`",
+                    r"execSync\s*\(\s*`",
+                    r"spawn\s*\(\s*.*shell:\s*true",
+                    r"eval\s*\(",
+                    r"Function\s*\(",
                 ],
-                "severity": "critical", "cwe": "CWE-78",
+                "severity": "critical",
+                "cwe": "CWE-78",
                 "rec": "Use execFile() instead of exec(); avoid shell: true",
             },
             "SQL_INJECTION": {
                 "patterns": [
-                    r'\.query\s*\(\s*`',
+                    r"\.query\s*\(\s*`",
                     r"\.query\s*\(\s*[" + "'" + r'][^"' + "'" + r"]*\+",
                 ],
-                "severity": "critical", "cwe": "CWE-89",
+                "severity": "critical",
+                "cwe": "CWE-89",
                 "rec": "Use parameterized queries with ? placeholders",
             },
             "SSRF": {
                 "patterns": [
-                    r'axios\.(?:get|post)\s*\(',
-                    r'fetch\s*\(\s*\w',
-                    r'request\s*\(\s*\{.*uri|url',
-                    r'got\s*\(',
+                    r"axios\.(?:get|post)\s*\(",
+                    r"fetch\s*\(\s*\w",
+                    r"request\s*\(\s*\{.*uri|url",
+                    r"got\s*\(",
                 ],
-                "severity": "high", "cwe": "CWE-918",
+                "severity": "high",
+                "cwe": "CWE-918",
                 "rec": "Validate URLs against allowlist",
             },
             "PROTOTYPE_POLLUTION": {
                 "patterns": [
-                    r'merge\s*\(\s*\{',
-                    r'assign\s*\(\s*\{\s*,\s*\w',
-                    r'clone\s*\(\s*\w',
+                    r"merge\s*\(\s*\{",
+                    r"assign\s*\(\s*\{\s*,\s*\w",
+                    r"clone\s*\(\s*\w",
                     r'\["__proto__"\]',
                     r'\["constructor"\]',
                 ],
-                "severity": "high", "cwe": "CWE-1321",
+                "severity": "high",
+                "cwe": "CWE-1321",
                 "rec": "Use Object.create(null) or Object.freeze() on prototypes",
             },
         },
@@ -249,40 +262,44 @@ LANG_CONFIGS = {
         "rules": {
             "SQL_INJECTION": {
                 "patterns": [
-                    r'\.Query\s*<\s*>\s*\(\s*\$?\w+\s*\+',
-                    r'SqlCommand\s*\([^)]*\+',
-                    r'\.ExecuteQuery\s*\([^)]*\+',
-                    r'\.FromSqlRaw\s*\(',
+                    r"\.Query\s*<\s*>\s*\(\s*\$?\w+\s*\+",
+                    r"SqlCommand\s*\([^)]*\+",
+                    r"\.ExecuteQuery\s*\([^)]*\+",
+                    r"\.FromSqlRaw\s*\(",
                 ],
-                "severity": "critical", "cwe": "CWE-89",
+                "severity": "critical",
+                "cwe": "CWE-89",
                 "rec": "Use parameterized SQL (SqlCommand with Parameters.Add)",
             },
             "DESERIALIZATION": {
                 "patterns": [
-                    r'BinaryFormatter\.Deserialize',
-                    r'SoapFormatter\.Deserialize',
-                    r'JavaScriptSerializer\.Deserialize',
-                    r'TypeNameHandling\.(?:All|Auto|Objects|Arrays)',
+                    r"BinaryFormatter\.Deserialize",
+                    r"SoapFormatter\.Deserialize",
+                    r"JavaScriptSerializer\.Deserialize",
+                    r"TypeNameHandling\.(?:All|Auto|Objects|Arrays)",
                 ],
-                "severity": "critical", "cwe": "CWE-502",
+                "severity": "critical",
+                "cwe": "CWE-502",
                 "rec": "Use Newtonsoft.Json with SerializationBinder or System.Text.Json",
             },
             "XXE": {
                 "patterns": [
-                    r'XmlDocument\s*\(',
-                    r'XPathDocument\s*\(',
-                    r'XmlReader\.Create',
+                    r"XmlDocument\s*\(",
+                    r"XPathDocument\s*\(",
+                    r"XmlReader\.Create",
                 ],
-                "severity": "high", "cwe": "CWE-611",
+                "severity": "high",
+                "cwe": "CWE-611",
                 "rec": "Set XmlReaderSettings.DtdProcessing = DtdProcessing.Prohibit",
             },
             "PATH_TRAVERSAL": {
                 "patterns": [
-                    r'File\.ReadAllText\s*\([^)]*\+',
-                    r'File\.WriteAllText\s*\([^)]*\+',
-                    r'Path\.Combine\s*\([^)]*\+\s*\w',
+                    r"File\.ReadAllText\s*\([^)]*\+",
+                    r"File\.WriteAllText\s*\([^)]*\+",
+                    r"Path\.Combine\s*\([^)]*\+\s*\w",
                 ],
-                "severity": "high", "cwe": "CWE-22",
+                "severity": "high",
+                "cwe": "CWE-22",
                 "rec": "Use Path.GetFullPath() and verify it is within allowed directory",
             },
         },
@@ -292,13 +309,14 @@ LANG_CONFIGS = {
         "rules": {
             "EXPRESSION_LANGUAGE": {
                 "patterns": [
-                    r'\$\{param',
-                    r'\$\{request',
-                    r'\$\{session',
-                    r'\$\{cookie',
-                    r'\$\{header',
+                    r"\$\{param",
+                    r"\$\{request",
+                    r"\$\{session",
+                    r"\$\{cookie",
+                    r"\$\{header",
                 ],
-                "severity": "high", "cwe": "CWE-917",
+                "severity": "high",
+                "cwe": "CWE-917",
                 "rec": "Use JSTL escape functions (fn:escapeXml) for user-controlled values in EL",
             },
         },
@@ -330,16 +348,19 @@ class CodeAuditor:
             for pattern in rule["patterns"]:
                 for i, line in enumerate(lines, 1):
                     if re.search(pattern, line):
-                        findings.append(AuditFinding(
-                            file=filepath,
-                            line=i,
-                            severity=rule["severity"],
-                            rule_id=rule_id,
-                            description="[%s] %s in %s" % (config["name"], rule_id, os.path.basename(filepath)),
-                            code_snippet=line.strip()[:150],
-                            recommendation=rule["rec"],
-                            cwe=rule.get("cwe"),
-                        ))
+                        findings.append(
+                            AuditFinding(
+                                file=filepath,
+                                line=i,
+                                severity=rule["severity"],
+                                rule_id=rule_id,
+                                description="[%s] %s in %s"
+                                % (config["name"], rule_id, os.path.basename(filepath)),
+                                code_snippet=line.strip()[:150],
+                                recommendation=rule["rec"],
+                                cwe=rule.get("cwe"),
+                            )
+                        )
                         break
         return findings
 
@@ -350,7 +371,11 @@ class CodeAuditor:
                 all_files.append(path)
             else:
                 for root, dirs, files in os.walk(path):
-                    dirs[:] = [d for d in dirs if d not in ("node_modules", "vendor", ".git", "__pycache__")]
+                    dirs[:] = [
+                        d
+                        for d in dirs
+                        if d not in ("node_modules", "vendor", ".git", "__pycache__")
+                    ]
                     for f in files:
                         ext = os.path.splitext(f)[1].lower()
                         if ext in LANG_CONFIGS:
@@ -374,9 +399,15 @@ class CodeAuditor:
             "by_severity": {k: len(v) for k, v in by_severity.items()},
             "by_type": {k: len(v) for k, v in by_type.items()},
             "findings": [
-                {"file": f.file, "line": f.line, "severity": f.severity,
-                 "rule": f.rule_id, "snippet": f.code_snippet,
-                 "cwe": f.cwe, "rec": f.recommendation}
+                {
+                    "file": f.file,
+                    "line": f.line,
+                    "severity": f.severity,
+                    "rule": f.rule_id,
+                    "snippet": f.code_snippet,
+                    "cwe": f.cwe,
+                    "rec": f.recommendation,
+                }
                 for f in self.findings
             ],
         }

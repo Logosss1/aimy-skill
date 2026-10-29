@@ -45,18 +45,27 @@ def _solve_challenge(html: str, base_url: str) -> Optional[str]:
     if not aes_js:
         logger.debug("Cannot solve challenge: aes.js not available")
         return None
-    js_code = aes_js + f"""
+    js_code = (
+        aes_js
+        + f"""
 function toNumbers(d){{var e=[];d.replace(/(..)/g,function(d){{e.push(parseInt(d,16))}});return e}}
 function toHex(){{for(var d=[],d=1==arguments.length&&arguments[0].constructor==Array?arguments[0]:arguments,e='',f=0;f<d.length;f++)e+=(16>d[f]?'0':'')+d[f].toString(16);return e.toLowerCase()}}
 try {{ console.log(toHex(slowAES.decrypt(toNumbers("{c}"),2,toNumbers("{a}"),toNumbers("{b}")))); }} catch(e) {{ console.error(e.message); }}
 """
+    )
     try:
         result = subprocess.run(
             ["node", "-e", js_code],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         cookie_val = result.stdout.strip()
-        if cookie_val and len(cookie_val) == 32 and all(c in "0123456789abcdef" for c in cookie_val):
+        if (
+            cookie_val
+            and len(cookie_val) == 32
+            and all(c in "0123456789abcdef" for c in cookie_val)
+        ):
             logger.debug("Solved anti-bot challenge: __test=%s", cookie_val)
             return cookie_val
         logger.debug("Challenge solver output invalid: %s", result.stdout.strip()[:50])
@@ -80,8 +89,14 @@ class _RawHttpClient:
         self.timeout = timeout
         self._ctx = _build_ssl_context()
 
-    def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None,
-                body: Optional[str] = None, cookie: Optional[str] = None) -> Tuple[int, Dict[str, str], str]:
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        body: Optional[str] = None,
+        cookie: Optional[str] = None,
+    ) -> Tuple[int, Dict[str, str], str]:
         parsed = urlparse(url)
         hostname = parsed.hostname
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -136,7 +151,7 @@ class _RawHttpClient:
             return (0, {}, response_str)
 
         raw_headers = response_str[:header_end]
-        response_body = response_str[header_end + 4:]
+        response_body = response_str[header_end + 4 :]
 
         header_lines = raw_headers.split("\r\n")
         status_line = header_lines[0]
@@ -193,12 +208,12 @@ class HttpClient:
             url = url + sep + urllib.parse.urlencode(params)
         if json_body is not None:
             import json as _json
+
             body = _json.dumps(json_body)
             headers.setdefault("Content-Type", "application/json")
         if cookies:
             cookie_str = "; ".join("%s=%s" % (k, v) for k, v in cookies.items())
-            self._cookie = ("%s; %s" % (self._cookie, cookie_str)
-                            if self._cookie else cookie_str)
+            self._cookie = "%s; %s" % (self._cookie, cookie_str) if self._cookie else cookie_str
 
         status, resp_headers, resp_body = self._raw.request(
             method, url, headers=headers, body=body, cookie=self._cookie
@@ -251,6 +266,5 @@ def build_url(base_url: str, param: str, value: str) -> str:
     query[param] = [value]
     new_query = urllib.parse.urlencode(query, doseq=True)
     return urllib.parse.ParseResult(
-        parsed.scheme, parsed.netloc, parsed.path,
-        parsed.params, new_query, parsed.fragment
+        parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment
     ).geturl()

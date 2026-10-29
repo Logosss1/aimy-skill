@@ -59,9 +59,7 @@ class TestRunAuthzScan:
 
         run_authz_scan("http://test.com", [], auth_url="http://custom/login")
         mock_matrix_cls.assert_called_once_with("http://test.com")
-        mock_matrix.authenticate_all.assert_called_once_with(
-            "http://custom/login", timeout=10.0
-        )
+        mock_matrix.authenticate_all.assert_called_once_with("http://custom/login", timeout=10.0)
 
     @patch("tools.biz_logic_v2.DeviationOracle")
     @patch("tools.biz_logic_v2.SessionMatrix")
@@ -75,10 +73,13 @@ class TestRunAuthzScan:
         mock_oracle_cls.return_value = mock_oracle
         mock_oracle.run.return_value = {"vulnerable": False}
 
-        run_authz_scan("http://test.com", [
-            {"label": "a", "username": "a", "password": "a", "role": "admin"},
-            {"label": "b", "username": "b", "password": "b", "role": "user"},
-        ])
+        run_authz_scan(
+            "http://test.com",
+            [
+                {"label": "a", "username": "a", "password": "a", "role": "admin"},
+                {"label": "b", "username": "b", "password": "b", "role": "user"},
+            ],
+        )
         assert mock_matrix.register.call_count == 2
 
     @patch("tools.biz_logic_v2.DeviationOracle")
@@ -109,9 +110,12 @@ class TestRunAuthzScan:
         mock_oracle_cls.return_value = mock_oracle
         mock_oracle.run.return_value = {"vulnerable": False}
 
-        run_authz_scan("http://test.com", [
-            {"username": "u1", "password": "p1", "role": "user"},
-        ])
+        run_authz_scan(
+            "http://test.com",
+            [
+                {"username": "u1", "password": "p1", "role": "user"},
+            ],
+        )
         mock_matrix.register.assert_called_once_with(
             label="u1", username="u1", password="p1", role="user"
         )
@@ -224,7 +228,8 @@ class TestRunWorkflowScan:
             mock_deviator.generate_skip_steps.return_value = []
             mock_deviator.generate_replay.return_value = []
             mock_deviator.find_resource_ids.return_value = [
-                ("id", "42", 0), ("uid", "99", 0),
+                ("id", "42", 0),
+                ("uid", "99", 0),
             ]
 
             result = run_workflow_scan("http://test.com", [{"step": "a"}], sess=MagicMock())
@@ -271,7 +276,8 @@ class TestRunRaceScan:
         mock_profiler = MagicMock()
         mock_profiler_cls.return_value = mock_profiler
         mock_profiler.detect_windows.return_value = {
-            "window_found": False, "windows": [],
+            "window_found": False,
+            "windows": [],
         }
 
         run_race_scan("http://test.com")
@@ -285,7 +291,8 @@ class TestRunRaceScan:
         mock_profiler = MagicMock()
         mock_profiler_cls.return_value = mock_profiler
         mock_profiler.detect_windows.return_value = {
-            "window_found": False, "windows": [],
+            "window_found": False,
+            "windows": [],
         }
 
         result = run_race_scan("http://test.com", concurrency=50)
@@ -400,9 +407,5 @@ class TestCheck:
         mock_race.return_value = {"vulnerable": False}
 
         check("http://test.com", "id", timeout=30.0)
-        mock_constraint.assert_called_once_with(
-            "http://test.com", "id", None, 30.0
-        )
-        mock_race.assert_called_once_with(
-            "http://test.com", "id", sess=None, timeout=30.0
-        )
+        mock_constraint.assert_called_once_with("http://test.com", "id", None, 30.0)
+        mock_race.assert_called_once_with("http://test.com", "id", sess=None, timeout=30.0)

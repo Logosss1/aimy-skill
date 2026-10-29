@@ -17,6 +17,7 @@ The differential mirrors the repo's baseline-vs-probe philosophy: the highest
 role is the baseline, and every lower role is judged against it, never
 cumulating independent signals.
 """
+
 import hashlib
 import re
 from collections import defaultdict
@@ -30,8 +31,14 @@ DENY_STATUS = frozenset((401, 403, 419))
 REDIRECT_DENY_MARKERS = ("login", "signin", "sign_in", "auth", "sso")
 
 DENY_BODY_MARKERS = (
-    "unauthorized", "forbidden", "access denied", "permission denied",
-    "not authorized", "sign in", "please login", "authentication required",
+    "unauthorized",
+    "forbidden",
+    "access denied",
+    "permission denied",
+    "not authorized",
+    "sign in",
+    "please login",
+    "authentication required",
 )
 
 
@@ -54,8 +61,16 @@ def _denied(status: int, body: str, url: str = "", headers: Optional[Dict] = Non
     return any(marker in low for marker in DENY_BODY_MARKERS)
 
 
-def _fetch(sess, method: str, url: str, timeout: float, params=None,
-           data=None, json_body=None, headers=None) -> Dict:
+def _fetch(
+    sess,
+    method: str,
+    url: str,
+    timeout: float,
+    params=None,
+    data=None,
+    json_body=None,
+    headers=None,
+) -> Dict:
     kwargs = {"params": params, "data": data, "headers": headers, "timeout": timeout}
     if json_body is not None:
         kwargs["json"] = json_body
@@ -69,8 +84,7 @@ def _fetch(sess, method: str, url: str, timeout: float, params=None,
             "size": len(getattr(r, "content", b"") or b""),
         }
     except Exception as exc:
-        return {"status": 0, "body": "", "url": url, "headers": {},
-                "size": 0, "error": str(exc)}
+        return {"status": 0, "body": "", "url": url, "headers": {}, "size": 0, "error": str(exc)}
 
 
 class AuthStateMachine:
@@ -80,10 +94,26 @@ class AuthStateMachine:
         self.timeout = timeout
         self.max_rank = max((r.get("rank", 0) for r in self.roles), default=0)
 
-    def _row(self, role: Dict, method: str, url: str, params=None,
-             data=None, json_body=None, headers=None) -> Dict:
-        resp = _fetch(role["sess"], method, url, self.timeout,
-                      params=params, data=data, json_body=json_body, headers=headers)
+    def _row(
+        self,
+        role: Dict,
+        method: str,
+        url: str,
+        params=None,
+        data=None,
+        json_body=None,
+        headers=None,
+    ) -> Dict:
+        resp = _fetch(
+            role["sess"],
+            method,
+            url,
+            self.timeout,
+            params=params,
+            data=data,
+            json_body=json_body,
+            headers=headers,
+        )
         body = _body_text(resp)
         denied = _denied(resp["status"], body, resp.get("url", url), resp.get("headers"))
         return {
@@ -110,22 +140,27 @@ class AuthStateMachine:
                 continue
             allowed = (not r["denied"]) and r["status"] in (200, 201, 202, 204)
             if allowed and highest["denied"]:
-                findings.append({
-                    "type": "authz_inversion", "label": r["label"],
-                    "note": "%s allowed (%d) while highest role denied (%d)"
-                            % (r["label"], r["status"], highest["status"]),
-                })
+                findings.append(
+                    {
+                        "type": "authz_inversion",
+                        "label": r["label"],
+                        "note": "%s allowed (%d) while highest role denied (%d)"
+                        % (r["label"], r["status"], highest["status"]),
+                    }
+                )
 
         if not highest["denied"]:
             for r in by_rank:
                 if r["rank"] >= max_rank:
                     continue
                 if (not r["denied"]) and r["signature"] and r["signature"] == highest["signature"]:
-                    findings.append({
-                        "type": "privilege_gap", "label": r["label"],
-                        "note": "%s returned identical data to highest role"
-                                % r["label"],
-                    })
+                    findings.append(
+                        {
+                            "type": "privilege_gap",
+                            "label": r["label"],
+                            "note": "%s returned identical data to highest role" % r["label"],
+                        }
+                    )
 
         same_rank: Dict[int, List[Dict]] = defaultdict(list)
         for r in rows:
@@ -135,52 +170,74 @@ class AuthStateMachine:
             if len(labels) > 1 and len(group) >= 2:
                 sigs = {r["signature"] for r in group}
                 if len(sigs) == 1 and sigs != {""} and not any(r["denied"] for r in group):
-                    findings.append({
-                        "type": "bola", "label": ",".join(labels),
-                        "note": "identities %s returned identical data (rank %d)"
-                                % (",".join(labels), rank),
-                    })
+                    findings.append(
+                        {
+                            "type": "bola",
+                            "label": ",".join(labels),
+                            "note": "identities %s returned identical data (rank %d)"
+                            % (",".join(labels), rank),
+                        }
+                    )
 
         anon = next((r for r in rows if r["rank"] == 0), None)
         if anon and (not anon["denied"]) and anon["status"] in (200, 201, 202, 204):
             if any(r["rank"] > 0 and (not r["denied"]) for r in rows):
-                findings.append({
-                    "type": "anon_access", "label": "anonymous",
-                    "note": "anonymous reached an authenticated resource",
-                })
+                findings.append(
+                    {
+                        "type": "anon_access",
+                        "label": "anonymous",
+                        "note": "anonymous reached an authenticated resource",
+                    }
+                )
 
         high_types = {"authz_inversion", "privilege_gap", "bola"}
         for f in findings:
             f["severity"] = "high" if f["type"] in high_types else "low"
         return findings
 
-    def replay(self, url: str, method: str = "GET", params: Optional[Dict] = None,
-               data: Optional[Dict] = None, json_body: Optional[Dict] = None,
-               headers: Optional[Dict] = None,
-               roles: Optional[Sequence[Dict]] = None) -> Dict:
+    def replay(
+        self,
+        url: str,
+        method: str = "GET",
+        params: Optional[Dict] = None,
+        data: Optional[Dict] = None,
+        json_body: Optional[Dict] = None,
+        headers: Optional[Dict] = None,
+        roles: Optional[Sequence[Dict]] = None,
+    ) -> Dict:
         roles = roles or self.roles
-        rows = [self._row(r, method, url, params=params, data=data,
-                          json_body=json_body, headers=headers) for r in roles]
+        rows = [
+            self._row(
+                r, method, url, params=params, data=data, json_body=json_body, headers=headers
+            )
+            for r in roles
+        ]
         findings = self._diff(rows)
         return {
-            "url": url, "method": method,
+            "url": url,
+            "method": method,
             "roles": rows,
             "findings": findings,
-            "vulnerable": any(f["type"] in ("authz_inversion", "privilege_gap", "bola")
-                              for f in findings),
+            "vulnerable": any(
+                f["type"] in ("authz_inversion", "privilege_gap", "bola") for f in findings
+            ),
         }
 
-    def replay_batch(self, points: Sequence[Dict],
-                     roles: Optional[Sequence[Dict]] = None) -> Dict:
+    def replay_batch(self, points: Sequence[Dict], roles: Optional[Sequence[Dict]] = None) -> Dict:
         out = []
         for p in points:
             try:
-                out.append(self.replay(
-                    p["url"], method=p.get("method", "GET"),
-                    params=p.get("params"), data=p.get("data"),
-                    json_body=p.get("json"), headers=p.get("headers"),
-                    roles=roles,
-                ))
+                out.append(
+                    self.replay(
+                        p["url"],
+                        method=p.get("method", "GET"),
+                        params=p.get("params"),
+                        data=p.get("data"),
+                        json_body=p.get("json"),
+                        headers=p.get("headers"),
+                        roles=roles,
+                    )
+                )
             except Exception as exc:
                 logger.debug("replay %s: %s", p.get("url"), exc)
         findings = [r for r in out if r["vulnerable"]]
@@ -191,7 +248,6 @@ class AuthStateMachine:
         }
 
 
-def auth_replay(points: Sequence[Dict], roles: Sequence[Dict],
-                timeout: float = 10.0) -> Dict:
+def auth_replay(points: Sequence[Dict], roles: Sequence[Dict], timeout: float = 10.0) -> Dict:
     machine = AuthStateMachine(roles, timeout=timeout)
     return machine.replay_batch(points)

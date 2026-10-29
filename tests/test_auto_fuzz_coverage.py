@@ -54,8 +54,13 @@ def _agent(sess=None):
 
 
 def _hyp(vuln_type, detail=None, param=None, confidence=0.5, priority=0):
-    return Hypothesis(vuln_type=vuln_type, confidence=confidence, param=param,
-                      detail=detail or {}, priority=priority)
+    return Hypothesis(
+        vuln_type=vuln_type,
+        confidence=confidence,
+        param=param,
+        detail=detail or {},
+        priority=priority,
+    )
 
 
 def _fake_ctx(**fields):
@@ -126,8 +131,7 @@ class TestExecuteHypothesis:
     def test_cve_http_get(self):
         sess = _sess()
         sess.get.return_value = _resp(200)
-        h = _hyp("rce", detail={"type": "cve", "cve": "CVE-2022-22965",
-                                "exploit_type": "http_get"})
+        h = _hyp("rce", detail={"type": "cve", "cve": "CVE-2022-22965", "exploit_type": "http_get"})
         result = _agent(sess).execute_hypothesis(h)
         assert result["success"] is True
         assert result["detail"]["cve"] == "CVE-2022-22965"
@@ -136,8 +140,10 @@ class TestExecuteHypothesis:
     def test_cve_http_post_xml(self):
         sess = _sess()
         sess.post.return_value = _resp(200)
-        h = _hyp("deser", detail={"type": "cve", "cve": "CVE-2017-10271",
-                                  "exploit_type": "http_post_xml"})
+        h = _hyp(
+            "deser",
+            detail={"type": "cve", "cve": "CVE-2017-10271", "exploit_type": "http_post_xml"},
+        )
         result = _agent(sess).execute_hypothesis(h)
         assert result["success"] is True
         assert "<?xml" in sess.post.call_args.kwargs["data"]
@@ -170,29 +176,45 @@ class TestExecuteHypothesis:
         """Ghostcat (ajp_protocol) has no implementation: it is skipped with an
         explicit note instead of falling through to the no-handler branch."""
         sess = _sess()
-        h = _hyp("lfi/rce", detail={"type": "cve", "cve": "CVE-2020-1938",
-                                    "name": "Ghostcat", "exploit_type": "ajp_protocol"})
+        h = _hyp(
+            "lfi/rce",
+            detail={
+                "type": "cve",
+                "cve": "CVE-2020-1938",
+                "name": "Ghostcat",
+                "exploit_type": "ajp_protocol",
+            },
+        )
         result = _agent(sess).execute_hypothesis(h)
         assert result == {
             "hypothesis": "lfi/rce",
             "success": False,
-            "detail": {"note": "cve_vector_ajp_protocol_not_implemented",
-                       "cve": "CVE-2020-1938"},
+            "detail": {"note": "cve_vector_ajp_protocol_not_implemented", "cve": "CVE-2020-1938"},
         }
         assert sess.get.call_count == 0
 
     def test_cve_unimplemented_http_post_vector_skips_generic_cmdi(self):
         """Drupalgeddon2 http_post has no implementation: it must not run the
         generic cmdi detector, and must report its own skip note."""
-        with patch("tools.cmdi_detector.check",
-                   return_value={"vulnerable": False, "probe": "cmdi"}) as check:
-            h = _hyp("rce", detail={"type": "cve", "cve": "CVE-2018-7600",
-                                    "name": "Drupalgeddon2", "exploit_type": "http_post"})
+        with patch(
+            "tools.cmdi_detector.check", return_value={"vulnerable": False, "probe": "cmdi"}
+        ) as check:
+            h = _hyp(
+                "rce",
+                detail={
+                    "type": "cve",
+                    "cve": "CVE-2018-7600",
+                    "name": "Drupalgeddon2",
+                    "exploit_type": "http_post",
+                },
+            )
             result = _agent().execute_hypothesis(h)
         assert not check.called
         assert result["success"] is False
-        assert result["detail"] == {"note": "cve_vector_http_post_not_implemented",
-                                    "cve": "CVE-2018-7600"}
+        assert result["detail"] == {
+            "note": "cve_vector_http_post_not_implemented",
+            "cve": "CVE-2018-7600",
+        }
 
     def test_sqli_handler_and_alt_param_detection(self):
         def fake_check(url, param, sess, timeout):
@@ -220,8 +242,9 @@ class TestExecuteHypothesis:
 
     @pytest.mark.parametrize("vtype,module", _DETECTOR_BRANCHES)
     def test_detector_branch_maps_through(self, vtype, module):
-        with patch(module + ".check",
-                   return_value={"vulnerable": True, "evidence": ["e"]}) as check:
+        with patch(
+            module + ".check", return_value={"vulnerable": True, "evidence": ["e"]}
+        ) as check:
             result = _agent().execute_hypothesis(_hyp(vtype, param="q"))
         assert check.called
         assert result["vulnerable"] is True
@@ -231,8 +254,9 @@ class TestExecuteHypothesis:
     def test_auth_bypass_metadata_enriched(self):
         """The auth branch enriches with target/param, so _url is the target and
         _param falls back to the default 'id'."""
-        with patch("tools.auth_bypass.check",
-                   return_value={"vulnerable": True, "total_bypasses": 1}):
+        with patch(
+            "tools.auth_bypass.check", return_value={"vulnerable": True, "total_bypasses": 1}
+        ):
             result = _agent().execute_hypothesis(_hyp("auth_bypass"))
         assert result["vulnerable"] is True
         assert result["_url"] == TARGET
@@ -295,14 +319,14 @@ class TestRunLoop:
         agent = _agent()
         agent.gather_intel = MagicMock(return_value={"attack_paths": []})
         agent.form_hypotheses = MagicMock(
-            side_effect=lambda intel: [Hypothesis(vuln_type="sqli", confidence=0.9)])
+            side_effect=lambda intel: [Hypothesis(vuln_type="sqli", confidence=0.9)]
+        )
         agent.chain_engine = MagicMock()
         return agent
 
     def test_run_confirms_and_composes_chains(self):
         agent = self._hooked_agent()
-        agent.execute_hypothesis = MagicMock(
-            return_value={"vulnerable": True, "evidence": ["e"]})
+        agent.execute_hypothesis = MagicMock(return_value={"vulnerable": True, "evidence": ["e"]})
         ok_fn, boom_fn = MagicMock(), MagicMock(side_effect=RuntimeError("chain boom"))
         agent.chain_engine.auto_compose.return_value = [
             {"chain": "sqli_to_rce", "param": "id"},
@@ -342,17 +366,18 @@ class TestGatherIntelAndHypotheses:
         agent = HypothesisDrivenAgent(TARGET, sess)
         orch_cls = MagicMock()
         orch_cls.return_value.phase_recon.return_value = {
-            "technologies": {"technologies": [{"id": "spring", "name": "Spring",
-                                               "version": "5.3"}]},
+            "technologies": {
+                "technologies": [{"id": "spring", "name": "Spring", "version": "5.3"}]
+            },
             "open_ports": {"open_ports": [{"port": 445}]},
             "git_leak": {"git_exposed": True},
             "directories": {"interesting": [{"path": "/admin"}]},
         }
-        with patch("tools.orchestrator.Orchestrator", orch_cls), \
-                patch("tools.auto_pwn.full_network_scan",
-                      return_value={"total_alive": 2}) as scan, \
-                patch("tools.auto_pwn.rank_attack_paths",
-                      return_value=[{"type": "cve"}]) as rank:
+        with (
+            patch("tools.orchestrator.Orchestrator", orch_cls),
+            patch("tools.auto_pwn.full_network_scan", return_value={"total_alive": 2}) as scan,
+            patch("tools.auto_pwn.rank_attack_paths", return_value=[{"type": "cve"}]) as rank,
+        ):
             intel = agent.gather_intel()
         orch_cls.assert_called_once_with(TARGET, sess, 10.0, fast_recon=True)
         scan.assert_called_once_with()
@@ -361,15 +386,15 @@ class TestGatherIntelAndHypotheses:
         assert intel["dirs"] == [{"path": "/admin"}]
         assert intel["internal_scan"] == {"total_alive": 2}
         assert intel["attack_paths"] == [{"type": "cve"}]
-        rank.assert_called_once_with(intel["techs"], intel["ports"],
-                                     {"git_exposed": True})
+        rank.assert_called_once_with(intel["techs"], intel["ports"], {"git_exposed": True})
 
     def test_gather_intel_swallows_all_failures_defect(self):
         """DEFECT(D4): recon/internal-scan exceptions are silently debug-logged."""
-        with patch("tools.orchestrator.Orchestrator", side_effect=RuntimeError("no orch")), \
-                patch("tools.auto_pwn.full_network_scan",
-                      side_effect=RuntimeError("no net")), \
-                patch("tools.auto_pwn.rank_attack_paths", return_value=[]):
+        with (
+            patch("tools.orchestrator.Orchestrator", side_effect=RuntimeError("no orch")),
+            patch("tools.auto_pwn.full_network_scan", side_effect=RuntimeError("no net")),
+            patch("tools.auto_pwn.rank_attack_paths", return_value=[]),
+        ):
             intel = _agent().gather_intel()
         assert intel["techs"] == []
         assert intel["ports"] == []
@@ -380,12 +405,23 @@ class TestGatherIntelAndHypotheses:
         agent = _agent()
         agent.reasoner = MagicMock()
         agent.reasoner.analyze.return_value = [
-            Hypothesis(vuln_type="xss", confidence=0.6, priority=2)]
+            Hypothesis(vuln_type="xss", confidence=0.6, priority=2)
+        ]
         intel = {
-            "techs": [], "ports": [], "dirs": [], "git": {},
-            "attack_paths": [{"type": "cve", "impact": "RCE", "score": 18.0,
-                              "cve": "CVE-2022-22965", "name": "Spring4Shell",
-                              "exploit_type": "http_get"}],
+            "techs": [],
+            "ports": [],
+            "dirs": [],
+            "git": {},
+            "attack_paths": [
+                {
+                    "type": "cve",
+                    "impact": "RCE",
+                    "score": 18.0,
+                    "cve": "CVE-2022-22965",
+                    "name": "Spring4Shell",
+                    "exploit_type": "http_get",
+                }
+            ],
             "internal_scan": {"total_alive": 3},
         }
         hyps = agent.form_hypotheses(intel)
@@ -398,8 +434,17 @@ class TestGatherIntelAndHypotheses:
         agent = _agent()
         agent.reasoner = MagicMock()
         agent.reasoner.analyze.return_value = []
-        paths = [{"type": "cve", "impact": "RCE", "score": 5.0, "cve": "C-%d" % i,
-                  "name": "n", "exploit_type": "manual"} for i in range(12)]
+        paths = [
+            {
+                "type": "cve",
+                "impact": "RCE",
+                "score": 5.0,
+                "cve": "C-%d" % i,
+                "name": "n",
+                "exploit_type": "manual",
+            }
+            for i in range(12)
+        ]
         assert len(agent.form_hypotheses({"attack_paths": paths})) == 10
 
 
@@ -447,8 +492,7 @@ class TestSeedPoolAndGenerate:
     def test_generate_known_type_uses_its_grammar(self, frozen_random):
         payloads = FuzzEngine(_sess()).generate("sql", count=6)
         assert len(payloads) == 6
-        assert set(payloads) == {"' OR 1=1 --", "' or 1=1 --",
-                                 "' OR 1=1 --' OR 1=1 --"}
+        assert set(payloads) == {"' OR 1=1 --", "' or 1=1 --", "' OR 1=1 --' OR 1=1 --"}
         assert all("1 1 1" not in p for p in payloads)
 
     def test_templates_with_unknown_placeholders_are_skipped(self, frozen_random):
@@ -471,8 +515,7 @@ class TestSeedPoolAndGenerate:
         assert engine.generate("sql", count=5) == []
 
     def test_init_seeds_skips_broken_template_but_keeps_value_seeds(self, monkeypatch):
-        monkeypatch.setattr(random, "choice",
-                            MagicMock(side_effect=RuntimeError("no candidate")))
+        monkeypatch.setattr(random, "choice", MagicMock(side_effect=RuntimeError("no candidate")))
         engine = FuzzEngine(_sess())
         assert engine.seed_pool["sql"]
         assert all(s.grammar is None for s in engine.seed_pool["sql"])
@@ -539,8 +582,12 @@ class TestTestPayloads:
         time-based injection); other exceptions become error entries, so no
         payload vanishes silently."""
         sess = _sess()
-        sess.get.side_effect = [_resp(200, "A"), _resp(200, "ok"),
-                                requests.Timeout("slow"), RuntimeError("boom")]
+        sess.get.side_effect = [
+            _resp(200, "A"),
+            _resp(200, "ok"),
+            requests.Timeout("slow"),
+            RuntimeError("boom"),
+        ]
         engine = FuzzEngine(sess)
         results = engine.test_payloads(TARGET, "id", ["first", "slow", "bad"])
         assert [r["payload"] for r in results] == ["first", "slow", "bad"]
@@ -598,11 +645,13 @@ class TestFuzzEndpointAndBatch:
     def test_fuzz_batch_skips_endpoints_without_url_or_param(self):
         engine = self._engine([_resp(200, "A"), _resp(200, "A")])
         engine.generate_hybrid = MagicMock(return_value=["x"])
-        out = engine.fuzz_batch([
-            {"url": TARGET + "/a", "param": "id"},
-            {"url": "", "param": "id"},
-            {"url": TARGET + "/b"},
-        ])
+        out = engine.fuzz_batch(
+            [
+                {"url": TARGET + "/a", "param": "id"},
+                {"url": "", "param": "id"},
+                {"url": TARGET + "/b"},
+            ]
+        )
         assert out["endpoints_fuzzed"] == 1
         assert out["total_payloads"] == 1
         assert out["total_interesting"] == 0
@@ -626,13 +675,16 @@ class TestFuzzEndpointAndBatch:
 
 
 class TestAdaptPayload:
-    @pytest.mark.parametrize("dbms,first", [
-        ("MySQL 8.0", "sleep"),
-        ("PostgreSQL 14", "pg_sleep"),
-        ("MSSQL", "waitfor"),
-        ("Microsoft SQL Server 2019", "waitfor"),
-        ("Oracle 19c", "dbms_pipe"),
-    ])
+    @pytest.mark.parametrize(
+        "dbms,first",
+        [
+            ("MySQL 8.0", "sleep"),
+            ("PostgreSQL 14", "pg_sleep"),
+            ("MSSQL", "waitfor"),
+            ("Microsoft SQL Server 2019", "waitfor"),
+            ("Oracle 19c", "dbms_pipe"),
+        ],
+    )
     def test_sqli_dbms_profiles(self, dbms, first):
         assert adapt_payload("sqli", _fake_ctx(dbms=dbms))["preferred"][0] == first
 
@@ -644,12 +696,15 @@ class TestAdaptPayload:
         hints = adapt_payload("sqli", _fake_ctx(dbms="mysql", has_debug_mode=True))
         assert "stacked_queries_for_debug" in hints["custom"]
 
-    @pytest.mark.parametrize("cloud,first,custom", [
-        ("AWS", "169.254.169.254", "imdsv2_token"),
-        ("GCP", "metadata.google.internal", "Metadata-Flavor: Google"),
-        ("Azure", "169.254.169.254/metadata/instance", "api-version=2021-02-01"),
-        ("Alibaba", "100.100.100.200", None),
-    ])
+    @pytest.mark.parametrize(
+        "cloud,first,custom",
+        [
+            ("AWS", "169.254.169.254", "imdsv2_token"),
+            ("GCP", "metadata.google.internal", "Metadata-Flavor: Google"),
+            ("Azure", "169.254.169.254/metadata/instance", "api-version=2021-02-01"),
+            ("Alibaba", "100.100.100.200", None),
+        ],
+    )
     def test_ssrf_cloud_profiles(self, cloud, first, custom):
         hints = adapt_payload("ssrf", _fake_ctx(cloud_provider=cloud))
         assert hints["preferred"][0] == first
@@ -674,14 +729,17 @@ class TestAdaptPayload:
         assert "waf_bypass_for_cmdi" in win["custom"]
         assert adapt_payload("cmdi", _fake_ctx())["preferred"][0] == "id"
 
-    @pytest.mark.parametrize("engine,first", [
-        ("Jinja2", "{{config}}"),
-        ("FreeMarker", "${7*7}"),
-        ("Velocity", "#set($x=7*7)$x"),
-        ("SpEL", "${7*7}"),
-        ("Spring", "${7*7}"),
-        ("Smarty", "{$smarty.version}"),
-    ])
+    @pytest.mark.parametrize(
+        "engine,first",
+        [
+            ("Jinja2", "{{config}}"),
+            ("FreeMarker", "${7*7}"),
+            ("Velocity", "#set($x=7*7)$x"),
+            ("SpEL", "${7*7}"),
+            ("Spring", "${7*7}"),
+            ("Smarty", "{$smarty.version}"),
+        ],
+    )
     def test_ssti_engine_profiles(self, engine, first):
         assert adapt_payload("ssti", _fake_ctx(ssti_engine=engine))["preferred"][0] == first
 
@@ -690,8 +748,10 @@ class TestAdaptPayload:
         assert hints["preferred"] == ["{{7*7}}", "${7*7}", "{{7*'7'}}"]
 
     def test_deser_frameworks_and_versions(self):
-        spring = adapt_payload("deser", _fake_ctx(frameworks=["Spring Boot 2.7"],
-                                                  discovered_versions={"jackson": "2.9"}))
+        spring = adapt_payload(
+            "deser",
+            _fake_ctx(frameworks=["Spring Boot 2.7"], discovered_versions={"jackson": "2.9"}),
+        )
         assert spring["preferred"][0] == "jackson"
         assert "jackson=2.9" in spring["custom"]
         assert adapt_payload("deser", _fake_ctx(frameworks=["Struts2"]))["preferred"][0] == "ognl"
@@ -736,8 +796,9 @@ class TestSelectPayloads:
 
     def test_custom_hint_adds_score(self):
         pool = [{"payload": "plain"}, {"payload": "spring=5.3"}]
-        out = select_payloads("deser", _fake_ctx(
-            frameworks=["spring"], discovered_versions={"spring": "5.3"}), pool)
+        out = select_payloads(
+            "deser", _fake_ctx(frameworks=["spring"], discovered_versions={"spring": "5.3"}), pool
+        )
         assert out[0]["payload"] == "spring=5.3"
 
 
@@ -746,23 +807,23 @@ class TestSuggestAdditionalTests:
         out = suggest_additional_tests("sqli", _fake_ctx(dbms="mysql", has_debug_mode=True))
         assert "try_debug_sqli_stack" in out
         assert "try_into_outfile" in out
-        assert suggest_additional_tests("sqli", _fake_ctx(dbms="mssql")) == [
-            "enable_xp_cmdshell"]
+        assert suggest_additional_tests("sqli", _fake_ctx(dbms="mssql")) == ["enable_xp_cmdshell"]
 
     def test_sqli_uppercase_dbms_matched(self):
         """The dbms check is case-insensitive: 'MSSQL'/'MySQL' trigger their advice."""
-        assert suggest_additional_tests("sqli", _fake_ctx(dbms="MSSQL")) == [
-            "enable_xp_cmdshell"]
-        assert suggest_additional_tests("sqli", _fake_ctx(dbms="MySQL")) == [
-            "try_into_outfile"]
+        assert suggest_additional_tests("sqli", _fake_ctx(dbms="MSSQL")) == ["enable_xp_cmdshell"]
+        assert suggest_additional_tests("sqli", _fake_ctx(dbms="MySQL")) == ["try_into_outfile"]
 
     def test_ssrf_lfi_cmdi_suggestions(self):
         assert suggest_additional_tests(
             "ssrf", _fake_ctx(cloud_provider="aws", has_admin_panel=True)
         ) == ["extract_cloud_credentials", "scan_internal_services"]
         lfi = suggest_additional_tests(
-            "lfi", _fake_ctx(lfi_readable_paths=["/var/log/nginx.log", "/proc/self/environ"],
-                             frameworks=["PHP"]))
+            "lfi",
+            _fake_ctx(
+                lfi_readable_paths=["/var/log/nginx.log", "/proc/self/environ"], frameworks=["PHP"]
+            ),
+        )
         assert "try_log_poison_rce" in lfi
         assert "try_ssh_key_extraction" in lfi
         assert "try_php_filter_wrapper" in lfi
@@ -914,8 +975,7 @@ class TestParamMinerBatch:
         assert found == []
         assert sess.get.call_count == 0
         assert sess.post.call_args_list[0].kwargs["data"] == {}
-        assert sess.post.call_args_list[1].kwargs["data"] == {
-            "username": "test_0_username"}
+        assert sess.post.call_args_list[1].kwargs["data"] == {"username": "test_0_username"}
 
 
 class TestParamMinerMine:
@@ -960,15 +1020,13 @@ class TestParamMinerMine:
         m = ParamMiner(TARGET, _sess())
         m.mine_all = MagicMock(return_value={})
         m.run()
-        m.mine_all.assert_called_once_with(
-            {"/": {"url": TARGET, "methods": ["GET"], "params": []}})
+        m.mine_all.assert_called_once_with({"/": {"url": TARGET, "methods": ["GET"], "params": []}})
 
     def test_module_mine_builds_miner(self):
         sess = _sess()
         with patch("tools.param_miner.ParamMiner") as miner_cls:
             miner_cls.return_value.run.return_value = {"ok": 1}
-            out = mine(TARGET, endpoints={"/a": {}}, sess=sess, timeout=5.0,
-                       threads=3, delay=0.5)
+            out = mine(TARGET, endpoints={"/a": {}}, sess=sess, timeout=5.0, threads=3, delay=0.5)
         miner_cls.assert_called_once_with(TARGET, sess, 5.0, 3, 0.5)
         miner_cls.return_value.run.assert_called_once_with({"/a": {}})
         assert out == {"ok": 1}
@@ -982,8 +1040,7 @@ class TestParamMinerMine:
 class TestLookupCves:
     def test_version_range_match_and_exploit_metadata(self):
         hits = lookup_cves("spring", "5.3.20")
-        assert {h["cve"] for h in hits} == {
-            "CVE-2022-22965", "CVE-2022-22963", "CVE-2022-22950"}
+        assert {h["cve"] for h in hits} == {"CVE-2022-22965", "CVE-2022-22963", "CVE-2022-22950"}
         top = [h for h in hits if h["cve"] == "CVE-2022-22965"][0]
         assert top["exploit_available"] is True
         assert top["difficulty"] == "easy"
@@ -999,8 +1056,7 @@ class TestLookupCves:
         assert len(hits) == len(TECH_CVE_DB["spring"]) == 4
         assert all(h["version_unconfirmed"] is True for h in hits)
         assert {h["cve"] for h in lookup_cves("spring", "")} == {h["cve"] for h in hits}
-        assert all(h["version_unconfirmed"] is False
-                   for h in lookup_cves("spring", "5.3.20"))
+        assert all(h["version_unconfirmed"] is False for h in lookup_cves("spring", "5.3.20"))
 
     def test_range_end_is_exclusive(self):
         """Ranges are half-open [start, end): tomcat 10 no longer matches ranges
@@ -1009,7 +1065,9 @@ class TestLookupCves:
         assert hits == {"CVE-2021-42340"}
         assert "CVE-2020-1938" not in hits and "CVE-2020-13935" not in hits
         assert {h["cve"] for h in lookup_cves("tomcat", "9.0.5")} == {
-            "CVE-2020-1938", "CVE-2020-13935"}
+            "CVE-2020-1938",
+            "CVE-2020-13935",
+        }
 
     def test_unknown_tech_returns_empty(self):
         assert lookup_cves("apache", "2.4") == []
@@ -1028,8 +1086,7 @@ class TestRankAttackPaths:
         assert all(p["score"] == 8 and p["impact"] == "RCE" for p in paths)
 
     def test_git_leak_path_scored_by_sensitive_count(self):
-        paths = rank_attack_paths([], [], {"git_exposed": True,
-                                           "sensitive_finds": ["a", "b", "c"]})
+        paths = rank_attack_paths([], [], {"git_exposed": True, "sensitive_finds": ["a", "b", "c"]})
         assert paths[0]["type"] == "git_leak"
         assert paths[0]["score"] == 10
 
@@ -1044,49 +1101,92 @@ class TestVisualizeAttackPaths:
         assert visualize_attack_paths([]) == "No attack paths identified."
 
     def test_structural_scores_get_expected_labels(self):
-        text = visualize_attack_paths([
-            {"type": "open_port", "port": 445, "module": "smb",
-             "check": "smb_null_session", "score": 8, "impact": "RCE"},
-            {"type": "git_leak", "score": 9, "sensitive_finds": 2, "impact": "Data Exfil"},
-        ])
+        text = visualize_attack_paths(
+            [
+                {
+                    "type": "open_port",
+                    "port": 445,
+                    "module": "smb",
+                    "check": "smb_null_session",
+                    "score": 8,
+                    "impact": "RCE",
+                },
+                {"type": "git_leak", "score": 9, "sensitive_finds": 2, "impact": "Data Exfil"},
+            ]
+        )
         assert "[HIGH] Port 445" in text
         assert "[CRIT] .git leak" in text
 
     def test_high_score_cve_rendered_as_crit(self):
         """Score thresholds are >=9 [CRIT] / >=7 [HIGH] / >=5 [MED] / else [LOW],
         so an 18.0 CVSS path is rendered [CRIT] instead of [LOW]."""
-        text = visualize_attack_paths([
-            {"type": "cve", "cve": "CVE-2022-22965", "name": "Spring4Shell",
-             "impact": "RCE", "score": 18.0, "exploit_type": "http_get"}])
+        text = visualize_attack_paths(
+            [
+                {
+                    "type": "cve",
+                    "cve": "CVE-2022-22965",
+                    "name": "Spring4Shell",
+                    "impact": "RCE",
+                    "score": 18.0,
+                    "exploit_type": "http_get",
+                }
+            ]
+        )
         assert "[CRIT]" in text
         assert "[LOW]" not in text
 
-    @pytest.mark.parametrize("score,label", [
-        (9, "[CRIT]"), (7, "[HIGH]"), (5, "[MED]"), (4.9, "[LOW]"), (0, "[LOW]"),
-    ])
+    @pytest.mark.parametrize(
+        "score,label",
+        [
+            (9, "[CRIT]"),
+            (7, "[HIGH]"),
+            (5, "[MED]"),
+            (4.9, "[LOW]"),
+            (0, "[LOW]"),
+        ],
+    )
     def test_score_band_boundaries(self, score, label):
-        text = visualize_attack_paths([
-            {"type": "cve", "cve": "C-1", "name": "n", "impact": "RCE",
-             "score": score, "exploit_type": "manual"}])
+        text = visualize_attack_paths(
+            [
+                {
+                    "type": "cve",
+                    "cve": "C-1",
+                    "name": "n",
+                    "impact": "RCE",
+                    "score": score,
+                    "exploit_type": "manual",
+                }
+            ]
+        )
         assert label in text
 
     def test_output_capped_at_fifteen_paths(self):
-        paths = [{"type": "cve", "cve": "C-%d" % i, "name": "n", "impact": "RCE",
-                  "score": 5, "exploit_type": "manual"} for i in range(20)]
+        paths = [
+            {
+                "type": "cve",
+                "cve": "C-%d" % i,
+                "name": "n",
+                "impact": "RCE",
+                "score": 5,
+                "exploit_type": "manual",
+            }
+            for i in range(20)
+        ]
         assert len(visualize_attack_paths(paths).splitlines()) == 16
 
 
 class TestBuildAttackPlan:
     def test_full_plan_scores_and_dedupes(self):
-        plan = build_attack_plan({
-            "target": TARGET,
-            "technologies": [{"id": "spring", "name": "Spring", "version": "5.3"}],
-            "open_ports": [{"port": 445}],
-            "git_leak": {"git_exposed": True, "sensitive_finds": ["a", "b"]},
-        })
+        plan = build_attack_plan(
+            {
+                "target": TARGET,
+                "technologies": [{"id": "spring", "name": "Spring", "version": "5.3"}],
+                "open_ports": [{"port": 445}],
+                "git_leak": {"git_exposed": True, "sensitive_finds": ["a", "b"]},
+            }
+        )
         assert plan["target"] == TARGET
-        assert [p["phase"] for p in plan["phases"]] == [
-            "tech_specific", "open_port", "git_leak"]
+        assert [p["phase"] for p in plan["phases"]] == ["tech_specific", "open_port", "git_leak"]
         assert plan["critical_paths"] == ["/actuator", "/swagger-resources"]
         assert plan["recommended_detectors"] == ["ssti", "deser", "ssrf", "sql_injection"]
         assert plan["risk_score"] == 25
@@ -1113,13 +1213,24 @@ class TestBuildAttackPlan:
         plan = build_attack_plan({"technologies": [{"id": "apache", "name": "Apache"}]})
         assert [p["phase"] for p in plan["phases"]] == ["generic"]
         assert plan["recommended_detectors"] == [
-            "sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti",
-            "cors", "jwt", "graphql", "nosqli", "proto_pollution"]
+            "sql_injection",
+            "xss",
+            "lfi",
+            "ssrf",
+            "cmdi",
+            "ssti",
+            "cors",
+            "jwt",
+            "graphql",
+            "nosqli",
+            "proto_pollution",
+        ]
 
     def test_subdomains_and_directories_discarded_defect(self):
         """DEFECT(D18): subdomains/directories go into dead locals (lines 357/360)."""
-        plan = build_attack_plan({"target": TARGET, "subdomains": ["a.target.test"],
-                                  "directories": [{"path": "/admin"}]})
+        plan = build_attack_plan(
+            {"target": TARGET, "subdomains": ["a.target.test"], "directories": [{"path": "/admin"}]}
+        )
         assert "a.target.test" not in str(plan)
 
 
@@ -1144,25 +1255,28 @@ class TestPivotOnIntermediateResult:
     @pytest.mark.parametrize("vtype,phase", _PIVOT_CASES)
     def test_known_finding_types_add_pivot_phase(self, vtype, phase):
         out = pivot_on_intermediate_result(
-            {"vulnerabilities": [{"type": vtype}]},
-            {"phases": [], "recommended_detectors": []})
+            {"vulnerabilities": [{"type": vtype}]}, {"phases": [], "recommended_detectors": []}
+        )
         assert out["pivoted"] is True
         assert out["phases"][0]["phase"] == phase
 
     def test_ssrf_pivot_registers_detector(self):
-        out = pivot_on_intermediate_result(
-            {"vulnerabilities": [{"type": "ssrf"}]}, {"phases": []})
+        out = pivot_on_intermediate_result({"vulnerabilities": [{"type": "ssrf"}]}, {"phases": []})
         assert "ssrf_pwn" in out["recommended_detectors"]
 
     def test_ssti_xss_rce_findings_add_pivot_phases(self):
         """ssti/xss/rce findings now add pivot phases; previously they were dropped."""
         current = {"phases": [{"phase": "generic"}]}
         out = pivot_on_intermediate_result(
-            {"vulnerabilities": [{"type": "xss"}, {"type": "ssti"}, {"type": "rce"}]},
-            current)
+            {"vulnerabilities": [{"type": "xss"}, {"type": "ssti"}, {"type": "rce"}]}, current
+        )
         assert out["pivoted"] is True
         assert [p["phase"] for p in out["phases"]] == [
-            "xss_pivot", "ssti_pivot", "rce_pivot", "generic"]
+            "xss_pivot",
+            "ssti_pivot",
+            "rce_pivot",
+            "generic",
+        ]
         assert out["phases"][0]["trigger"] == "xss_detected"
         assert out["phases"][1]["trigger"] == "ssti_detected"
         assert out["phases"][2]["trigger"] == "rce_detected"
@@ -1172,8 +1286,7 @@ class TestPivotOnIntermediateResult:
         """recommended_detectors is deep-copied, so the caller's plan is untouched
         while the returned plan carries the new detector."""
         current = {"phases": [], "recommended_detectors": ["sql_injection"]}
-        out = pivot_on_intermediate_result(
-            {"vulnerabilities": [{"type": "ssrf"}]}, current)
+        out = pivot_on_intermediate_result({"vulnerabilities": [{"type": "ssrf"}]}, current)
         assert current["recommended_detectors"] == ["sql_injection"]
         assert out["recommended_detectors"] == ["sql_injection", "ssrf_pwn"]
         assert out["phases"][0]["phase"] == "ssrf_pivot"

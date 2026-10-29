@@ -57,9 +57,13 @@ class RaceProfiler:
         self.timeout = timeout
         self.probe = TransactionProbe(sess, timeout)
 
-    def detect_windows(self, url: str, param: Optional[str] = None,
-                       method: str = "POST",
-                       body: Optional[Dict] = None) -> Dict:
+    def detect_windows(
+        self,
+        url: str,
+        param: Optional[str] = None,
+        method: str = "POST",
+        body: Optional[Dict] = None,
+    ) -> Dict:
         result = {"window_found": False, "windows": []}
         baseline_r = self._single_request(url, method, body)
         if baseline_r is None:
@@ -71,23 +75,24 @@ class RaceProfiler:
         for concurrency in (5, 10, 20, 50):
             for _ in range(3):
                 responses = self._race_round(url, method, body, concurrency)
-                window = self._analyze_window(responses, bl_status,
-                                               bl_body, bl_len, concurrency)
-                if (window.duplicate_success or window.state_mismatch
-                        or window.integrity_violated
-                        or window.resource_created_twice):
+                window = self._analyze_window(responses, bl_status, bl_body, bl_len, concurrency)
+                if (
+                    window.duplicate_success
+                    or window.state_mismatch
+                    or window.integrity_violated
+                    or window.resource_created_twice
+                ):
                     result["window_found"] = True
                     result["windows"].append(window)
                     break
         return result
 
-    def _single_request(self, url: str, method: str,
-                        body: Optional[Dict] = None) -> Optional[Dict]:
+    def _single_request(self, url: str, method: str, body: Optional[Dict] = None) -> Optional[Dict]:
         try:
             start = time.time()
-            r = getattr(self.sess, method.lower())(url, json=body,
-                                                    timeout=self.timeout,
-                                                    verify=settings.verify_ssl)
+            r = getattr(self.sess, method.lower())(
+                url, json=body, timeout=self.timeout, verify=settings.verify_ssl
+            )
             elapsed = (time.time() - start) * 1000
             return {
                 "status": r.status_code,
@@ -99,14 +104,15 @@ class RaceProfiler:
             logger.debug("baseline: %s", e)
             return None
 
-    def _race_round(self, url: str, method: str, body: Optional[Dict],
-                    concurrency: int) -> List[Dict]:
+    def _race_round(
+        self, url: str, method: str, body: Optional[Dict], concurrency: int
+    ) -> List[Dict]:
         def fire(i):
             try:
                 start = time.time()
-                r = getattr(self.sess, method.lower())(url, json=body,
-                                                        timeout=self.timeout + 5,
-                                                        verify=settings.verify_ssl)
+                r = getattr(self.sess, method.lower())(
+                    url, json=body, timeout=self.timeout + 5, verify=settings.verify_ssl
+                )
                 return {
                     "index": i,
                     "status": r.status_code,
@@ -115,21 +121,28 @@ class RaceProfiler:
                     "elapsed_ms": (time.time() - start) * 1000,
                 }
             except Exception as e:
-                return {"index": i, "status": 0, "body": "", "length": 0,
-                        "elapsed_ms": 0, "error": str(e)}
+                return {
+                    "index": i,
+                    "status": 0,
+                    "body": "",
+                    "length": 0,
+                    "elapsed_ms": 0,
+                    "error": str(e),
+                }
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as ex:
             futures = [ex.submit(fire, i) for i in range(concurrency)]
             responses = [f.result() for f in concurrent.futures.as_completed(futures)]
         return responses
 
-    def _analyze_window(self, responses: List[Dict], bl_status: int,
-                        bl_body: str, bl_len: int,
-                        concurrency: int) -> RaceWindow:
-        window = RaceWindow(concurrency=concurrency,
-                            elapsed_ms=responses[0].get("elapsed_ms", 0)
-                            if responses else 0,
-                            responses=responses)
+    def _analyze_window(
+        self, responses: List[Dict], bl_status: int, bl_body: str, bl_len: int, concurrency: int
+    ) -> RaceWindow:
+        window = RaceWindow(
+            concurrency=concurrency,
+            elapsed_ms=responses[0].get("elapsed_ms", 0) if responses else 0,
+            responses=responses,
+        )
 
         success_count = sum(1 for r in responses if r["status"] in (200, 201))
         window.duplicate_success = success_count > 1
@@ -184,9 +197,11 @@ class StateIntegrityChecker:
                 results[label] = {"status": "no_baseline"}
                 continue
             try:
-                r = self.sess.get(label if label.startswith("http")
-                                  else label, timeout=self.timeout,
-                                  verify=settings.verify_ssl)
+                r = self.sess.get(
+                    label if label.startswith("http") else label,
+                    timeout=self.timeout,
+                    verify=settings.verify_ssl,
+                )
                 unchanged = r.text == current
                 results[label] = {
                     "unchanged": unchanged,
@@ -201,12 +216,22 @@ class StateIntegrityChecker:
 
 def check(url: str, param: str = None, sess=None, timeout: float = 10.0) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
     profiler = RaceProfiler(sess, timeout)
-    write_keywords = ["create", "order", "checkout", "redeem", "claim",
-                       "submit", "transfer", "vote", "like"]
+    write_keywords = [
+        "create",
+        "order",
+        "checkout",
+        "redeem",
+        "claim",
+        "submit",
+        "transfer",
+        "vote",
+        "like",
+    ]
     method = "POST" if param and any(k in url.lower() for k in write_keywords) else "GET"
     body = {param: "1"} if param else None
     result = profiler.detect_windows(url, param, method, body)

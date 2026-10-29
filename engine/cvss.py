@@ -43,9 +43,7 @@ _DEFAULT_VECTORS: Dict[str, str] = {
 
 
 def cvss_vector_for(vtype: str) -> str:
-    return _DEFAULT_VECTORS.get(
-        vtype, "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
-    )
+    return _DEFAULT_VECTORS.get(vtype, "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
 
 
 def _parse(vector: str) -> Dict[str, str]:
@@ -80,22 +78,14 @@ def cvss_base_score(vector: str) -> float:
     parts = _parse(vector)
     scope_changed = parts["S"] == "C"
 
-    iss = 1.0 - (
-        (1.0 - _CIA[parts["C"]])
-        * (1.0 - _CIA[parts["I"]])
-        * (1.0 - _CIA[parts["A"]])
-    )
+    iss = 1.0 - ((1.0 - _CIA[parts["C"]]) * (1.0 - _CIA[parts["I"]]) * (1.0 - _CIA[parts["A"]]))
     if scope_changed:
         impact = 7.52 * (iss - 0.029) - 3.25 * ((iss - 0.02) ** 15)
     else:
         impact = 6.42 * iss
 
     exploitability = (
-        8.22
-        * _AV[parts["AV"]]
-        * _AC[parts["AC"]]
-        * _PR[parts["S"]][parts["PR"]]
-        * _UI[parts["UI"]]
+        8.22 * _AV[parts["AV"]] * _AC[parts["AC"]] * _PR[parts["S"]][parts["PR"]] * _UI[parts["UI"]]
     )
 
     if impact <= 0:

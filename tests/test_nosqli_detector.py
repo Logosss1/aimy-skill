@@ -23,8 +23,7 @@ class TestNoSQLIDetector:
                 return (200, {}, "no rows")
             return (200, {}, "normal response")
 
-        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"),
-                               callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"), callback=cb)
         result = check("http://test.com/login", "id")
         assert result["vulnerable"] is True
         assert result["type"] == "boolean"
@@ -43,8 +42,7 @@ class TestNoSQLIDetector:
             # 任何带引号的 payload 都触发同一个错误页 (恒定长度)
             return (200, {}, "SQL syntax error near ''' " + "e" * 42)
 
-        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"),
-                               callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"), callback=cb)
         result = check("http://test.com/login", "id")
         assert result["vulnerable"] is False
 
@@ -58,8 +56,7 @@ class TestNoSQLIDetector:
                 return (500, {}, "MongoError: bad query")
             return (200, {}, "normal response")
 
-        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"),
-                               callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"), callback=cb)
         result = check("http://test.com/login", "id")
         assert result["vulnerable"] is True
         assert result["type"] == "error"
@@ -87,10 +84,10 @@ class TestNoSQLIDetector:
                 return (200, {}, "normal response")
             return (200, {}, "varies-%d" % counter["n"])
 
-        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"),
-                               callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/login.*"), callback=cb)
         result = check("http://test.com/login", "id")
         assert result["vulnerable"] is False
+
 
 class TestOperatorDifferential:
     def test_confirm_operator_blind_two_families(self, monkeypatch):
@@ -139,8 +136,7 @@ class TestOperatorDifferential:
                 return (200, {}, "x" * 135)
             return (200, {}, "x")
 
-        responses.add_callback(responses.GET, re.compile(r"http://test\.com/api.*"),
-                               callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/api.*"), callback=cb)
         result = check("http://test.com/api", "id")
         assert result["vulnerable"] is True
         assert result["type"] == "operator"

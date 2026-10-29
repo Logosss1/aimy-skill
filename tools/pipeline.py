@@ -14,6 +14,7 @@ Graph semantics
 * Attack chains = shortest paths on the asset graph from the proven attack surface to a
   crown jewel, ranked by accumulated business value and edge confidence.
 """
+
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Deque, Dict, List, Optional, Sequence, Tuple
@@ -33,35 +34,101 @@ ENDPOINT_ID_PREFIX = "endpoint:"
 # ---------------------------------------------------------------------------
 
 CROWN_JEWEL_PATH_PATTERNS: Tuple[str, ...] = (
-    "/admin", "/administrator", "/manage", "/management", "/dashboard",
-    "/console", "/wp-admin", "/actuator", "/api/", "/graphql", "/upload",
-    "/phpmyadmin", "/swagger", "/debug", "/config", "/login", "/signin",
-    "/database", "/phpinfo", "/manager", "/jenkins", "/kibana", "/grafana",
-    "/cpanel", "/swagger-resources", "/.env", "/.git",
+    "/admin",
+    "/administrator",
+    "/manage",
+    "/management",
+    "/dashboard",
+    "/console",
+    "/wp-admin",
+    "/actuator",
+    "/api/",
+    "/graphql",
+    "/upload",
+    "/phpmyadmin",
+    "/swagger",
+    "/debug",
+    "/config",
+    "/login",
+    "/signin",
+    "/database",
+    "/phpinfo",
+    "/manager",
+    "/jenkins",
+    "/kibana",
+    "/grafana",
+    "/cpanel",
+    "/swagger-resources",
+    "/.env",
+    "/.git",
 )
 
 # DB / infra ports that usually gate the most valuable data
 CROWN_JEWEL_PORTS: Tuple[int, ...] = (
-    1433, 1521, 2375, 2376, 3306, 5432, 5984, 6379, 6443, 7001, 8161,
-    8500, 9200, 27017, 50070, 61616,
+    1433,
+    1521,
+    2375,
+    2376,
+    3306,
+    5432,
+    5984,
+    6379,
+    6443,
+    7001,
+    8161,
+    8500,
+    9200,
+    27017,
+    50070,
+    61616,
 )
 
 HIGH_VALUE_TECHS: Tuple[str, ...] = (
-    "spring", "weblogic", "thinkphp", "laravel", "wordpress", "tomcat",
-    "flask", "django", "jenkins", "struts", "drupal", "asp.net", "graphql",
+    "spring",
+    "weblogic",
+    "thinkphp",
+    "laravel",
+    "wordpress",
+    "tomcat",
+    "flask",
+    "django",
+    "jenkins",
+    "struts",
+    "drupal",
+    "asp.net",
+    "graphql",
 )
 
 ROLE_WEIGHTS: Dict[str, float] = {
-    "/console": 1.0, "/admin": 1.0, "/manager": 0.9, "/phpmyadmin": 0.9,
-    "/login": 0.9, "/signin": 0.9, "/actuator": 0.9, "/graphql": 0.9,
-    "/jenkins": 0.9, "/swagger": 0.8, "/api": 0.8, "/upload": 0.8,
-    "/config": 0.8, "/debug": 0.8, "/dashboard": 0.8, "/database": 0.8,
-    "/.env": 0.9, "/.git": 0.8,
+    "/console": 1.0,
+    "/admin": 1.0,
+    "/manager": 0.9,
+    "/phpmyadmin": 0.9,
+    "/login": 0.9,
+    "/signin": 0.9,
+    "/actuator": 0.9,
+    "/graphql": 0.9,
+    "/jenkins": 0.9,
+    "/swagger": 0.8,
+    "/api": 0.8,
+    "/upload": 0.8,
+    "/config": 0.8,
+    "/debug": 0.8,
+    "/dashboard": 0.8,
+    "/database": 0.8,
+    "/.env": 0.9,
+    "/.git": 0.8,
 }
 
 DEFAULT_VALUE_WEIGHTS: Dict[str, float] = {
-    "role": 3.0, "port": 2.0, "tech": 1.5, "cve": 1.0, "auth": 1.0,
-    "git": 1.0, "finding": 1.5, "auth_bypass": 1.0,
+    "role": 3.0,
+    "port": 2.0,
+    "tech": 1.5,
+    "cve": 1.0,
+    "auth": 1.0,
+    "git": 1.0,
+    "finding": 1.5,
+    "auth_bypass": 1.0,
 }
 
 _PORT_RISK_SCORE = {"critical": 1.0, "high": 0.7, "medium": 0.4, "low": 0.1}
@@ -71,6 +138,7 @@ _TECH_RISK_SCORE = {"critical": 1.0, "high": 0.7, "medium": 0.4, "low": 0.2}
 # ---------------------------------------------------------------------------
 # URL / id helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalize_url(url: str) -> str:
     url = (url or "").strip()
@@ -113,6 +181,7 @@ def endpoint_id(url: str) -> str:
 # Asset graph
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AssetNode:
     id: str
@@ -154,21 +223,36 @@ class AssetGraph:
         self.edges: Dict[str, List[AssetEdge]] = defaultdict(list)
         self.adj: Dict[str, set] = defaultdict(set)
 
-    def add_node(self, node_id: str, kind: str, url: str = "", host: str = "",
-                 port: int = 0, value: float = 0.0, tags: Optional[List[str]] = None) -> AssetNode:
+    def add_node(
+        self,
+        node_id: str,
+        kind: str,
+        url: str = "",
+        host: str = "",
+        port: int = 0,
+        value: float = 0.0,
+        tags: Optional[List[str]] = None,
+    ) -> AssetNode:
         if node_id in self.nodes:
             existing = self.nodes[node_id]
             if tags:
                 existing.tags = list(dict.fromkeys(existing.tags + tags))
             return existing
         node = AssetNode(
-            id=node_id, kind=kind, url=url, host=host, port=port,
-            value=value, tags=tags or [],
+            id=node_id,
+            kind=kind,
+            url=url,
+            host=host,
+            port=port,
+            value=value,
+            tags=tags or [],
         )
         self.nodes[node_id] = node
         return node
 
-    def add_edge(self, from_id: str, to_id: str, relation: str, confidence: float = 1.0) -> AssetEdge:
+    def add_edge(
+        self, from_id: str, to_id: str, relation: str, confidence: float = 1.0
+    ) -> AssetEdge:
         for edge in self.edges.get(from_id, []):
             if edge.to_id == to_id and edge.relation == relation:
                 edge.confidence = max(edge.confidence, confidence)
@@ -194,7 +278,9 @@ class AssetGraph:
                     count += 2
         return count
 
-    def bfs(self, starts: Sequence[str], goals: Sequence[str], max_depth: int = 8) -> List[List[str]]:
+    def bfs(
+        self, starts: Sequence[str], goals: Sequence[str], max_depth: int = 8
+    ) -> List[List[str]]:
         """Shortest paths (BFS) from any start to any goal, returning node-id paths."""
         if not goals:
             return []
@@ -270,6 +356,7 @@ class AssetGraph:
 # Asset graph construction from scan state
 # ---------------------------------------------------------------------------
 
+
 def _techs_of(recon: Dict) -> List[Dict]:
     techs = recon.get("technologies", {})
     if isinstance(techs, dict):
@@ -319,7 +406,6 @@ def _add_endpoint(graph: AssetGraph, base: str, url: str, tags=None, evidence=No
     return nid
 
 
-
 def _auth_bypasses_of(state: Dict) -> List[Dict]:
     auth = (state.get("phases") or {}).get("auth_bypass", {})
     if not isinstance(auth, dict):
@@ -355,8 +441,7 @@ def build_asset_graph(state: Dict, target: str = "") -> AssetGraph:
         if not shost or shost == host:
             continue
         snid = host_id(shost)
-        graph.add_node(snid, "host", host=shost,
-                       tags=["ip:%s" % s["ip"]] if s.get("ip") else [])
+        graph.add_node(snid, "host", host=shost, tags=["ip:%s" % s["ip"]] if s.get("ip") else [])
         graph.add_edge(host_id(host), snid, "subdomain", 0.7)
         graph.add_edge(snid, host_id(host), "subdomain", 0.7)
 
@@ -365,8 +450,12 @@ def build_asset_graph(state: Dict, target: str = "") -> AssetGraph:
         if not shost:
             continue
         snid = host_id(shost)
-        graph.add_node(snid, "host", host=shost,
-                       tags=["status:%s" % r.get("status", "")] if r.get("status") else [])
+        graph.add_node(
+            snid,
+            "host",
+            host=shost,
+            tags=["status:%s" % r.get("status", "")] if r.get("status") else [],
+        )
         node = graph.nodes[snid]
         if r.get("server"):
             node.evidence.append("server:%s" % r["server"])
@@ -383,8 +472,7 @@ def build_asset_graph(state: Dict, target: str = "") -> AssetGraph:
             continue
         svc = p.get("service", "")
         sid = port_id(host, port)
-        graph.add_node(sid, "service", host=host, port=int(port),
-                       tags=[str(svc)] if svc else [])
+        graph.add_node(sid, "service", host=host, port=int(port), tags=[str(svc)] if svc else [])
         graph.add_edge(host_id(host), sid, "runs_on", 1.0)
         graph.add_edge(sid, host_id(host), "runs_on", 1.0)
 
@@ -442,8 +530,10 @@ def build_asset_graph(state: Dict, target: str = "") -> AssetGraph:
 # Crown jewel inference
 # ---------------------------------------------------------------------------
 
-def infer_crown_jewels(state: Dict, target: str = "",
-                       override: Optional[Sequence[str]] = None) -> List[str]:
+
+def infer_crown_jewels(
+    state: Dict, target: str = "", override: Optional[Sequence[str]] = None
+) -> List[str]:
     """Infer crown jewels from recon; an explicit override always wins."""
     if override:
         return [str(j) for j in override]
@@ -494,6 +584,7 @@ def infer_crown_jewels(state: Dict, target: str = "",
 # Business value scoring (multi-factor)
 # ---------------------------------------------------------------------------
 
+
 def _role_score(url: str) -> float:
     path = (url or "").split("?", 1)[0].lower()
     best = 0.0
@@ -513,8 +604,9 @@ def _tech_risk(tech_id: str) -> float:
     return _TECH_RISK_SCORE.get(entry.get("risk", "low"), 0.2)
 
 
-def score_assets(graph: AssetGraph, state: Dict,
-                 weights: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+def score_assets(
+    graph: AssetGraph, state: Dict, weights: Optional[Dict[str, float]] = None
+) -> Dict[str, float]:
     """Multi-factor business value per asset node, normalized to 0..10."""
     w = dict(DEFAULT_VALUE_WEIGHTS)
     if weights:
@@ -564,10 +656,15 @@ def score_assets(graph: AssetGraph, state: Dict,
 # Differential verification: predicted attack surface vs confirmed findings
 # ---------------------------------------------------------------------------
 
-def differential_verify(graph: AssetGraph, scores: Dict[str, float],
-                        crown_jewels: Sequence[str], state: Dict) -> Dict:
-    confirmed = [nid for nid, node in graph.nodes.items()
-                 if any(e.startswith("finding:") for e in node.evidence)]
+
+def differential_verify(
+    graph: AssetGraph, scores: Dict[str, float], crown_jewels: Sequence[str], state: Dict
+) -> Dict:
+    confirmed = [
+        nid
+        for nid, node in graph.nodes.items()
+        if any(e.startswith("finding:") for e in node.evidence)
+    ]
     high_value = [nid for nid in scores if scores[nid] >= 6.0]
     confirmed_set = set(confirmed)
     hit = [nid for nid in high_value if nid in confirmed_set]
@@ -576,8 +673,9 @@ def differential_verify(graph: AssetGraph, scores: Dict[str, float],
     coverage = len(hit) / len(confirmed) if confirmed else 0.0
 
     reached = [j for j in crown_jewels if j in confirmed_set]
-    auth_gated = sum(1 for nid, node in graph.nodes.items()
-                     if any(e == "auth_bypass" for e in node.evidence))
+    auth_gated = sum(
+        1 for nid, node in graph.nodes.items() if any(e == "auth_bypass" for e in node.evidence)
+    )
 
     return {
         "expected_high_value": len(high_value),
@@ -594,6 +692,7 @@ def differential_verify(graph: AssetGraph, scores: Dict[str, float],
 # BFS-to-crown-jewel chain ranking
 # ---------------------------------------------------------------------------
 
+
 def _node_label(graph: AssetGraph, nid: str) -> str:
     node = graph.nodes.get(nid)
     if not node:
@@ -605,10 +704,13 @@ def _node_label(graph: AssetGraph, nid: str) -> str:
     return node.url or nid
 
 
-def bfs_to_crown_jewel(graph: AssetGraph, scores: Dict[str, float],
-                       crown_jewels: Sequence[str],
-                       start_nodes: Optional[Sequence[str]] = None,
-                       top_n: int = 5) -> List[Dict]:
+def bfs_to_crown_jewel(
+    graph: AssetGraph,
+    scores: Dict[str, float],
+    crown_jewels: Sequence[str],
+    start_nodes: Optional[Sequence[str]] = None,
+    top_n: int = 5,
+) -> List[Dict]:
     """Ranked shortest paths from the proven attack surface to each crown jewel."""
     if not crown_jewels:
         return []
@@ -616,27 +718,31 @@ def bfs_to_crown_jewel(graph: AssetGraph, scores: Dict[str, float],
     if start_nodes is not None:
         starts = list(start_nodes)
     else:
-        proven = [nid for nid, node in graph.nodes.items()
-                  if node.kind == "endpoint"
-                  and any(e.startswith("finding:") for e in node.evidence)]
-        starts = proven if proven else [
-            nid for nid, node in graph.nodes.items() if node.kind == "host"
+        proven = [
+            nid
+            for nid, node in graph.nodes.items()
+            if node.kind == "endpoint" and any(e.startswith("finding:") for e in node.evidence)
         ]
+        starts = (
+            proven if proven else [nid for nid, node in graph.nodes.items() if node.kind == "host"]
+        )
 
     paths = graph.bfs(starts, list(crown_jewels), max_depth=8)
     ranked = []
     for path in paths:
         avg_value = sum(scores.get(nid, 0.0) for nid in path) / float(len(path))
         conf = graph.path_confidence(path)
-        ranked.append({
-            "nodes": list(path),
-            "target": path[-1],
-            "hops": len(path) - 1,
-            "avg_value": round(avg_value, 2),
-            "confidence": conf,
-            "score": round(avg_value * (0.5 + conf) / 1.5, 2),
-            "path_string": " -> ".join(_node_label(graph, nid) for nid in path),
-        })
+        ranked.append(
+            {
+                "nodes": list(path),
+                "target": path[-1],
+                "hops": len(path) - 1,
+                "avg_value": round(avg_value, 2),
+                "confidence": conf,
+                "score": round(avg_value * (0.5 + conf) / 1.5, 2),
+                "path_string": " -> ".join(_node_label(graph, nid) for nid in path),
+            }
+        )
     ranked.sort(key=lambda x: -x["score"])
     return ranked[:top_n]
 
@@ -645,38 +751,53 @@ def bfs_to_crown_jewel(graph: AssetGraph, scores: Dict[str, float],
 # Report section
 # ---------------------------------------------------------------------------
 
+
 def _recommendations(graph: AssetGraph, chains: List[Dict], diff: Dict) -> List[str]:
     recs: List[str] = []
     if diff.get("expected_high_value", 0) and not diff.get("confirmed_on_high_value", 0):
-        recs.append("No predicted high-value endpoint has confirmed findings; re-test or expand coverage.")
+        recs.append(
+            "No predicted high-value endpoint has confirmed findings; re-test or expand coverage."
+        )
     if diff.get("crown_jewel_reached"):
-        recs.append("Crown jewel reached with confirmed findings: %s" % ", ".join(
-            diff["crown_jewel_reached"]))
+        recs.append(
+            "Crown jewel reached with confirmed findings: %s"
+            % ", ".join(diff["crown_jewel_reached"])
+        )
     for ch in chains[:3]:
-        recs.append("Chain -> %s (%d hops): %s" % (
-            ch["target"], ch["hops"], ch["path_string"]))
+        recs.append("Chain -> %s (%d hops): %s" % (ch["target"], ch["hops"], ch["path_string"]))
     if not chains:
-        recs.append("No path to a crown jewel from current surface; consider protocol/lateral pivots.")
+        recs.append(
+            "No path to a crown jewel from current surface; consider protocol/lateral pivots."
+        )
     if graph.summary().get("connected_components", 0) > 1:
-        recs.append("Multiple disconnected asset components; pivot opportunities may exist between hosts.")
+        recs.append(
+            "Multiple disconnected asset components; pivot opportunities may exist between hosts."
+        )
     return recs
 
 
-def build_pipeline_report(graph: AssetGraph, scores: Dict[str, float],
-                          crown_jewels: Sequence[str], chains: List[Dict],
-                          diff: Dict, target: str = "") -> Dict:
+def build_pipeline_report(
+    graph: AssetGraph,
+    scores: Dict[str, float],
+    crown_jewels: Sequence[str],
+    chains: List[Dict],
+    diff: Dict,
+    target: str = "",
+) -> Dict:
     top_assets = []
     for nid, val in sorted(scores.items(), key=lambda x: -x[1])[:10]:
         node = graph.nodes[nid]
-        top_assets.append({
-            "id": nid,
-            "kind": node.kind,
-            "value": val,
-            "url": node.url,
-            "host": node.host,
-            "port": node.port,
-            "tags": node.tags[:6],
-        })
+        top_assets.append(
+            {
+                "id": nid,
+                "kind": node.kind,
+                "value": val,
+                "url": node.url,
+                "host": node.host,
+                "port": node.port,
+                "tags": node.tags[:6],
+            }
+        )
     return {
         "target": target,
         "asset_graph": graph.summary(),
@@ -688,10 +809,13 @@ def build_pipeline_report(graph: AssetGraph, scores: Dict[str, float],
     }
 
 
-def run_pipeline(state: Dict, target: str = "",
-                 crown_jewels: Optional[Sequence[str]] = None,
-                 weights: Optional[Dict[str, float]] = None,
-                 top_chains: int = 5) -> Dict:
+def run_pipeline(
+    state: Dict,
+    target: str = "",
+    crown_jewels: Optional[Sequence[str]] = None,
+    weights: Optional[Dict[str, float]] = None,
+    top_chains: int = 5,
+) -> Dict:
     """End-to-end pipeline: recon state -> ranked asset graph + crown-jewel chains."""
     graph = build_asset_graph(state, target)
     jewels = infer_crown_jewels(state, target, override=crown_jewels)

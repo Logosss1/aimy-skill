@@ -40,6 +40,7 @@ class TestContextMemory:
         m = ContextMemory()
         m.set("temp_key", {"data": "temp"}, ttl=1)
         import time
+
         time.sleep(1.1)
         cleaned = m.cleanup()
         assert cleaned >= 0

@@ -83,6 +83,7 @@ class TestSqliWeaponizer:
     @responses.activate
     def test_blind_boolean_extraction(self):
         """Boolean-blind extraction of the database name (no UNION)."""
+
         def callback(request):
             v = _param_from(request)
             if "UNION SELECT" in v:
@@ -115,6 +116,7 @@ class TestSqliWeaponizer:
     @responses.activate
     def test_blind_union_extraction(self):
         """Blind UNION extraction: IF(cond,1,2) row-presence oracle, 1 column."""
+
         def callback(request):
             v = _param_from(request)
             if re.search(r"UNION SELECT NULL,NULL", v):

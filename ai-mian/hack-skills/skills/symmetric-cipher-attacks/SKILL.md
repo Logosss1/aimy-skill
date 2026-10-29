@@ -74,7 +74,7 @@ def padding_oracle_attack(ciphertext, block_size, oracle):
     oracle(ct) returns True if padding is valid, False otherwise.
     ciphertext includes IV as first block.
     """
-    blocks = [ciphertext[i:i+block_size] for i in range(0, len(ciphertext), block_size)]
+    blocks = [ciphertext[i : i + block_size] for i in range(0, len(ciphertext), block_size)]
     plaintext = b""
 
     for block_idx in range(1, len(blocks)):
@@ -152,9 +152,10 @@ def cbc_bitflip(ciphertext, block_size, target_byte_pos, old_value, new_value):
     ct[modify_pos] ^= old_value ^ new_value
     return bytes(ct)
 
+
 # Example: flip "admin=0" to "admin=1"
 # If "admin=0" is at byte position 22 (block 1, byte 6):
-modified_ct = cbc_bitflip(ciphertext, 16, 22, ord('0'), ord('1'))
+modified_ct = cbc_bitflip(ciphertext, 16, 22, ord("0"), ord("1"))
 ```
 
 ---
@@ -166,8 +167,9 @@ modified_ct = cbc_bitflip(ciphertext, 16, 22, ord('0'), ord('1'))
 ```python
 def detect_ecb(ciphertext, block_size=16):
     """ECB produces identical blocks for identical plaintext blocks."""
-    blocks = [ciphertext[i:i+block_size] for i in range(0, len(ciphertext), block_size)]
+    blocks = [ciphertext[i : i + block_size] for i in range(0, len(ciphertext), block_size)]
     return len(blocks) != len(set(blocks))
+
 
 # Force detection: send repeated plaintext
 test_input = b"A" * 48  # at least 3 blocks of identical data
@@ -209,7 +211,7 @@ def ecb_byte_at_a_time(encrypt_oracle, block_size=16):
     Returns the unknown_secret.
     """
     secret = b""
-    secret_len = len(encrypt_oracle(b"")) 
+    secret_len = len(encrypt_oracle(b""))
 
     for i in range(secret_len):
         block_num = i // block_size
@@ -218,12 +220,12 @@ def ecb_byte_at_a_time(encrypt_oracle, block_size=16):
 
         # Build lookup table
         target_ct = encrypt_oracle(padding)
-        target_block = target_ct[block_num * block_size:(block_num + 1) * block_size]
+        target_block = target_ct[block_num * block_size : (block_num + 1) * block_size]
 
         for byte_val in range(256):
             test_input = padding + secret + bytes([byte_val])
             test_ct = encrypt_oracle(test_input)
-            test_block = test_ct[block_num * block_size:(block_num + 1) * block_size]
+            test_block = test_ct[block_num * block_size : (block_num + 1) * block_size]
 
             if test_block == target_block:
                 secret += bytes([byte_val])
@@ -249,10 +251,8 @@ def two_time_pad(c1, c2, known_crib=None):
     if known_crib:
         results = []
         for offset in range(len(xored) - len(known_crib) + 1):
-            candidate = bytes(
-                xored[offset + i] ^ known_crib[i] for i in range(len(known_crib))
-            )
-            if all(0x20 <= b <= 0x7e for b in candidate):
+            candidate = bytes(xored[offset + i] ^ known_crib[i] for i in range(len(known_crib)))
+            if all(0x20 <= b <= 0x7E for b in candidate):
                 results.append((offset, candidate))
         return results
     return xored
@@ -264,17 +264,22 @@ def two_time_pad(c1, c2, known_crib=None):
 def single_byte_xor_crack(ciphertext):
     """Brute force single-byte XOR key using frequency analysis."""
     english_freq = {
-        'e': 12.7, 't': 9.1, 'a': 8.2, 'o': 7.5, 'i': 7.0,
-        'n': 6.7, 's': 6.3, 'h': 6.1, 'r': 6.0, 'd': 4.3,
+        "e": 12.7,
+        "t": 9.1,
+        "a": 8.2,
+        "o": 7.5,
+        "i": 7.0,
+        "n": 6.7,
+        "s": 6.3,
+        "h": 6.1,
+        "r": 6.0,
+        "d": 4.3,
     }
     best_score, best_key, best_plaintext = 0, 0, b""
 
     for key in range(256):
         plaintext = bytes(b ^ key for b in ciphertext)
-        score = sum(
-            english_freq.get(chr(b).lower(), 0)
-            for b in plaintext if 0x20 <= b <= 0x7e
-        )
+        score = sum(english_freq.get(chr(b).lower(), 0) for b in plaintext if 0x20 <= b <= 0x7E)
         if score > best_score:
             best_score = score
             best_key = key
@@ -288,17 +293,18 @@ def single_byte_xor_crack(ciphertext):
 ```python
 def repeating_xor_crack(ciphertext, max_keylen=40):
     """Crack repeating-key XOR using Hamming distance for key length."""
+
     def hamming(a, b):
-        return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
+        return sum(bin(x ^ y).count("1") for x, y in zip(a, b))
 
     # Find key length
     scores = []
     for kl in range(2, max_keylen + 1):
-        blocks = [ciphertext[i:i+kl] for i in range(0, len(ciphertext) - kl, kl)]
+        blocks = [ciphertext[i : i + kl] for i in range(0, len(ciphertext) - kl, kl)]
         if len(blocks) < 4:
             continue
-        dist = sum(hamming(blocks[i], blocks[i+1]) for i in range(min(3, len(blocks)-1)))
-        normalized = dist / (min(3, len(blocks)-1) * kl)
+        dist = sum(hamming(blocks[i], blocks[i + 1]) for i in range(min(3, len(blocks) - 1)))
+        normalized = dist / (min(3, len(blocks) - 1) * kl)
         scores.append((normalized, kl))
 
     best_keylen = sorted(scores)[0][1]
@@ -346,7 +352,7 @@ def berlekamp_massey_gf2(output_bits):
                 C[i] ^= B[i - m]
             m += 1
 
-    return C[:L + 1], L
+    return C[: L + 1], L
 ```
 
 ### 4.5 RC4 Biases
@@ -377,6 +383,7 @@ Attack:
 
 ```python
 from itertools import product
+
 
 def meet_in_the_middle(encrypt, decrypt, plaintext, ciphertext, keyspace_bits):
     """MITM attack on double encryption."""

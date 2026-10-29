@@ -12,15 +12,14 @@ from tools.settings import settings
 
 logger = get_logger("jwt_detector")
 
-JWT_REGEX = r'[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+'
+JWT_REGEX = r"[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"
 
 JWT_HEADER_KEYS = ["authorization", "x-jwt", "x-auth-token", "token", "bearer"]
 
 __all__ = ["JWT_REGEX", "JWT_HEADER_KEYS", "decode_jwt_header", "decode_jwt_payload", "check"]
 
 
-def check_jwt_none(sess: requests.Session, url: str = None,
-                   token_header: str = None) -> Dict:
+def check_jwt_none(sess: requests.Session, url: str = None, token_header: str = None) -> Dict:
     result = {"vulnerable": False, "type": None, "evidence": []}
     header = {"alg": "none", "typ": "JWT"}
     payload = {"sub": "admin", "role": "admin", "iat": _time.time()}
@@ -30,29 +29,44 @@ def check_jwt_none(sess: requests.Session, url: str = None,
 
     if url and sess:
         try:
-            r = sess.get(url,
-                         headers={"Authorization": "Bearer %s" % token},
-                         timeout=10)
+            r = sess.get(url, headers={"Authorization": "Bearer %s" % token}, timeout=10)
             if r.status_code in (200, 201, 204):
                 result["vulnerable"] = True
                 result["type"] = "alg_none"
-                result["evidence"].append("alg:none token accepted at %s (status %d)" % (url, r.status_code))
+                result["evidence"].append(
+                    "alg:none token accepted at %s (status %d)" % (url, r.status_code)
+                )
                 return result
         except Exception as e:
             logger.debug("jwt none test: %s", e)
 
-    return {"token": token, "header": header, "payload": payload,
-            "note": "alg:none token generated - test manually if network test failed"}
+    return {
+        "token": token,
+        "header": header,
+        "payload": payload,
+        "note": "alg:none token generated - test manually if network test failed",
+    }
 
 
 def check_jwt_weak_secret(token: str, wordlist: list = None) -> Dict:
     if wordlist is None:
-        wordlist = ["secret", "password", "123456", "admin", "key", "jwt_secret",
-                     "supersecret", "pass", "changeme", "1234"]
+        wordlist = [
+            "secret",
+            "password",
+            "123456",
+            "admin",
+            "key",
+            "jwt_secret",
+            "supersecret",
+            "pass",
+            "changeme",
+            "1234",
+        ]
     result = {"vulnerable": False, "found_secret": None}
     try:
         import hashlib
         import hmac
+
         parts = token.split(".")
         if len(parts) != 3:
             return result
@@ -70,8 +84,9 @@ def check_jwt_weak_secret(token: str, wordlist: list = None) -> Dict:
     return result
 
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -88,7 +103,9 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
                     entry = {"token": token[:50] + "...", "header": hdr, "payload": payload}
                     result["tokens_found"].append(entry)
                     if payload:
-                        if payload.get("role") == "admin" or str(payload.get("sub", "")).startswith("admin"):
+                        if payload.get("role") == "admin" or str(payload.get("sub", "")).startswith(
+                            "admin"
+                        ):
                             result["findings"].append("high-privilege token found in page body")
                         if hdr and hdr.get("alg") == "none":
                             result["findings"].append("alg:none token header detected in page body")

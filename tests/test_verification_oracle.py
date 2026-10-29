@@ -29,31 +29,37 @@ class TestConfidenceVoter:
     def test_vote_status_code_same(self):
         class Resp:
             status_code = 200
+
         assert ConfidenceVoter.vote_status_code(Resp(), 200) == 0.0
 
     def test_vote_status_code_500(self):
         class Resp:
             status_code = 500
+
         assert ConfidenceVoter.vote_status_code(Resp(), 200) == 0.5
 
     def test_vote_status_code_502(self):
         class Resp:
             status_code = 502
+
         assert ConfidenceVoter.vote_status_code(Resp(), 200) == 0.5
 
     def test_vote_status_code_200_same(self):
         class Resp:
             status_code = 200
+
         assert ConfidenceVoter.vote_status_code(Resp(), 200) == 0.0
 
     def test_vote_status_code_503(self):
         class Resp:
             status_code = 503
+
         assert ConfidenceVoter.vote_status_code(Resp(), 200) == 0.5
 
     def test_vote_status_code_different(self):
         class Resp:
             status_code = 200
+
         assert ConfidenceVoter.vote_status_code(Resp(), 404) == 0.3
 
     def test_vote_length_diff_large(self):
@@ -89,11 +95,15 @@ class TestConfidenceVoter:
         assert ConfidenceVoter.vote_time_elapsed(1.0, 0.5, 5.0) == 0.0
 
     def test_vote_evidence_keywords_many(self):
-        score = ConfidenceVoter.vote_evidence_keywords("error warning critical", ["error", "warning", "critical"])
+        score = ConfidenceVoter.vote_evidence_keywords(
+            "error warning critical", ["error", "warning", "critical"]
+        )
         assert score == 0.9
 
     def test_vote_evidence_keywords_few(self):
-        score = ConfidenceVoter.vote_evidence_keywords("error found", ["error", "warning", "critical"])
+        score = ConfidenceVoter.vote_evidence_keywords(
+            "error found", ["error", "warning", "critical"]
+        )
         assert score == 0.5
 
     def test_vote_evidence_keywords_none(self):
@@ -144,7 +154,9 @@ class TestVerificationOracle:
     def test_verify_unknown_detector(self):
         oracle = VerificationOracle()
         finding = {"vulnerable": True, "type": "unknown"}
-        result = oracle.verify("unknown_type", finding, "http://test.com", "id", MagicMock(), timeout=2.0)
+        result = oracle.verify(
+            "unknown_type", finding, "http://test.com", "id", MagicMock(), timeout=2.0
+        )
         assert result["vulnerable"] is True
 
     def test_verify_ssrf_disclosure(self):

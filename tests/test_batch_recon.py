@@ -8,11 +8,22 @@ class TestBatchRecon:
         hosts = tmp_path / "hosts.txt"
         hosts.write_text("1.2.3.4\n5.6.7.8\n")
         with mock.patch.object(batch_recon, "_scan_ports", side_effect=[[80, 443], [22]]):
-            with mock.patch.object(batch_recon, "_probe_web", side_effect=[
-                [{"url": "http://1.2.3.4/", "status": 200, "server": "nginx",
-                  "title": "Login", "has_login": True}],
-                [],
-            ]):
+            with mock.patch.object(
+                batch_recon,
+                "_probe_web",
+                side_effect=[
+                    [
+                        {
+                            "url": "http://1.2.3.4/",
+                            "status": 200,
+                            "server": "nginx",
+                            "title": "Login",
+                            "has_login": True,
+                        }
+                    ],
+                    [],
+                ],
+            ):
                 r = batch_recon.run(str(hosts), ports="22,80,443")
         assert r["targets"] == 2
         assert len(r["alive"]) == 2
@@ -32,11 +43,15 @@ class TestBatchRecon:
     def test_unauth_link(self, tmp_path):
         hosts = tmp_path / "hosts.txt"
         hosts.write_text("1.2.3.4\n")
-        fake_unauth = mock.Mock(return_value={
-            "scanned": 1, "vulnerable": True, "_vulnerable_count": 1,
-            "findings": [{"ip": "1.2.3.4", "port": 6379, "unauth": True, "version": "8.0"}],
-            "honeypots": [],
-        })
+        fake_unauth = mock.Mock(
+            return_value={
+                "scanned": 1,
+                "vulnerable": True,
+                "_vulnerable_count": 1,
+                "findings": [{"ip": "1.2.3.4", "port": 6379, "unauth": True, "version": "8.0"}],
+                "honeypots": [],
+            }
+        )
         with mock.patch.object(batch_recon, "_scan_ports", return_value=[6379]):
             with mock.patch.object(batch_recon, "_probe_web", return_value=[]):
                 with mock.patch.object(batch_recon, "unauth_check", fake_unauth):

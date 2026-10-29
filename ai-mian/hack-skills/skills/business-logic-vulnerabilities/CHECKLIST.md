@@ -290,13 +290,12 @@
 ```python
 # Burp Turbo Intruder template
 def queueRequests(target, wordlists):
-    engine = RequestEngine(endpoint=target.endpoint,
-                           concurrentConnections=30,
-                           requestsPerConnection=10,
-                           pipeline=False)
+    engine = RequestEngine(
+        endpoint=target.endpoint, concurrentConnections=30, requestsPerConnection=10, pipeline=False
+    )
     for i in range(30):
-        engine.queue(target.req, target.baseInput, gate='race1')
-    engine.openGate('race1')
+        engine.queue(target.req, target.baseInput, gate="race1")
+    engine.openGate("race1")
 ```
 
 ---

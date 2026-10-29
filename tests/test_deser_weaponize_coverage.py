@@ -211,9 +211,7 @@ class TestSendPayload:
 
     def test_java_posts_bytes(self):
         sess = self._session()
-        result = dw.send_payload(
-            "http://t.test/deser", "p", technique="java_urldns", sess=sess
-        )
+        result = dw.send_payload("http://t.test/deser", "p", technique="java_urldns", sess=sess)
         assert result["sent"] is True
         assert result["status"] == 200
         assert result["interesting"] is True
@@ -231,9 +229,7 @@ class TestSendPayload:
 
     def test_nodejs_posts_json(self):
         sess = self._session()
-        dw.send_payload(
-            "http://t.test/deser", "p", technique="nodejs_rce", cmd="whoami", sess=sess
-        )
+        dw.send_payload("http://t.test/deser", "p", technique="nodejs_rce", cmd="whoami", sess=sess)
         assert sess.calls[0][1]["json"] == {"rce": "whoami"}
 
     def test_php_posts_via_url(self):
@@ -247,23 +243,17 @@ class TestSendPayload:
 
     def test_500_with_error_marker_not_interesting(self):
         sess = self._session(status=500, text="y" * 60 + "error!")
-        result = dw.send_payload(
-            "http://t.test/deser", "p", technique="php_generic", sess=sess
-        )
+        result = dw.send_payload("http://t.test/deser", "p", technique="php_generic", sess=sess)
         assert result["sent"] is True
         assert "interesting" not in result
 
     def test_404_without_error_marker_interesting(self):
         sess = self._session(status=404, text="z" * 60)
-        result = dw.send_payload(
-            "http://t.test/deser", "p", technique="php_generic", sess=sess
-        )
+        result = dw.send_payload("http://t.test/deser", "p", technique="php_generic", sess=sess)
         assert result["interesting"] is True
 
     def test_unknown_technique(self):
-        result = dw.send_payload(
-            "http://t.test/deser", "p", technique="nope", sess=self._session()
-        )
+        result = dw.send_payload("http://t.test/deser", "p", technique="nope", sess=self._session())
         assert result["success"] is False
         assert result["error"]
 
@@ -272,7 +262,9 @@ class TestSendPayload:
             raise requests.ConnectionError("boom")
 
         result = dw.send_payload(
-            "http://t.test/deser", "p", technique="php_generic",
+            "http://t.test/deser",
+            "p",
+            technique="php_generic",
             sess=HandlerSession(handler),
         )
         assert result["sent"] is False
@@ -281,9 +273,7 @@ class TestSendPayload:
     def test_session_created_when_missing(self):
         sess = self._session()
         with mock.patch("requests.Session", return_value=sess):
-            result = dw.send_payload(
-                "http://t.test/deser", "p", technique="php_generic", sess=None
-            )
+            result = dw.send_payload("http://t.test/deser", "p", technique="php_generic", sess=None)
         assert result["sent"] is True
 
 

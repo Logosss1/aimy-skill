@@ -2,6 +2,7 @@
 
 Time is frozen/patched via tools.context_memory.time; storage is a MagicMock.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,21 +26,28 @@ def _frozen_time(value=1000.0):
 class TestMemoryEntry:
     def test_is_expired_with_frozen_time(self):
         with patch("tools.context_memory.time", _frozen_time(1000.0)):
-            entry = MemoryEntry(key="k", value="v", source="s", confidence=0.8,
-                                timestamp=900.0, ttl=50.0)
+            entry = MemoryEntry(
+                key="k", value="v", source="s", confidence=0.8, timestamp=900.0, ttl=50.0
+            )
             assert entry.is_expired() is True
-            fresh = MemoryEntry(key="k", value="v", source="s", confidence=0.8,
-                                timestamp=990.0, ttl=50.0)
+            fresh = MemoryEntry(
+                key="k", value="v", source="s", confidence=0.8, timestamp=990.0, ttl=50.0
+            )
             assert fresh.is_expired() is False
 
     def test_to_dict(self):
         with patch("tools.context_memory.time", _frozen_time(1000.0)):
-            entry = MemoryEntry(key="k", value=[1, 2], source="s", confidence=0.85,
-                                timestamp=900.0, tags=["a"])
+            entry = MemoryEntry(
+                key="k", value=[1, 2], source="s", confidence=0.85, timestamp=900.0, tags=["a"]
+            )
             data = entry.to_dict()
         assert data == {
-            "key": "k", "value": [1, 2], "source": "s",
-            "confidence": 0.85, "age_seconds": 100.0, "tags": ["a"],
+            "key": "k",
+            "value": [1, 2],
+            "source": "s",
+            "confidence": 0.85,
+            "age_seconds": 100.0,
+            "tags": ["a"],
         }
 
 
@@ -122,12 +130,20 @@ class TestRestore:
         memory = ContextMemory()
         with patch("tools.context_memory.time", _frozen_time(1000.0)):
             memory.set("existing", "strong", source="x", confidence=0.9)
-            memory.restore({
-                "existing": {"value": "weak", "confidence": 0.5},
-                "plain": {"value": 42},
-                "tagged": {"value": "v", "source": "backup", "confidence": 0.7,
-                           "timestamp": 980.0, "ttl": 500.0, "tags": ["t"]},
-            })
+            memory.restore(
+                {
+                    "existing": {"value": "weak", "confidence": 0.5},
+                    "plain": {"value": 42},
+                    "tagged": {
+                        "value": "v",
+                        "source": "backup",
+                        "confidence": 0.7,
+                        "timestamp": 980.0,
+                        "ttl": 500.0,
+                        "tags": ["t"],
+                    },
+                }
+            )
             assert memory.get("existing") == "strong"
             assert memory.get("plain") == 42
             plain_entry = memory.get_entry("plain")
@@ -175,8 +191,10 @@ class TestSuggestions:
         memory.set("db_creds", {"user": "root"})
         suggestions = memory.get_suggestions("sqli")
         assert suggestions == {
-            "dbms": "MySQL 8.0", "dialect": "mysql",
-            "waf": "Cloudflare", "bypass_strategy": "cloudflare_bypass",
+            "dbms": "MySQL 8.0",
+            "dialect": "mysql",
+            "waf": "Cloudflare",
+            "bypass_strategy": "cloudflare_bypass",
             "use_credentials": {"user": "root"},
         }
 
@@ -188,7 +206,10 @@ class TestSuggestions:
         memory.set("framework", "Spring Boot")
         memory.set("language", "java")
         assert memory.get_suggestions("ssti") == {
-            "framework": "Spring Boot", "template_engine": "spel", "language": "java"}
+            "framework": "Spring Boot",
+            "template_engine": "spel",
+            "language": "java",
+        }
 
     def test_ssrf(self):
         memory = ContextMemory()
@@ -224,10 +245,14 @@ class TestSuggestions:
         memory.set("ssh_keys", ["key"])
         memory.set("cloud_creds", {"ak": "sk"})
         assert memory.get_suggestions("auth") == {
-            "credentials": {"user": "admin"}, "session": "tok"}
+            "credentials": {"user": "admin"},
+            "session": "tok",
+        }
         assert memory.get_suggestions("exploit") == {
-            "credentials": {"user": "admin"}, "ssh_keys": ["key"],
-            "cloud_credentials": {"ak": "sk"}}
+            "credentials": {"user": "admin"},
+            "ssh_keys": ["key"],
+            "cloud_credentials": {"ak": "sk"},
+        }
 
     def test_unknown_module(self):
         assert ContextMemory().get_suggestions("misc") == {}
@@ -242,7 +267,11 @@ class TestAutoLearn:
         memory.set("os_type", "linux")
         stats = memory.get_stats()
         assert stats["learnt_rules"] == {
-            "sqli_dialect": 1, "ssti_engine": 1, "waf_bypass": 1, "os_specific": 1}
+            "sqli_dialect": 1,
+            "ssti_engine": 1,
+            "waf_bypass": 1,
+            "os_specific": 1,
+        }
         assert memory._learnt_rules["sqli_dialect"][0]["dialect"] == "postgresql"
         assert memory._learnt_rules["ssti_engine"][0]["engine"] == "django_template"
         assert memory._learnt_rules["waf_bypass"][0]["strategy"] == "akamai_bypass"
@@ -313,23 +342,30 @@ class TestMappings:
 
     def test_cloud_metadata_url(self):
         memory = ContextMemory()
-        assert memory._cloud_metadata_url("AWS") == \
-            "http://169.254.169.254/latest/meta-data/"
-        assert memory._cloud_metadata_url("GCP") == \
-            "http://metadata.google.internal/computeMetadata/v1/"
-        assert memory._cloud_metadata_url("Google Cloud") == \
-            "http://metadata.google.internal/computeMetadata/v1/"
+        assert memory._cloud_metadata_url("AWS") == "http://169.254.169.254/latest/meta-data/"
+        assert (
+            memory._cloud_metadata_url("GCP")
+            == "http://metadata.google.internal/computeMetadata/v1/"
+        )
+        assert (
+            memory._cloud_metadata_url("Google Cloud")
+            == "http://metadata.google.internal/computeMetadata/v1/"
+        )
         assert "api-version" in memory._cloud_metadata_url("Azure")
-        assert memory._cloud_metadata_url("Alibaba Cloud") == \
-            "http://100.100.100.200/latest/meta-data/"
-        assert memory._cloud_metadata_url("Aliyun") == \
-            "http://100.100.100.200/latest/meta-data/"
-        assert memory._cloud_metadata_url("Tencent") == \
-            "http://metadata.tencentyun.com/latest/meta-data/"
-        assert memory._cloud_metadata_url("QCloud") == \
-            "http://metadata.tencentyun.com/latest/meta-data/"
-        assert memory._cloud_metadata_url("Unknown") == \
-            "http://169.254.169.254/latest/meta-data/"
+        assert (
+            memory._cloud_metadata_url("Alibaba Cloud")
+            == "http://100.100.100.200/latest/meta-data/"
+        )
+        assert memory._cloud_metadata_url("Aliyun") == "http://100.100.100.200/latest/meta-data/"
+        assert (
+            memory._cloud_metadata_url("Tencent")
+            == "http://metadata.tencentyun.com/latest/meta-data/"
+        )
+        assert (
+            memory._cloud_metadata_url("QCloud")
+            == "http://metadata.tencentyun.com/latest/meta-data/"
+        )
+        assert memory._cloud_metadata_url("Unknown") == "http://169.254.169.254/latest/meta-data/"
 
     def test_php_wrappers_versions(self):
         memory = ContextMemory()

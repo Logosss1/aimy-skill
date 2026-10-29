@@ -61,81 +61,112 @@ class AndroidScanner:
 
     def _check_manifest(self):
         if not self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="manifest", severity="medium",
-                title="AndroidManifest.xml not readable",
-                description="Could not decode AndroidManifest.xml; may be binary encoded",
-                recommendation="Use apktool to decode the manifest",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="manifest",
+                    severity="medium",
+                    title="AndroidManifest.xml not readable",
+                    description="Could not decode AndroidManifest.xml; may be binary encoded",
+                    recommendation="Use apktool to decode the manifest",
+                )
+            )
             return
         self.manifest_xml.split("\n")
 
     def _check_backup(self):
-        if 'android:allowBackup="true"' in self.manifest_xml or "allowBackup=true" in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="backup", severity="high",
-                title="Backup Allowed",
-                description="android:allowBackup=true allows full app data backup via ADB",
-                recommendation="Set android:allowBackup=false in AndroidManifest.xml",
-                cwe="CWE-312",
-            ))
+        if (
+            'android:allowBackup="true"' in self.manifest_xml
+            or "allowBackup=true" in self.manifest_xml
+        ):
+            self.findings.append(
+                MobileFinding(
+                    category="backup",
+                    severity="high",
+                    title="Backup Allowed",
+                    description="android:allowBackup=true allows full app data backup via ADB",
+                    recommendation="Set android:allowBackup=false in AndroidManifest.xml",
+                    cwe="CWE-312",
+                )
+            )
 
     def _check_debuggable(self):
         if 'android:debuggable="true"' in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="debug", severity="high",
-                title="Debuggable App",
-                description="App is debuggable; debugger can attach and inspect runtime",
-                recommendation="Remove android:debuggable or set to false for release builds",
-                cwe="CWE-489",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="debug",
+                    severity="high",
+                    title="Debuggable App",
+                    description="App is debuggable; debugger can attach and inspect runtime",
+                    recommendation="Remove android:debuggable or set to false for release builds",
+                    cwe="CWE-489",
+                )
+            )
 
     def _check_exported_components(self):
         exported_count = self.manifest_xml.count('android:exported="true"')
         if exported_count > 0:
-            self.findings.append(MobileFinding(
-                category="components", severity="medium",
-                title="%d Exported Components" % exported_count,
-                description="Components with exported=true can be launched by any app",
-                recommendation="Set exported=false or implement proper permission checks",
-                cwe="CWE-926",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="components",
+                    severity="medium",
+                    title="%d Exported Components" % exported_count,
+                    description="Components with exported=true can be launched by any app",
+                    recommendation="Set exported=false or implement proper permission checks",
+                    cwe="CWE-926",
+                )
+            )
 
     def _check_ssl(self):
         if "http://" in self.manifest_xml and "https://" not in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="network", severity="critical",
-                title="Plain HTTP Usage",
-                description="App uses HTTP without HTTPS; all traffic is unencrypted",
-                recommendation="Use HTTPS for all network communications",
-                cwe="CWE-319",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="network",
+                    severity="critical",
+                    title="Plain HTTP Usage",
+                    description="App uses HTTP without HTTPS; all traffic is unencrypted",
+                    recommendation="Use HTTPS for all network communications",
+                    cwe="CWE-319",
+                )
+            )
         if 'android:usesCleartextTraffic="true"' in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="network", severity="critical",
-                title="Cleartext Traffic Allowed",
-                description="usesCleartextTraffic=true allows unencrypted HTTP traffic",
-                recommendation="Set android:usesCleartextTraffic=false",
-                cwe="CWE-319",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="network",
+                    severity="critical",
+                    title="Cleartext Traffic Allowed",
+                    description="usesCleartextTraffic=true allows unencrypted HTTP traffic",
+                    recommendation="Set android:usesCleartextTraffic=false",
+                    cwe="CWE-319",
+                )
+            )
 
     def _check_webview(self):
         if "setJavaScriptEnabled" in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="webview", severity="medium",
-                title="JavaScript Enabled in WebView",
-                description="WebView with JavaScript enabled may be vulnerable to XSS",
-                recommendation="Disable JavaScript unless absolutely necessary; sanitize input",
-                cwe="CWE-79",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="webview",
+                    severity="medium",
+                    title="JavaScript Enabled in WebView",
+                    description="WebView with JavaScript enabled may be vulnerable to XSS",
+                    recommendation="Disable JavaScript unless absolutely necessary; sanitize input",
+                    cwe="CWE-79",
+                )
+            )
 
     def _check_permissions(self):
         dangerous = [
-            "READ_SMS", "SEND_SMS", "RECEIVE_SMS",
-            "READ_CONTACTS", "CAMERA", "RECORD_AUDIO",
-            "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION",
-            "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE",
-            "GET_TASKS", "SYSTEM_ALERT_WINDOW",
+            "READ_SMS",
+            "SEND_SMS",
+            "RECEIVE_SMS",
+            "READ_CONTACTS",
+            "CAMERA",
+            "RECORD_AUDIO",
+            "ACCESS_FINE_LOCATION",
+            "ACCESS_COARSE_LOCATION",
+            "READ_EXTERNAL_STORAGE",
+            "WRITE_EXTERNAL_STORAGE",
+            "GET_TASKS",
+            "SYSTEM_ALERT_WINDOW",
             "BIND_ACCESSIBILITY_SERVICE",
         ]
         found = []
@@ -143,33 +174,42 @@ class AndroidScanner:
             if 'android.permission.%s"' % perm in self.manifest_xml:
                 found.append(perm)
         if found:
-            self.findings.append(MobileFinding(
-                category="permissions", severity="medium",
-                title="Dangerous Permissions: %s" % ", ".join(found[:5]),
-                description="App requests %d dangerous permissions" % len(found),
-                recommendation="Review each permission; use runtime permission model",
-                cwe="CWE-250",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="permissions",
+                    severity="medium",
+                    title="Dangerous Permissions: %s" % ", ".join(found[:5]),
+                    description="App requests %d dangerous permissions" % len(found),
+                    recommendation="Review each permission; use runtime permission model",
+                    cwe="CWE-250",
+                )
+            )
 
     def _check_network_security(self):
         ns_files = [k for k in self.resources if "network_security" in k]
-        if not ns_files and 'android:networkSecurityConfig' not in self.manifest_xml:
-            self.findings.append(MobileFinding(
-                category="network", severity="info",
-                title="No Network Security Config",
-                description="No network_security_config.xml found; default allows all CAs",
-                recommendation="Add network_security_config.xml with certificate pinning",
-                cwe="CWE-295",
-            ))
+        if not ns_files and "android:networkSecurityConfig" not in self.manifest_xml:
+            self.findings.append(
+                MobileFinding(
+                    category="network",
+                    severity="info",
+                    title="No Network Security Config",
+                    description="No network_security_config.xml found; default allows all CAs",
+                    recommendation="Add network_security_config.xml with certificate pinning",
+                    cwe="CWE-295",
+                )
+            )
 
     def _check_dex_count(self):
         if len(self.dex_files) > 3:
-            self.findings.append(MobileFinding(
-                category="obfuscation", severity="info",
-                title="Multi-Dex App (%d .dex files)" % len(self.dex_files),
-                description="Multiple DEX files may indicate code obfuscation/packing",
-                recommendation="Verify with dex2jar or jadx",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="obfuscation",
+                    severity="info",
+                    title="Multi-Dex App (%d .dex files)" % len(self.dex_files),
+                    description="Multiple DEX files may indicate code obfuscation/packing",
+                    recommendation="Verify with dex2jar or jadx",
+                )
+            )
 
     def _result(self) -> Dict:
         by_severity = {}
@@ -180,9 +220,14 @@ class AndroidScanner:
             "total_findings": len(self.findings),
             "by_severity": {k: len(v) for k, v in by_severity.items()},
             "findings": [
-                {"category": f.category, "severity": f.severity,
-                 "title": f.title, "description": f.description,
-                 "recommendation": f.recommendation, "cwe": f.cwe}
+                {
+                    "category": f.category,
+                    "severity": f.severity,
+                    "title": f.title,
+                    "description": f.description,
+                    "recommendation": f.recommendation,
+                    "cwe": f.cwe,
+                }
                 for f in self.findings
             ],
             "dex_count": len(self.dex_files),
@@ -224,46 +269,62 @@ class IOSScanner:
 
     def _check_ats(self):
         if "NSAppTransportSecurity" in self.plist:
-            if "NSAllowsArbitraryLoads" in self.plist and "true" in self.plist.split("NSAllowsArbitraryLoads")[1][:10]:
-                self.findings.append(MobileFinding(
-                    category="network", severity="critical",
-                    title="ATS Disabled (NSAllowsArbitraryLoads=true)",
-                    description="App Transport Security bypassed; allows HTTP connections",
-                    recommendation="Remove NSAllowsArbitraryLoads or set specific exception domains",
-                    cwe="CWE-319",
-                ))
+            if (
+                "NSAllowsArbitraryLoads" in self.plist
+                and "true" in self.plist.split("NSAllowsArbitraryLoads")[1][:10]
+            ):
+                self.findings.append(
+                    MobileFinding(
+                        category="network",
+                        severity="critical",
+                        title="ATS Disabled (NSAllowsArbitraryLoads=true)",
+                        description="App Transport Security bypassed; allows HTTP connections",
+                        recommendation="Remove NSAllowsArbitraryLoads or set specific exception domains",
+                        cwe="CWE-319",
+                    )
+                )
 
     def _check_encryption(self):
         if "NSFileProtection" not in self.plist:
-            self.findings.append(MobileFinding(
-                category="data_storage", severity="high",
-                title="No File Protection",
-                description="NSFileProtection not configured; app data may be accessible on locked device",
-                recommendation="Set NSFileProtection to NSFileProtectionComplete",
-                cwe="CWE-312",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="data_storage",
+                    severity="high",
+                    title="No File Protection",
+                    description="NSFileProtection not configured; app data may be accessible on locked device",
+                    recommendation="Set NSFileProtection to NSFileProtectionComplete",
+                    cwe="CWE-312",
+                )
+            )
 
     def _check_frameworks(self):
         dangerous = ["JSPatch", "ReactNativeDev", "FLEX", "Cycript", "SSLKillSwitch"]
         for fw in self.frameworks:
             for d in dangerous:
                 if d.lower() in fw.lower():
-                    self.findings.append(MobileFinding(
-                        category="framework", severity="high",
-                        title="%s Detected" % d,
-                        description="%s framework found; may indicate jailbreak detection bypass or debug tools" % d,
-                        recommendation="Remove debug frameworks from release builds",
-                    ))
+                    self.findings.append(
+                        MobileFinding(
+                            category="framework",
+                            severity="high",
+                            title="%s Detected" % d,
+                            description="%s framework found; may indicate jailbreak detection bypass or debug tools"
+                            % d,
+                            recommendation="Remove debug frameworks from release builds",
+                        )
+                    )
 
     def _check_uiwebview(self):
         if "UIWebView" in self.plist or "UIWebView" in str(self.frameworks):
-            self.findings.append(MobileFinding(
-                category="webview", severity="high",
-                title="UIWebView Usage",
-                description="UIWebView is deprecated and lacks WKWebView security features",
-                recommendation="Migrate from UIWebView to WKWebView",
-                cwe="CWE-79",
-            ))
+            self.findings.append(
+                MobileFinding(
+                    category="webview",
+                    severity="high",
+                    title="UIWebView Usage",
+                    description="UIWebView is deprecated and lacks WKWebView security features",
+                    recommendation="Migrate from UIWebView to WKWebView",
+                    cwe="CWE-79",
+                )
+            )
 
     def _result(self) -> Dict:
         by_severity = {}
@@ -274,9 +335,14 @@ class IOSScanner:
             "total_findings": len(self.findings),
             "by_severity": {k: len(v) for k, v in by_severity.items()},
             "findings": [
-                {"category": f.category, "severity": f.severity,
-                 "title": f.title, "description": f.description,
-                 "recommendation": f.recommendation, "cwe": f.cwe}
+                {
+                    "category": f.category,
+                    "severity": f.severity,
+                    "title": f.title,
+                    "description": f.description,
+                    "recommendation": f.recommendation,
+                    "cwe": f.cwe,
+                }
                 for f in self.findings
             ],
             "framework_count": len(self.frameworks),

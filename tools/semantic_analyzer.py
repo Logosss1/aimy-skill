@@ -7,14 +7,38 @@ from tools.log_utils import get_logger
 
 logger = get_logger("semantic_analyzer")
 
-STRUCTURAL_TAGS = {"table", "div", "form", "input", "select", "a", "script", "img",
-                    "h1", "h2", "h3", "p", "ul", "li", "span", "section", "article"}
+STRUCTURAL_TAGS = {
+    "table",
+    "div",
+    "form",
+    "input",
+    "select",
+    "a",
+    "script",
+    "img",
+    "h1",
+    "h2",
+    "h3",
+    "p",
+    "ul",
+    "li",
+    "span",
+    "section",
+    "article",
+}
 
 
 class ResponseSignature:
-    def __init__(self, status: int, length: int, structure_hash: str,
-                 error_patterns: List[str], content_type: str,
-                 title: str = "", keywords: List[str] = None):
+    def __init__(
+        self,
+        status: int,
+        length: int,
+        structure_hash: str,
+        error_patterns: List[str],
+        content_type: str,
+        title: str = "",
+        keywords: List[str] = None,
+    ):
         self.status = status
         self.length = length
         self.structure_hash = structure_hash
@@ -38,12 +62,25 @@ class ResponseSignature:
         return changes
 
 
-VOID_TAGS = {"input", "img", "br", "hr", "meta", "link", "area", "base",
-             "col", "embed", "source", "track", "wbr"}
+VOID_TAGS = {
+    "input",
+    "img",
+    "br",
+    "hr",
+    "meta",
+    "link",
+    "area",
+    "base",
+    "col",
+    "embed",
+    "source",
+    "track",
+    "wbr",
+}
 
 
 def extract_structure(text: str) -> Dict:
-    tags = re.findall(r'<(/?)(' + '|'.join(STRUCTURAL_TAGS) + r')([^>]*)>', text, re.I)
+    tags = re.findall(r"<(/?)(" + "|".join(STRUCTURAL_TAGS) + r")([^>]*)>", text, re.I)
     counts = {}
     depth = 0
     max_depth = 0
@@ -57,9 +94,9 @@ def extract_structure(text: str) -> Dict:
                 max_depth = max(max_depth, depth)
         else:
             depth = max(0, depth - 1)
-    form_count = len(re.findall(r'<form[^>]*>', text, re.I))
-    input_count = len(re.findall(r'<input[^>]*>', text, re.I))
-    script_count = len(re.findall(r'<script[^>]*>', text, re.I))
+    form_count = len(re.findall(r"<form[^>]*>", text, re.I))
+    input_count = len(re.findall(r"<input[^>]*>", text, re.I))
+    script_count = len(re.findall(r"<script[^>]*>", text, re.I))
     return {
         "tag_counts": counts,
         "max_depth": max_depth,
@@ -83,12 +120,18 @@ def extract_error_patterns(text: str) -> List[str]:
     checks = [
         (r"SQL syntax.*MySQL|Warning.*mysql_|MariaDB", "mysql"),
         (r"Fatal error.*Uncaught.*|Warning.*PHP", "php"),
-        (r"org\.springframework\.|java\.lang\.|NullPointerException|ClassCastException", "java_spring"),
+        (
+            r"org\.springframework\.|java\.lang\.|NullPointerException|ClassCastException",
+            "java_spring",
+        ),
         (r"Warning.*pg_|PostgreSQL.*ERROR|psql.*ERROR", "postgresql"),
         (r"Unclosed quotation mark|Microsoft OLE DB|SQL Server.*Error", "mssql"),
         (r"Warning.*oci_|ORA-[0-9]{5}|Oracle.*Driver", "oracle"),
-        (r'Traceback \(most recent call last\)|File "[^"]+", line \d+|'
-         r'(?:NameError|TypeError|ValueError|KeyError|AttributeError):', "python"),
+        (
+            r'Traceback \(most recent call last\)|File "[^"]+", line \d+|'
+            r"(?:NameError|TypeError|ValueError|KeyError|AttributeError):",
+            "python",
+        ),
         (r"Warning.*SimpleXML|DOMDocument|loadXML.*", "xml_xxe"),
         (r"Parse error|syntax error.*unexpected|unexpected T_", "php_parse"),
         (r"root@|www-data@|ubuntu@", "shell_output"),
@@ -106,9 +149,9 @@ def extract_error_patterns(text: str) -> List[str]:
 
 
 def analyze_single_response(body: str, status: int, content_type: str = "") -> Dict:
-    title_m = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.DOTALL)
+    title_m = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.DOTALL)
     title = title_m.group(1).strip() if title_m else ""
-    keywords = list(set(re.findall(r'\b([A-Z]\w{3,20})\b', body[:500])))
+    keywords = list(set(re.findall(r"\b([A-Z]\w{3,20})\b", body[:500])))
     return {
         "status": status,
         "length": len(body),
@@ -194,7 +237,7 @@ def detect_content_reflection(original_payload: str, response_body: str) -> Dict
                 fragment.replace('"', "&quot;"),
             ]
             for idx in [m.start() for m in re.finditer(re.escape(fragment[:20]), response_body)]:
-                window = response_body[idx:idx + len(fragment) + 50]
+                window = response_body[idx : idx + len(fragment) + 50]
                 is_escaped = any(ev in window for ev in escaped_variants if ev != fragment)
                 if not is_escaped and fragment in window:
                     context = _detect_html_context(response_body, idx)
@@ -211,17 +254,21 @@ def detect_content_reflection(original_payload: str, response_body: str) -> Dict
 
 
 def _detect_html_context(html_text: str, offset: int) -> str:
-    before = html_text[max(0, offset - 100):offset]
+    before = html_text[max(0, offset - 100) : offset]
     lower_before = html_text[:offset].lower()
     # 未闭合的 <script 跨越窗口边界也要识别 (旧逻辑只看 50 字符, 深层
     # script 内反射被误标 html).
     if lower_before.rfind("<script") > lower_before.rfind("</script"):
         return "js"
-    if 'onerror=' in before[-50:] or 'onload=' in before[-50:] or 'onfocus=' in before[-50:]:
+    if "onerror=" in before[-50:] or "onload=" in before[-50:] or "onfocus=" in before[-50:]:
         return "event_handler"
-    if 'href=' in before[-30:] or 'src=' in before[-30:]:
+    if "href=" in before[-30:] or "src=" in before[-30:]:
         return "attribute"
-    if before.rstrip().endswith("=") or before.rstrip().endswith('"') or before.rstrip().endswith("'"):
+    if (
+        before.rstrip().endswith("=")
+        or before.rstrip().endswith('"')
+        or before.rstrip().endswith("'")
+    ):
         return "attribute_value"
     if ">" not in before[-50:]:
         return "html"

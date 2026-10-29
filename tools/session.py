@@ -30,10 +30,14 @@ def build_session(args=None) -> requests.Session:
                 if m:
                     cookie_val = solve_with_node(m, req.url)
                     if cookie_val:
-                        logger.info("Anti-bot challenge solved, retrying %s %s", req.method, req.url)
+                        logger.info(
+                            "Anti-bot challenge solved, retrying %s %s", req.method, req.url
+                        )
                         _challenge_solved[0] = True
                         existing = req.headers.get("Cookie", "")
-                        req.headers["Cookie"] = ("%s; __test=%s" % (existing, cookie_val)).strip("; ")
+                        req.headers["Cookie"] = ("%s; __test=%s" % (existing, cookie_val)).strip(
+                            "; "
+                        )
                         resp = _orig_send(req, **kwargs)
         return resp
 

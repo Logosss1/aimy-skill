@@ -12,6 +12,7 @@ PAYLOAD_ENCODERS = {
     "unicode": lambda s: "".join("\\u%04x" % ord(c) for c in s),
 }
 
+
 def mutate_param_name(name: str) -> list:
     return [
         name,
@@ -23,6 +24,7 @@ def mutate_param_name(name: str) -> list:
         "_" + name,
         name + "_",
     ]
+
 
 def mutate_value(value: str) -> list:
     return [
@@ -38,9 +40,11 @@ def mutate_value(value: str) -> list:
         " " + value + " ",
     ]
 
+
 def encode_payload(payload: str, method: str = "raw") -> str:
     encoder = PAYLOAD_ENCODERS.get(method, PAYLOAD_ENCODERS["raw"])
     return encoder(payload)
+
 
 def inject_at_position(base: str, inject: str, pos: str = "suffix") -> str:
     if pos == "prefix":
@@ -51,6 +55,7 @@ def inject_at_position(base: str, inject: str, pos: str = "suffix") -> str:
         return inject
     else:
         return base + inject
+
 
 def random_string(length: int = 8) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))

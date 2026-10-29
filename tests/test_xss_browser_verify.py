@@ -10,6 +10,7 @@ class TestXssBrowserVerify:
     def test_http_fallback_confirms_reflection(self):
         def callback(request):
             import urllib.parse
+
             q = urllib.parse.parse_qs(request.url.split("?", 1)[1])["q"][0]
             return (200, {}, "<html>%s</html>" % q)
 
@@ -19,6 +20,7 @@ class TestXssBrowserVerify:
             callback=callback,
         )
         import requests
+
         sess = requests.Session()
         result = _verify_http("http://test.com/xss", "q", sess, 5)
         assert result["vulnerable"] is True
@@ -32,6 +34,7 @@ class TestXssBrowserVerify:
             status=200,
         )
         import requests
+
         sess = requests.Session()
         result = _verify_http("http://test.com/xss", "q", sess, 5)
         assert result["vulnerable"] is False
@@ -45,6 +48,7 @@ class TestXssBrowserVerify:
             status=200,
         )
         import requests
+
         sess = requests.Session()
         result = check("http://test.com/xss", "q", sess, 3)
         assert "playwright_available" in result

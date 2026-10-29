@@ -27,9 +27,9 @@ class TestSecondOrderVerifier:
             url="http://test.com/page",
             param="id",
             vuln_type="sqli",
-            original_evidence={"body": "sql error", "status": 200}
+            original_evidence={"body": "sql error", "status": 200},
         )
-        assert hasattr(result, 'confirmed')
+        assert hasattr(result, "confirmed")
 
     @responses.activate
     def test_xss_verification(self):
@@ -50,9 +50,9 @@ class TestSecondOrderVerifier:
             url="http://test.com/search",
             param="q",
             vuln_type="xss",
-            original_evidence={"body": "<script>alert(1)</script>", "status": 200}
+            original_evidence={"body": "<script>alert(1)</script>", "status": 200},
         )
-        assert hasattr(result, 'confirmed')
+        assert hasattr(result, "confirmed")
 
     def test_unsupported_vuln_type(self):
         v = SecondOrderVerifier()
@@ -76,9 +76,9 @@ class TestSecondOrderVerifier:
             url="http://test.com/proxy",
             param="url",
             vuln_type="ssrf",
-            original_evidence={"body": "internal response", "status": 200}
+            original_evidence={"body": "internal response", "status": 200},
         )
-        assert hasattr(result, 'confirmed')
+        assert hasattr(result, "confirmed")
 
     @responses.activate
     def test_lfi_verification(self):
@@ -93,6 +93,6 @@ class TestSecondOrderVerifier:
             url="http://test.com/view",
             param="file",
             vuln_type="lfi",
-            original_evidence={"body": "root:x:0:0", "status": 200}
+            original_evidence={"body": "root:x:0:0", "status": 200},
         )
-        assert hasattr(result, 'confirmed')
+        assert hasattr(result, "confirmed")

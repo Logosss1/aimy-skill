@@ -11,6 +11,7 @@ logger = get_logger("playwright_engine")
 HAS_PLAYWRIGHT = False
 try:
     from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
+
     HAS_PLAYWRIGHT = True
 except ImportError:
     Page = Any
@@ -43,7 +44,9 @@ class PlaywrightEngine:
                 "playwright not installed. Run: pip install playwright && python -m playwright install chromium"
             )
         self._headless = headless
-        self._user_agent = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        self._user_agent = (
+            user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
         self._viewport = viewport or {"width": 1280, "height": 720}
         self._ignore_https_errors = ignore_https_errors
         self._proxy = proxy
@@ -74,7 +77,8 @@ class PlaywrightEngine:
         )
         logger.info(
             "Playwright started (headless=%s, browser=%s)",
-            self._headless, self._browser.version,
+            self._headless,
+            self._browser.version,
         )
 
     def stop(self):
@@ -142,15 +146,13 @@ class PlaywrightEngine:
 
     def get_api_calls(self) -> List[CapturedRequest]:
         return [
-            r for r in self._captured_requests
-            if r.resource_type in ("xhr", "fetch")
-            or ("api" in urlparse(r.url).path)
+            r
+            for r in self._captured_requests
+            if r.resource_type in ("xhr", "fetch") or ("api" in urlparse(r.url).path)
         ]
 
     def get_scripts(self) -> List[CapturedRequest]:
-        return [
-            r for r in self._captured_requests if r.resource_type == "script"
-        ]
+        return [r for r in self._captured_requests if r.resource_type == "script"]
 
     def navigate_and_wait(
         self,
@@ -182,15 +184,12 @@ class PlaywrightEngine:
     ):
         if cookies:
             self._context.add_cookies(
-                [{"name": k, "value": v, "domain": "", "path": "/"}
-                 for k, v in cookies.items()]
+                [{"name": k, "value": v, "domain": "", "path": "/"} for k, v in cookies.items()]
             )
         if headers:
             self._context.set_extra_http_headers(headers)
         if storage_state:
-            self._context.add_init_script(
-                "() => { %s }" % json.dumps(storage_state)
-            )
+            self._context.add_init_script("() => { %s }" % json.dumps(storage_state))
 
     def set_api_patterns(self, patterns: List[str]):
         self._api_patterns = patterns

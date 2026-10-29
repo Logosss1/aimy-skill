@@ -214,7 +214,7 @@ All 4 requests processed at the same nanosecond window
 import h2.connection, h2.config, socket, ssl
 
 ctx = ssl.create_default_context()
-ctx.set_alpn_protocols(['h2'])
+ctx.set_alpn_protocols(["h2"])
 sock = ctx.wrap_socket(socket.create_connection((host, 443)), server_hostname=host)
 
 conn = h2.connection.H2Connection(config=h2.config.H2Configuration(client_side=True))
@@ -223,8 +223,10 @@ sock.sendall(conn.data_to_send())
 
 for i in range(20):
     sid = conn.get_next_available_stream_id()
-    conn.send_headers(sid, [(':method','POST'),(':path',path),(':authority',host),(':scheme','https')])
-    conn.send_data(sid, b'amount=1000', end_stream=True)
+    conn.send_headers(
+        sid, [(":method", "POST"), (":path", path), (":authority", host), (":scheme", "https")]
+    )
+    conn.send_data(sid, b"amount=1000", end_stream=True)
 
 sock.sendall(conn.data_to_send())  # ALL frames in single TCP packet
 ```

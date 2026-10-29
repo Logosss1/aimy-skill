@@ -51,9 +51,15 @@ class HypothesisDrivenAgent:
 
     def gather_intel(self) -> Dict:
         logger.info("[AutoPwn] Phase 1: Intelligence gathering")
-        intel: Dict[str, Any] = {"target": self.target, "techs": [], "ports": [], "attack_paths": []}
+        intel: Dict[str, Any] = {
+            "target": self.target,
+            "techs": [],
+            "ports": [],
+            "attack_paths": [],
+        }
         try:
             from tools.orchestrator import Orchestrator
+
             orch = Orchestrator(self.target, self.sess, self.timeout, fast_recon=True)
             orch.init_storage()
             recon = orch.phase_recon()
@@ -68,13 +74,14 @@ class HypothesisDrivenAgent:
             intel["internal_scan"] = internal
         except Exception as e:
             logger.debug("internal scan: %s", e)
-        intel["attack_paths"] = rank_attack_paths(
-            intel["techs"], intel["ports"], intel.get("git"))
+        intel["attack_paths"] = rank_attack_paths(intel["techs"], intel["ports"], intel.get("git"))
         return intel
 
     def form_hypotheses(self, intel: Dict) -> List[Hypothesis]:
-        logger.info("[AutoPwn] Phase 2: Forming hypotheses (%d paths available)",
-                    len(intel.get("attack_paths", [])))
+        logger.info(
+            "[AutoPwn] Phase 2: Forming hypotheses (%d paths available)",
+            len(intel.get("attack_paths", [])),
+        )
         context = {
             "technologies": intel.get("techs", []),
             "open_ports": intel.get("ports", []),
@@ -87,26 +94,34 @@ class HypothesisDrivenAgent:
         hypotheses = self.reasoner.analyze(context)
         for path in intel.get("attack_paths", [])[:10]:
             if path["type"] == "cve":
-                hypotheses.append(Hypothesis(
-                    vuln_type=path["impact"].lower(),
-                    confidence=min(path["score"] / 10, 0.95),
-                    evidence=[f"{path['cve']}: {path['name']}"],
-                    priority=0,
-                    detail=path,
-                ))
+                hypotheses.append(
+                    Hypothesis(
+                        vuln_type=path["impact"].lower(),
+                        confidence=min(path["score"] / 10, 0.95),
+                        evidence=[f"{path['cve']}: {path['name']}"],
+                        priority=0,
+                        detail=path,
+                    )
+                )
         if intel.get("internal_scan", {}).get("total_alive", 0) > 1:
-            hypotheses.append(Hypothesis(
-                vuln_type="internal_pivot",
-                confidence=0.7,
-                evidence=[f"{intel['internal_scan']['total_alive']} hosts discovered"],
-                priority=1,
-            ))
+            hypotheses.append(
+                Hypothesis(
+                    vuln_type="internal_pivot",
+                    confidence=0.7,
+                    evidence=[f"{intel['internal_scan']['total_alive']} hosts discovered"],
+                    priority=1,
+                )
+            )
         hypotheses.sort(key=lambda h: (h.priority, -h.confidence))
         return hypotheses
 
     def execute_hypothesis(self, h: Hypothesis) -> Dict:
-        logger.info("[AutoPwn] Testing: %s (confidence=%.2f, priority=%d)",
-                    h.vuln_type, h.confidence, h.priority)
+        logger.info(
+            "[AutoPwn] Testing: %s (confidence=%.2f, priority=%d)",
+            h.vuln_type,
+            h.confidence,
+            h.priority,
+        )
         result = {"hypothesis": h.vuln_type, "success": False, "detail": {}}
         vt = h.vuln_type
 
@@ -123,9 +138,11 @@ class HypothesisDrivenAgent:
                     if exploit_type == "http_get":
                         r = self.sess.get(self.target, timeout=self.timeout)
                     else:
-                        r = self.sess.post(self.target,
-                                           data="""<?xml version="1.0" encoding="UTF-8"?><root><test/></root>""",
-                                           timeout=self.timeout)
+                        r = self.sess.post(
+                            self.target,
+                            data="""<?xml version="1.0" encoding="UTF-8"?><root><test/></root>""",
+                            timeout=self.timeout,
+                        )
                     result["success"] = 200 <= r.status_code < 400
                     result["detail"] = {"status": r.status_code, "cve": h.detail.get("cve")}
                 except Exception as e:
@@ -143,42 +160,52 @@ class HypothesisDrivenAgent:
         try:
             if vt in ("sql_injection", "sqli"):
                 from tools.sql_injection import check as sqli
+
                 result = deep_check(sqli, self.target, param, self.sess, self.timeout, "sqli")
                 result = enrich_sqli(result, self.target, param)
             elif vt == "ssrf":
                 from tools.ssrf_detector import check as ssrf
+
                 result = ssrf(self.target, param, self.sess, self.timeout)
                 result = enrich_ssrf(result, self.target, param)
             elif vt in ("lfi", "path_traversal"):
                 from tools.lfi_scanner import check as lfi
+
                 result = lfi(self.target, param, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="lfi")
             elif vt in ("rce", "cmdi"):
                 from tools.cmdi_detector import check as cmdi
+
                 result = cmdi(self.target, param, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="cmdi")
             elif vt == "ssti":
                 from tools.ssti_detector import check as ssti
+
                 result = ssti(self.target, param, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="ssti")
             elif vt == "xss":
                 from tools.xss_detector import check as xss
+
                 result = xss(self.target, param, self.sess, self.timeout)
                 result = enrich_xss(result, self.target, param)
             elif vt in ("auth_bypass", "auth-bypass"):
                 from tools.auth_bypass import check as auth
+
                 result = auth(self.target, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="auth")
             elif vt == "jwt":
                 from tools.jwt_detector import check as jwt
+
                 result = jwt(self.target, param, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="jwt")
             elif vt == "deser":
                 from tools.deserialization_detector import check as deser
+
                 result = deser(self.target, param, self.sess, self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="deser")
             elif vt == "xxe":
                 from tools.xxe_detector import check as xxe
+
                 result = xxe(self.target, param, sess=self.sess, timeout=self.timeout)
                 result = enrich_generic(result, self.target, param, detector_type="xxe")
             else:
@@ -193,16 +220,17 @@ class HypothesisDrivenAgent:
         if vt not in self.beliefs:
             self.beliefs[vt] = Belief(initial=hypothesis.confidence)
         self.beliefs[vt].update(result)
-        self.attack_history.append({
-            "timestamp": time.time(),
-            "hypothesis": vt,
-            "confidence": hypothesis.confidence,
-            "result": bool(result.get("vulnerable") or result.get("success")),
-            "detail": result.get("evidence", str(result)[:100]),
-        })
+        self.attack_history.append(
+            {
+                "timestamp": time.time(),
+                "hypothesis": vt,
+                "confidence": hypothesis.confidence,
+                "result": bool(result.get("vulnerable") or result.get("success")),
+                "detail": result.get("evidence", str(result)[:100]),
+            }
+        )
         if result.get("vulnerable") or result.get("success"):
-            logger.info("[AutoPwn] ** CONFIRMED: %s (belief=%.2f) **",
-                        vt, self.beliefs[vt].belief)
+            logger.info("[AutoPwn] ** CONFIRMED: %s (belief=%.2f) **", vt, self.beliefs[vt].belief)
 
     def should_continue(self, max_iterations: int = 30) -> bool:
         if self._iteration >= max_iterations:
@@ -228,14 +256,16 @@ class HypothesisDrivenAgent:
             result = self.execute_hypothesis(best)
             self.learn(best, result)
             if result.get("vulnerable") or result.get("success"):
-                chain = self.chain_engine.auto_compose({
-                    f"finding_{self._iteration}": {
-                        "type": best.vuln_type,
-                        "url": self.target,
-                        "param": best.param or "id",
-                        "evidence": result.get("evidence", []),
+                chain = self.chain_engine.auto_compose(
+                    {
+                        f"finding_{self._iteration}": {
+                            "type": best.vuln_type,
+                            "url": self.target,
+                            "param": best.param or "id",
+                            "evidence": result.get("evidence", []),
+                        }
                     }
-                })
+                )
                 if chain:
                     logger.info("[AutoPwn] Chain triggered: %s", chain[0]["chain"])
                     for entry in chain:
@@ -260,14 +290,18 @@ class HypothesisDrivenAgent:
             "history": self.attack_history[-20:],
         }
         confirmed = len(confirmed_hist)
-        logger.info("[AutoPwn] Done. %d/%d hypotheses confirmed, %d iterations",
-                    confirmed, summary["hypotheses_tested"], self._iteration)
+        logger.info(
+            "[AutoPwn] Done. %d/%d hypotheses confirmed, %d iterations",
+            confirmed,
+            summary["hypotheses_tested"],
+            self._iteration,
+        )
         return summary
 
 
-def auto_pwn(target: str, sess=None, timeout: float = 10.0,
-             max_iterations: int = 30) -> Dict:
+def auto_pwn(target: str, sess=None, timeout: float = 10.0, max_iterations: int = 30) -> Dict:
     import requests
+
     sess = sess or requests.Session()
     agent = HypothesisDrivenAgent(target, sess, timeout)
     return agent.run(max_iterations=max_iterations)

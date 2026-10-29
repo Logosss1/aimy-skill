@@ -27,9 +27,7 @@ def probe_and_detect(
             d[param] = marker
             resp = sess.post(url, data=d, timeout=timeout)
         else:
-            resp = sess.get(
-                build_url(url, param, marker), timeout=timeout
-            )
+            resp = sess.get(build_url(url, param, marker), timeout=timeout)
         html = resp.text
     except Exception as e:
         logger.debug("probe failed %s?%s: %s", url, param, e)
@@ -101,11 +99,7 @@ def _inside_style(before: str) -> bool:
 
 
 def _inside_event_handler(before: str) -> bool:
-    return bool(
-        re.search(
-            r"(on\w+\s*=\s*['\"]?)[^'\">]*$", before, re.I
-        )
-    )
+    return bool(re.search(r"(on\w+\s*=\s*['\"]?)[^'\">]*$", before, re.I))
 
 
 def _check_attr_context(before: str, after: str) -> Optional[str]:

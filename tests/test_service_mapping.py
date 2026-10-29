@@ -89,10 +89,18 @@ class TestMapOpenPorts:
                 "recon": {
                     "open_ports": {
                         "open_ports": [
-                            {"port": 21, "service": "FTP",
-                             "banner": "220 (vsFTPd 2.3.4)", "state": "open"},
-                            {"port": 22, "service": "SSH",
-                             "banner": "SSH-2.0-OpenSSH_9.6", "state": "open"},
+                            {
+                                "port": 21,
+                                "service": "FTP",
+                                "banner": "220 (vsFTPd 2.3.4)",
+                                "state": "open",
+                            },
+                            {
+                                "port": 22,
+                                "service": "SSH",
+                                "banner": "SSH-2.0-OpenSSH_9.6",
+                                "state": "open",
+                            },
                             {"port": 9999, "service": "", "state": "open"},
                         ]
                     }

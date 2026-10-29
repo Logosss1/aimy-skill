@@ -19,7 +19,8 @@ def _make(monkeypatch, **kwargs):
     calls, sleep_fn = _fake_sleep()
     sess = OPSECSession(sleep_fn=sleep_fn, rng=random.Random(1), **kwargs)
     monkeypatch.setattr(
-        sess, "send",
+        sess,
+        "send",
         lambda req, **kw: requests.Response(),
     )
     return sess, calls
@@ -113,8 +114,7 @@ class TestRetry:
             sess.get("http://x.test/")
 
     def test_backoff_grows_with_attempt(self):
-        sess = OPSECSession(retries=3, backoff=1.0, backoff_max=100.0,
-                            rng=random.Random(1))
+        sess = OPSECSession(retries=3, backoff=1.0, backoff_max=100.0, rng=random.Random(1))
         d0 = sess._backoff_delay(0)
         d2 = sess._backoff_delay(2)
         assert d2 > d0
@@ -159,12 +159,14 @@ class TestOpsecSessionFn:
 class TestOrchestratorOpsec:
     def test_opsec_flag_wraps_session(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", opsec=True)
         assert isinstance(o.sess, OPSECSession)
 
     def test_default_no_session_builds_session(self):
         # 修复: Orchestrator 保证 self.sess 非空, 无会话时自动构建普通会话
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test")
         assert isinstance(o.sess, requests.Session)
         assert not isinstance(o.sess, OPSECSession)

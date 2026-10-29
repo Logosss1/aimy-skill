@@ -37,6 +37,7 @@ def _make_session(handler):
 def _raiser(exc):
     def handler(url, timeout=None):
         raise exc
+
     return handler
 
 
@@ -83,6 +84,7 @@ class TestBinarySearchColumns:
             if number <= real_columns:
                 return Resp(200, "ok")
             return Resp(500, "error")
+
         return handler
 
     def test_exact_column_count(self):
@@ -203,7 +205,8 @@ class TestBlindExtractData:
     def test_extracts_version_user_database_and_tables(self):
         tables_query = (
             "(SELECT GROUP_CONCAT(TABLE_NAME) FROM INFORMATION_SCHEMA.TABLES "
-            "WHERE TABLE_SCHEMA=DATABASE())")
+            "WHERE TABLE_SCHEMA=DATABASE())"
+        )
         values = {
             "SELECT VERSION()": "8.0.32",
             "SELECT USER()": "root",
@@ -249,8 +252,9 @@ class TestExtractChar:
 
 class TestUnionProbe:
     def test_no_columns_found_returns_early(self, monkeypatch):
-        monkeypatch.setattr(bs, "binary_search_columns",
-                            lambda *a, **k: {"vulnerable": False, "column_count": None})
+        monkeypatch.setattr(
+            bs, "binary_search_columns", lambda *a, **k: {"vulnerable": False, "column_count": None}
+        )
         sess = _make_session(lambda url, timeout=None: Resp(404, ""))
         result = sqli_union_probe(URL, "id", sess)
         assert result["vulnerable"] is False
@@ -258,8 +262,9 @@ class TestUnionProbe:
         assert result["usable_columns"] == []
 
     def test_finds_usable_columns(self, monkeypatch):
-        monkeypatch.setattr(bs, "binary_search_columns",
-                            lambda *a, **k: {"vulnerable": True, "column_count": 2})
+        monkeypatch.setattr(
+            bs, "binary_search_columns", lambda *a, **k: {"vulnerable": True, "column_count": 2}
+        )
 
         def handler(url, timeout=None):
             payload = _param_value(url)
@@ -283,8 +288,9 @@ class TestUnionProbe:
         assert all(e["method"] == "union" for e in result["evidence"])
 
     def test_no_marker_in_response_means_no_usable_columns(self, monkeypatch):
-        monkeypatch.setattr(bs, "binary_search_columns",
-                            lambda *a, **k: {"vulnerable": True, "column_count": 1})
+        monkeypatch.setattr(
+            bs, "binary_search_columns", lambda *a, **k: {"vulnerable": True, "column_count": 1}
+        )
         sess = _make_session(lambda url, timeout=None: Resp(404, ""))
         result = sqli_union_probe(URL, "id", sess)
         assert result["vulnerable"] is False

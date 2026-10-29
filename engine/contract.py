@@ -7,6 +7,7 @@
 本模块只产出告警, 不抛异常, 不强制修改现有 detector. 新 detector
 应按本契约返回; 老 detector 可渐进迁移.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -69,9 +70,7 @@ class CheckResult:
         """返回告警列表, 不抛异常."""
         warnings: List[str] = []
         if not isinstance(self.vulnerable, bool):
-            warnings.append(
-                "vulnerable must be bool, got %s" % type(self.vulnerable).__name__
-            )
+            warnings.append("vulnerable must be bool, got %s" % type(self.vulnerable).__name__)
         if self.confidence is not None and self.confidence not in CONFIDENCE_LEVELS:
             warnings.append(
                 "confidence must be one of %s, got %r" % (CONFIDENCE_LEVELS, self.confidence)
@@ -92,9 +91,7 @@ class CheckResult:
         return warnings
 
 
-def check_return_shape(
-    result: Optional[Dict[str, Any]], *, strict: bool = False
-) -> List[str]:
+def check_return_shape(result: Optional[Dict[str, Any]], *, strict: bool = False) -> List[str]:
     """便利函数: 直接校验 detector 返回的 dict, 返回告警列表."""
     if result is None:
         return ["check() returned None (must return Dict)"]

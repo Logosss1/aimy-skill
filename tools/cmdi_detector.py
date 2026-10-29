@@ -43,7 +43,10 @@ OUTPUT_INDICATORS = [
     (r"ProcessorId", "windows_wmic"),
     (r"HostName|Domain|UserName", "windows_env"),
     (r"nt authority\\", "windows_whoami"),
-    (r"^[a-z0-9_.-]+\\[a-z0-9_.-]+$", "windows_user", ),
+    (
+        r"^[a-z0-9_.-]+\\[a-z0-9_.-]+$",
+        "windows_user",
+    ),
     (r"Linux \w+ [\d.]+-", "uname"),
     (r"Darwin \w+", "uname"),
     (r"root@", "user"),
@@ -86,6 +89,7 @@ class _OobServer:
     def _public_config(self):
         try:
             from tools.settings import settings
+
             return (settings.oob_domain or "").strip(), (settings.oob_callback_url or "").strip()
         except Exception:
             return "", ""
@@ -143,15 +147,25 @@ def _measure_baseline_timing(url, param, sess, timeout):
     return statistics.median(samples) if len(samples) >= 3 else sum(samples) / len(samples)
 
 
-def check(url: str, param: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0, waf_name: Optional[str] = None,
-          oob_url: Optional[str] = None,
-          oob_domain: Optional[str] = None) -> dict:
+def check(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    waf_name: Optional[str] = None,
+    oob_url: Optional[str] = None,
+    oob_domain: Optional[str] = None,
+) -> dict:
     if sess is None:
         sess = requests.Session()
         sess.verify = settings.verify_ssl
-    result = {"vulnerable": False, "type": None, "evidence": [], "payload": None,
-              "oob_tested": False}
+    result = {
+        "vulnerable": False,
+        "type": None,
+        "evidence": [],
+        "payload": None,
+        "oob_tested": False,
+    }
 
     voter = ConfidenceVoter()
 
@@ -200,11 +214,15 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                     elapsed = time.time() - start
                     if elapsed >= threshold:
                         time_hits += 1
-                        result["evidence"].append("cmdi time: %s => %.1fs (baseline=%.1fs)" % (
-                            payload[:15], elapsed, baseline_sec))
+                        result["evidence"].append(
+                            "cmdi time: %s => %.1fs (baseline=%.1fs)"
+                            % (payload[:15], elapsed, baseline_sec)
+                        )
                         result["payload"] = payload
-                        voter.add_vote("time_delay", ConfidenceVoter.vote_time_elapsed(
-                            elapsed, baseline_sec, threshold))
+                        voter.add_vote(
+                            "time_delay",
+                            ConfidenceVoter.vote_time_elapsed(elapsed, baseline_sec, threshold),
+                        )
                 except requests.Timeout:
                     time_hits += 1
                     voter.add_vote("timeout", 0.7)
@@ -265,7 +283,6 @@ def check(url: str, param: str, sess: Optional[requests.Session] = None,
                 result["payload"] = templates[0] if templates else ""
 
         oob_server.stop()
-
 
     result["confidence_score"] = round(voter.score, 2)
     result["confidence"] = voter.level.value

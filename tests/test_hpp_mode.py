@@ -9,11 +9,14 @@ class TestHPPDetector:
     @responses.activate
     def test_hpp_not_polluted(self):
         from tools._session import make_session
+
         sess = make_session()
-        responses.add(responses.GET, "http://test.com/page?q=1",
-                      status=200, body="same response content")
-        responses.add(responses.GET, "http://test.com/page?q=1&q=2",
-                      status=200, body="same response content")
+        responses.add(
+            responses.GET, "http://test.com/page?q=1", status=200, body="same response content"
+        )
+        responses.add(
+            responses.GET, "http://test.com/page?q=1&q=2", status=200, body="same response content"
+        )
         result = hpp.check("http://test.com/page", "q", sess=sess, timeout=2)
         assert result["vulnerable"] is False
         assert result["findings"] == []
@@ -21,11 +24,12 @@ class TestHPPDetector:
     @responses.activate
     def test_hpp_polluted(self):
         from tools._session import make_session
+
         sess = make_session()
-        responses.add(responses.GET, "http://test.com/page?q=1",
-                      status=200, body="response with 1")
-        responses.add(responses.GET, "http://test.com/page?q=1&q=2",
-                      status=200, body="response with 2")
+        responses.add(responses.GET, "http://test.com/page?q=1", status=200, body="response with 1")
+        responses.add(
+            responses.GET, "http://test.com/page?q=1&q=2", status=200, body="response with 2"
+        )
         result = hpp.check("http://test.com/page", "q", sess=sess, timeout=2)
         assert result["vulnerable"] is True
         assert result["parameter_pollution"] is True
@@ -35,42 +39,41 @@ class TestHPPDetector:
     @responses.activate
     def test_hpp_url_prefix_fix(self):
         from tools._session import make_session
+
         sess = make_session()
-        responses.add(responses.GET, "http://test.com/page?q=1",
-                      status=200, body="same")
-        responses.add(responses.GET, "http://test.com/page?q=1&q=2",
-                      status=200, body="same")
+        responses.add(responses.GET, "http://test.com/page?q=1", status=200, body="same")
+        responses.add(responses.GET, "http://test.com/page?q=1&q=2", status=200, body="same")
         result = hpp.check("test.com/page", "q", sess=sess, timeout=2)
         assert result["vulnerable"] is False
 
     @responses.activate
     def test_hpp_default_session(self):
-        responses.add(responses.GET, "http://test.com/page?q=1",
-                      status=200, body="same")
-        responses.add(responses.GET, "http://test.com/page?q=1&q=2",
-                      status=200, body="same")
+        responses.add(responses.GET, "http://test.com/page?q=1", status=200, body="same")
+        responses.add(responses.GET, "http://test.com/page?q=1&q=2", status=200, body="same")
         result = hpp.check("http://test.com/page", "q", timeout=2)
         assert result["vulnerable"] is False
 
     @responses.activate
     def test_hpp_network_error(self):
         from tools._session import make_session
+
         sess = make_session()
-        responses.add(responses.GET, "http://test.com/page?q=1",
-                      body=ConnectionError("failed"))
+        responses.add(responses.GET, "http://test.com/page?q=1", body=ConnectionError("failed"))
         result = hpp.check("http://test.com/page", "q", sess=sess, timeout=2)
         assert result["vulnerable"] is False
 
     def test_hpp_finding_details(self):
         result = {
             "vulnerable": True,
-            "findings": [{
-                "type": "hpp",
-                "severity": "low",
-                "confidence": 0.8,
-                "single_response_length": 200,
-                "polluted_response_length": 250,
-            }],
+            "findings": [
+                {
+                    "type": "hpp",
+                    "severity": "low",
+                    "confidence": 0.8,
+                    "single_response_length": 200,
+                    "polluted_response_length": 250,
+                }
+            ],
         }
         assert result["findings"][0]["confidence"] == 0.8
 
@@ -86,6 +89,7 @@ class TestModeSelector:
         settings.mode = "rookie"
         import io
         import sys
+
         old_stderr = sys.stderr
         sys.stderr = captured = io.StringIO()
         try:
@@ -99,6 +103,7 @@ class TestModeSelector:
         settings.mode = "veteran"
         import io
         import sys
+
         old_stderr = sys.stderr
         sys.stderr = captured = io.StringIO()
         try:
@@ -112,6 +117,7 @@ class TestModeSelector:
         settings.mode = "unknown_mode"
         import io
         import sys
+
         old_stderr = sys.stderr
         sys.stderr = captured = io.StringIO()
         try:

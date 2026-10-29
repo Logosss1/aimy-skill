@@ -12,6 +12,7 @@ Attack Techniques:
   8. Schema leaking via error messages
   9. Subscription hijacking
 """
+
 import json
 import re
 import time
@@ -190,9 +191,9 @@ fragment CircularB on Query {
 """
 
 DIRECTIVE_PAYLOADS = [
-    'query @skip(if: false) { __typename }',
-    'query @include(if: true) { __typename }',
-    'mutation @deprecated { __typename }',
+    "query @skip(if: false) { __typename }",
+    "query @include(if: true) { __typename }",
+    "mutation @deprecated { __typename }",
 ]
 
 
@@ -205,7 +206,7 @@ class GraphQLAbuser:
         result = abuser.check(url)
     """
 
-    def __init__(self, sess: 'requests.Session' = None, timeout: float = 10.0):
+    def __init__(self, sess: "requests.Session" = None, timeout: float = 10.0):
         self.sess = sess or HttpClient()
         self.timeout = timeout
         self._schema = None
@@ -213,17 +214,30 @@ class GraphQLAbuser:
 
     def _find_endpoint(self, base_url: str) -> List[str]:
         candidates = [
-            "/graphql", "/graphiql", "/api/graphql", "/v1/graphql",
-            "/v2/graphql", "/gql", "/query", "/api/query", "/graphql/console",
-            "/altair", "/playground", "/_graphql",
+            "/graphql",
+            "/graphiql",
+            "/api/graphql",
+            "/v1/graphql",
+            "/v2/graphql",
+            "/gql",
+            "/query",
+            "/api/query",
+            "/graphql/console",
+            "/altair",
+            "/playground",
+            "/_graphql",
         ]
         found = []
         for path in candidates:
             url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
             try:
-                resp = self.sess.post(url, json={"query": "{__typename}"},
-                                      timeout=self.timeout, verify=settings.verify_ssl,
-                                      headers={"Content-Type": "application/json"})
+                resp = self.sess.post(
+                    url,
+                    json={"query": "{__typename}"},
+                    timeout=self.timeout,
+                    verify=settings.verify_ssl,
+                    headers={"Content-Type": "application/json"},
+                )
                 if resp.status_code in (200, 400, 422) and (
                     "data" in resp.text or "errors" in resp.text or "message" in resp.text
                 ):
@@ -232,22 +246,29 @@ class GraphQLAbuser:
                 pass
         return found
 
-    def _make_query(self, endpoint: str, query: str,
-                    variables: Dict = None, operation_name: str = None) -> Dict:
+    def _make_query(
+        self, endpoint: str, query: str, variables: Dict = None, operation_name: str = None
+    ) -> Dict:
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
         if operation_name:
             payload["operationName"] = operation_name
         try:
-            resp = self.sess.post(endpoint, json=payload,
-                                  timeout=self.timeout, verify=settings.verify_ssl,
-                                  headers={"Content-Type": "application/json"})
+            resp = self.sess.post(
+                endpoint,
+                json=payload,
+                timeout=self.timeout,
+                verify=settings.verify_ssl,
+                headers={"Content-Type": "application/json"},
+            )
             return {
                 "status_code": resp.status_code,
                 "body": resp.text,
-                "json": resp.json() if resp.headers.get("content-type", "").startswith("application/json") else None,
-                "elapsed": resp.elapsed.total_seconds() if hasattr(resp, 'elapsed') else 0,
+                "json": resp.json()
+                if resp.headers.get("content-type", "").startswith("application/json")
+                else None,
+                "elapsed": resp.elapsed.total_seconds() if hasattr(resp, "elapsed") else 0,
             }
         except Exception as e:
             logger.debug("GraphQL request failed: %s", e)
@@ -288,15 +309,17 @@ class GraphQLAbuser:
             if data.get("__schema"):
                 types = data["__schema"].get("types", [])
                 custom_types = [t for t in types if not t["name"].startswith("__")]
-                findings.append({
-                    "method": "full_introspection",
-                    "confidence": 0.90,
-                    "confirmed": True,
-                    "types_found": len(custom_types),
-                    "type_names": [t["name"] for t in custom_types[:20]],
-                    "query_type": data["__schema"].get("queryType", {}).get("name"),
-                    "mutation_type": data["__schema"].get("mutationType", {}).get("name"),
-                })
+                findings.append(
+                    {
+                        "method": "full_introspection",
+                        "confidence": 0.90,
+                        "confirmed": True,
+                        "types_found": len(custom_types),
+                        "type_names": [t["name"] for t in custom_types[:20]],
+                        "query_type": data["__schema"].get("queryType", {}).get("name"),
+                        "mutation_type": data["__schema"].get("mutationType", {}).get("name"),
+                    }
+                )
                 self._schema = data["__schema"]
 
         # Minimal introspection
@@ -304,22 +327,30 @@ class GraphQLAbuser:
         if result2.get("json") and "data" in result2["json"]:
             data = result2["json"]["data"]
             if data.get("__schema"):
-                findings.append({
-                    "method": "minimal_introspection",
-                    "confidence": 0.85,
-                    "confirmed": True,
-                })
+                findings.append(
+                    {
+                        "method": "minimal_introspection",
+                        "confidence": 0.85,
+                        "confirmed": True,
+                    }
+                )
 
         # Introspection via GET
         try:
-            resp = self.sess.get(endpoint, params={"query": INTROSPECTION_MINIMAL},
-                                 timeout=self.timeout, verify=settings.verify_ssl)
+            resp = self.sess.get(
+                endpoint,
+                params={"query": INTROSPECTION_MINIMAL},
+                timeout=self.timeout,
+                verify=settings.verify_ssl,
+            )
             if resp.status_code == 200 and "__schema" in resp.text:
-                findings.append({
-                    "method": "introspection_via_get",
-                    "confidence": 0.80,
-                    "confirmed": True,
-                })
+                findings.append(
+                    {
+                        "method": "introspection_via_get",
+                        "confidence": 0.80,
+                        "confirmed": True,
+                    }
+                )
         except Exception:
             pass
 
@@ -339,23 +370,30 @@ class GraphQLAbuser:
                     msg = error.get("message", "")
                     if "did you mean" in msg.lower() or "suggestion" in msg.lower():
                         suggestions = re.findall(r'"([^"]+)"', msg)
-                        findings.append({
-                            "method": "field_suggestion_abuse",
-                            "confidence": 0.70,
-                            "confirmed": True,
-                            "suggestions": suggestions,
-                            "error_message": msg[:200],
-                        })
-                    elif any(kw in msg.lower() for kw in ["cannot query", "unknown field", "unknown argument"]):
-                        schema_leak = re.findall(r'\"([A-Z][a-zA-Z]+)\"', msg)
-                        if schema_leak:
-                            findings.append({
-                                "method": "error_schema_leak",
-                                "confidence": 0.60,
+                        findings.append(
+                            {
+                                "method": "field_suggestion_abuse",
+                                "confidence": 0.70,
                                 "confirmed": True,
-                                "leaked_types": list(set(schema_leak)),
+                                "suggestions": suggestions,
                                 "error_message": msg[:200],
-                            })
+                            }
+                        )
+                    elif any(
+                        kw in msg.lower()
+                        for kw in ["cannot query", "unknown field", "unknown argument"]
+                    ):
+                        schema_leak = re.findall(r"\"([A-Z][a-zA-Z]+)\"", msg)
+                        if schema_leak:
+                            findings.append(
+                                {
+                                    "method": "error_schema_leak",
+                                    "confidence": 0.60,
+                                    "confirmed": True,
+                                    "leaked_types": list(set(schema_leak)),
+                                    "error_message": msg[:200],
+                                }
+                            )
 
         return findings
 
@@ -377,23 +415,29 @@ class GraphQLAbuser:
         ]
         try:
             start = time.time()
-            resp = self.sess.post(endpoint, json=batch_payload,
-                                  timeout=self.timeout, verify=settings.verify_ssl,
-                                  headers={"Content-Type": "application/json"})
+            resp = self.sess.post(
+                endpoint,
+                json=batch_payload,
+                timeout=self.timeout,
+                verify=settings.verify_ssl,
+                headers={"Content-Type": "application/json"},
+            )
             batch_time = time.time() - start
             if resp.status_code == 200:
                 try:
                     batch_results = resp.json()
                     if isinstance(batch_results, list) and len(batch_results) == 5:
-                        findings.append({
-                            "method": "batch_query",
-                            "confidence": 0.75,
-                            "confirmed": True,
-                            "batch_size": 5,
-                            "single_time": single_time,
-                            "batch_time": batch_time,
-                            "speedup": round(single_time / max(batch_time, 0.001), 1),
-                        })
+                        findings.append(
+                            {
+                                "method": "batch_query",
+                                "confidence": 0.75,
+                                "confirmed": True,
+                                "batch_size": 5,
+                                "single_time": single_time,
+                                "batch_time": batch_time,
+                                "speedup": round(single_time / max(batch_time, 0.001), 1),
+                            }
+                        )
                 except json.JSONDecodeError:
                     pass
         except Exception:
@@ -413,11 +457,13 @@ class GraphQLAbuser:
         if result.get("json") and "data" in result["json"]:
             data = result["json"]["data"]
             if all(data.get("q%d" % i) == "__Schema" or data.get("q%d" % i) for i in range(1, 6)):
-                findings.append({
-                    "method": "alias_batching",
-                    "confidence": 0.70,
-                    "confirmed": True,
-                })
+                findings.append(
+                    {
+                        "method": "alias_batching",
+                        "confidence": 0.70,
+                        "confirmed": True,
+                    }
+                )
 
         return findings
 
@@ -429,24 +475,28 @@ class GraphQLAbuser:
         result = self._make_query(endpoint, depth_query)
         if result.get("json"):
             if "data" in result["json"] and not result["json"].get("errors"):
-                findings.append({
-                    "method": "no_depth_limit",
-                    "confidence": 0.65,
-                    "confirmed": True,
-                    "max_depth_tested": 50,
-                })
+                findings.append(
+                    {
+                        "method": "no_depth_limit",
+                        "confidence": 0.65,
+                        "confirmed": True,
+                        "max_depth_tested": 50,
+                    }
+                )
             elif result["json"].get("errors"):
                 err_msg = result["json"]["errors"][0].get("message", "")
                 if "depth" in err_msg.lower() or "limit" in err_msg.lower():
-                    depth_match = re.search(r'(\d+)', err_msg)
+                    depth_match = re.search(r"(\d+)", err_msg)
                     max_depth = int(depth_match.group(1)) if depth_match else 0
-                    findings.append({
-                        "method": "depth_limit_detected",
-                        "confidence": 0.50,
-                        "confirmed": False,
-                        "max_depth": max_depth,
-                        "error": err_msg[:200],
-                    })
+                    findings.append(
+                        {
+                            "method": "depth_limit_detected",
+                            "confidence": 0.50,
+                            "confirmed": False,
+                            "max_depth": max_depth,
+                            "error": err_msg[:200],
+                        }
+                    )
 
         return findings
 
@@ -457,12 +507,14 @@ class GraphQLAbuser:
             result = self._make_query(endpoint, payload)
             if result.get("json") and "data" in result["json"]:
                 if result["json"]["data"].get("__typename"):
-                    findings.append({
-                        "method": "directive_injection",
-                        "confidence": 0.55,
-                        "confirmed": True,
-                        "payload": payload,
-                    })
+                    findings.append(
+                        {
+                            "method": "directive_injection",
+                            "confidence": 0.55,
+                            "confirmed": True,
+                            "payload": payload,
+                        }
+                    )
                     break
 
         return findings
@@ -476,19 +528,23 @@ class GraphQLAbuser:
             for error in errors:
                 msg = error.get("message", "")
                 if "circular" in msg.lower() or "recursive" in msg.lower():
-                    findings.append({
-                        "method": "circular_fragment_detected",
-                        "confidence": 0.40,
-                        "confirmed": False,
-                        "error": msg[:200],
-                    })
+                    findings.append(
+                        {
+                            "method": "circular_fragment_detected",
+                            "confidence": 0.40,
+                            "confirmed": False,
+                            "error": msg[:200],
+                        }
+                    )
                 elif "max" in msg.lower() or "limit" in msg.lower() or "depth" in msg.lower():
-                    findings.append({
-                        "method": "fragment_depth_limit",
-                        "confidence": 0.45,
-                        "confirmed": False,
-                        "error": msg[:200],
-                    })
+                    findings.append(
+                        {
+                            "method": "fragment_depth_limit",
+                            "confidence": 0.45,
+                            "confirmed": False,
+                            "error": msg[:200],
+                        }
+                    )
 
         return findings
 

@@ -136,12 +136,14 @@ class TestPayloadGenerate:
 
     def test_versioned_comment_encoder(self):
         from tools.payload_engine import ENCODERS
+
         out = ENCODERS["versioned_comment"]("' UNION SELECT NULL-- ")
         assert "/*!50000UNION*/" in out
         assert "/*!50000SELECT*/" in out
 
     def test_hex_str_encoder(self):
         from tools.payload_engine import ENCODERS
+
         out = ENCODERS["hex_str"]("'1'='1'")
         assert "0x31=0x31" in out
 

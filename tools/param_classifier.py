@@ -6,6 +6,7 @@ from tools.log_utils import get_logger
 
 logger = get_logger("param_classifier")
 
+
 @dataclass
 class ParameterProfile:
     name: str
@@ -90,8 +91,9 @@ class ParamClassifier:
     def __init__(self):
         self._profiles: Dict[str, ParameterProfile] = {}
 
-    def classify(self, name: str, sample_value: str = "",
-                 url_path: str = "", method: str = "GET") -> ParameterProfile:
+    def classify(
+        self, name: str, sample_value: str = "", url_path: str = "", method: str = "GET"
+    ) -> ParameterProfile:
         cached = self._profiles.get(name)
         if cached:
             if sample_value and sample_value not in cached.sample_values_seen:
@@ -116,13 +118,10 @@ class ParamClassifier:
         self._profiles[name] = profile
         return profile
 
-    def classify_batch(self, params: Dict[str, str],
-                       url_path: str = "",
-                       method: str = "GET") -> List[ParameterProfile]:
-        return [
-            self.classify(k, v, url_path, method)
-            for k, v in params.items()
-        ]
+    def classify_batch(
+        self, params: Dict[str, str], url_path: str = "", method: str = "GET"
+    ) -> List[ParameterProfile]:
+        return [self.classify(k, v, url_path, method) for k, v in params.items()]
 
     def _match_role(self, name: str) -> Tuple[str, float]:
         best_role = "unknown"
@@ -146,8 +145,7 @@ class ParamClassifier:
                 return dtype
         return "text"
 
-    def _infer_constraints(self, name: str, url_path: str,
-                           method: str) -> List[str]:
+    def _infer_constraints(self, name: str, url_path: str, method: str) -> List[str]:
         constraints = []
 
         if re.search(r"id$|_id$", name, re.I):
@@ -165,8 +163,7 @@ class ParamClassifier:
 
         return constraints
 
-    def _attack_surfaces(self, role: str, name: str,
-                         data_type: str) -> List[str]:
+    def _attack_surfaces(self, role: str, name: str, data_type: str) -> List[str]:
         surfaces = []
 
         if role == "identifier":

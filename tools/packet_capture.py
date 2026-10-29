@@ -25,6 +25,7 @@ def auto_detect_mode(args) -> str:
 def _check_self_kali():
     try:
         import subprocess
+
         r = subprocess.run(["which", "tcpdump"], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
             logger.info("Auto-detected local tcpdump, using local capture")
@@ -37,7 +38,10 @@ def _check_self_kali():
 def run_capture(args) -> Dict:
     mode = auto_detect_mode(args)
     if not mode:
-        return {"success": False, "error": "No capture mode. Use --proxy, --capture + --kali-host/--kali-local"}
+        return {
+            "success": False,
+            "error": "No capture mode. Use --proxy, --capture + --kali-host/--kali-local",
+        }
 
     if mode == "proxy":
         return _run_proxy(args)
@@ -52,11 +56,11 @@ def _run_proxy(args) -> Dict:
     proxy = start_proxy(port=port, host=host)
     ca = proxy.ca_info()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  MITM Proxy running on {host}:{port}")
     print(f"  CA cert: {ca['ca_cert']}")
     print("  Install CA into browser for HTTPS inspection")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     print(proxy.install_ca_instruction())
 
     if duration > 0:

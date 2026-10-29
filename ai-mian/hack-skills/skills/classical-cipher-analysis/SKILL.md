@@ -44,18 +44,18 @@ def analyze_charset(ciphertext):
     """Identify encoding/cipher by character set."""
     chars = set(ciphertext.strip())
 
-    if chars <= set('01 \n'):
+    if chars <= set("01 \n"):
         return "Binary encoding"
-    if chars <= set('.-/ \n'):
+    if chars <= set(".-/ \n"):
         return "Morse code"
-    if chars <= set('0123456789abcdef \n'):
+    if chars <= set("0123456789abcdef \n"):
         return "Hex encoding"
-    if chars <= set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n'):
-        if '=' in ciphertext or len(ciphertext) % 4 == 0:
+    if chars <= set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n"):
+        if "=" in ciphertext or len(ciphertext) % 4 == 0:
             return "Base64 encoding"
-    if chars <= set('ABCDEFGHIJKLMNOPQRSTUVWXYZ \n'):
+    if chars <= set("ABCDEFGHIJKLMNOPQRSTUVWXYZ \n"):
         return "Uppercase only — classical cipher"
-    if all(c in '12345' for c in ciphertext.replace(' ', '').replace('\n', '')):
+    if all(c in "12345" for c in ciphertext.replace(" ", "").replace("\n", "")):
         return "Polybius square (digits 1-5)"
 
     return "Mixed charset — needs further analysis"
@@ -65,6 +65,7 @@ def analyze_charset(ciphertext):
 
 ```python
 from collections import Counter
+
 
 def frequency_analysis(text):
     """Compute letter frequency distribution."""
@@ -76,10 +77,11 @@ def frequency_analysis(text):
     print("Letter frequencies:")
     for letter, count in freq.most_common():
         pct = count / total * 100
-        bar = '#' * int(pct)
+        bar = "#" * int(pct)
         print(f"  {letter}: {pct:5.1f}% {bar}")
 
     return freq
+
 
 # English letter frequency (for comparison):
 # E T A O I N S H R D L C U M W F G Y P B V K J X Q Z
@@ -101,6 +103,7 @@ def index_of_coincidence(text):
     ic = sum(f * (f - 1) for f in freq.values()) / (N * (N - 1))
     return ic
 
+
 # Interpretation:
 # IC > 0.060 → monoalphabetic (Caesar, simple substitution, Playfair)
 # IC ≈ 0.045-0.055 → polyalphabetic with short key (Vigenere key < 10)
@@ -113,14 +116,15 @@ def index_of_coincidence(text):
 from math import gcd
 from functools import reduce
 
+
 def kasiski(ciphertext, min_len=3):
     """Find repeated sequences and their distances → key length."""
-    text = ''.join(c for c in ciphertext.upper() if c.isalpha())
+    text = "".join(c for c in ciphertext.upper() if c.isalpha())
     distances = []
 
     for length in range(min_len, min(20, len(text) // 3)):
         for i in range(len(text) - length):
-            seq = text[i:i+length]
+            seq = text[i : i + length]
             j = text.find(seq, i + 1)
             while j != -1:
                 distances.append(j - i)
@@ -156,7 +160,7 @@ def solve_substitution(ciphertext, interactive=False):
 
     # English frequency order
     eng_order = "ETAOINSRHLDCUMWFGYPBVKJXQZ"
-    cipher_order = ''.join(c for c, _ in freq.most_common())
+    cipher_order = "".join(c for c, _ in freq.most_common())
 
     # Initial mapping (frequency-based guess)
     mapping = {}
@@ -170,6 +174,7 @@ def solve_substitution(ciphertext, interactive=False):
         result += mapping.get(c, c)
 
     return result, mapping
+
 
 # Better approach: use automated solvers
 # quipqiup.com — online substitution solver
@@ -190,7 +195,7 @@ def crib_drag_substitution(ciphertext, known_plain, known_cipher):
     # Apply partial mapping
     result = ""
     for c in ciphertext.upper():
-        result += mapping.get(c, '?')
+        result += mapping.get(c, "?")
 
     return result, mapping
 ```
@@ -209,7 +214,7 @@ def caesar_bruteforce(ciphertext):
         decrypted = ""
         for c in ciphertext:
             if c.isalpha():
-                base = ord('A') if c.isupper() else ord('a')
+                base = ord("A") if c.isupper() else ord("a")
                 decrypted += chr((ord(c) - base - shift) % 26 + base)
             else:
                 decrypted += c
@@ -221,25 +226,47 @@ def caesar_bruteforce(ciphertext):
     results.sort(key=lambda x: x[1])
     return results[0]  # best match
 
+
 def chi_squared_score(text):
     """Lower score = closer to English."""
     expected = {
-        'E': 12.7, 'T': 9.1, 'A': 8.2, 'O': 7.5, 'I': 7.0,
-        'N': 6.7, 'S': 6.3, 'H': 6.1, 'R': 6.0, 'D': 4.3,
-        'L': 4.0, 'C': 2.8, 'U': 2.8, 'M': 2.4, 'W': 2.4,
-        'F': 2.2, 'G': 2.0, 'Y': 2.0, 'P': 1.9, 'B': 1.5,
-        'V': 1.0, 'K': 0.8, 'J': 0.2, 'X': 0.2, 'Q': 0.1, 'Z': 0.1,
+        "E": 12.7,
+        "T": 9.1,
+        "A": 8.2,
+        "O": 7.5,
+        "I": 7.0,
+        "N": 6.7,
+        "S": 6.3,
+        "H": 6.1,
+        "R": 6.0,
+        "D": 4.3,
+        "L": 4.0,
+        "C": 2.8,
+        "U": 2.8,
+        "M": 2.4,
+        "W": 2.4,
+        "F": 2.2,
+        "G": 2.0,
+        "Y": 2.0,
+        "P": 1.9,
+        "B": 1.5,
+        "V": 1.0,
+        "K": 0.8,
+        "J": 0.2,
+        "X": 0.2,
+        "Q": 0.1,
+        "Z": 0.1,
     }
     text = text.upper()
     letters = [c for c in text if c.isalpha()]
     total = len(letters)
     if total == 0:
-        return float('inf')
+        return float("inf")
 
     freq = Counter(letters)
     score = sum(
         (freq.get(c, 0) / total * 100 - expected.get(c, 0)) ** 2 / max(expected.get(c, 0.1), 0.1)
-        for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     )
     return score
 ```
@@ -250,14 +277,12 @@ def chi_squared_score(text):
 import codecs
 
 # ROT13 (letters only)
-rot13 = codecs.decode(ciphertext, 'rot_13')
+rot13 = codecs.decode(ciphertext, "rot_13")
+
 
 # ROT47 (ASCII 33-126)
 def rot47(text):
-    return ''.join(
-        chr(33 + (ord(c) - 33 + 47) % 94) if 33 <= ord(c) <= 126 else c
-        for c in text
-    )
+    return "".join(chr(33 + (ord(c) - 33 + 47) % 94) if 33 <= ord(c) <= 126 else c for c in text)
 ```
 
 ---
@@ -288,9 +313,7 @@ def find_vigenere_key_length(ciphertext, max_key=20):
             columns[i % kl].append(c)
 
         # Average IC across columns
-        avg_ic = sum(
-            index_of_coincidence(''.join(col)) for col in columns
-        ) / kl
+        avg_ic = sum(index_of_coincidence("".join(col)) for col in columns) / kl
 
         results.append((kl, avg_ic))
         print(f"  Key length {kl:2d}: IC = {avg_ic:.4f}")
@@ -309,18 +332,18 @@ def crack_vigenere(ciphertext, key_length):
     key = ""
 
     for pos in range(key_length):
-        column = ''.join(text[i] for i in range(pos, len(text), key_length))
+        column = "".join(text[i] for i in range(pos, len(text), key_length))
         # Solve as Caesar cipher
         shift, score, _ = caesar_bruteforce(column)
-        key += chr(shift + ord('A'))
+        key += chr(shift + ord("A"))
 
     # Decrypt
     plaintext = ""
     ki = 0
     for c in ciphertext:
         if c.isalpha():
-            shift = ord(key[ki % key_length]) - ord('A')
-            base = ord('A') if c.isupper() else ord('a')
+            shift = ord(key[ki % key_length]) - ord("A")
+            base = ord("A") if c.isupper() else ord("a")
             plaintext += chr((ord(c) - base - shift) % 26 + base)
             ki += 1
         else:
@@ -352,9 +375,9 @@ def crack_affine(ciphertext):
             plaintext = ""
             for c in ciphertext.upper():
                 if c.isalpha():
-                    y = ord(c) - ord('A')
+                    y = ord(c) - ord("A")
                     x = (a_inv * (y - b)) % 26
-                    plaintext += chr(x + ord('A'))
+                    plaintext += chr(x + ord("A"))
                 else:
                     plaintext += c
 
@@ -368,8 +391,8 @@ def crack_affine(ciphertext):
 ```python
 def affine_from_known(plain1, cipher1, plain2, cipher2):
     """Recover (a, b) from two known plaintext-ciphertext pairs."""
-    p1, c1 = ord(plain1) - ord('A'), ord(cipher1) - ord('A')
-    p2, c2 = ord(plain2) - ord('A'), ord(cipher2) - ord('A')
+    p1, c1 = ord(plain1) - ord("A"), ord(cipher1) - ord("A")
+    p2, c2 = ord(plain2) - ord("A"), ord(cipher2) - ord("A")
 
     # c1 = a*p1 + b, c2 = a*p2 + b
     # c1 - c2 = a*(p1 - p2) mod 26
@@ -395,19 +418,21 @@ Matrix-based cipher: `C = K · P mod 26` where K is an n×n key matrix.
 ```python
 import numpy as np
 
+
 def crack_hill(known_plain, known_cipher, n=2):
     """Recover Hill cipher key from known plaintext-ciphertext (mod 26)."""
     # Convert to numbers
-    P = [ord(c) - ord('A') for c in known_plain.upper()]
-    C = [ord(c) - ord('A') for c in known_cipher.upper()]
+    P = [ord(c) - ord("A") for c in known_plain.upper()]
+    C = [ord(c) - ord("A") for c in known_cipher.upper()]
 
     # Build matrices (need at least n pairs of n-grams)
-    P_matrix = np.array(P[:n*n]).reshape(n, n).T
-    C_matrix = np.array(C[:n*n]).reshape(n, n).T
+    P_matrix = np.array(P[: n * n]).reshape(n, n).T
+    C_matrix = np.array(C[: n * n]).reshape(n, n).T
 
     # K = C · P⁻¹ mod 26
     # Need modular matrix inverse
     from sympy import Matrix
+
     P_mat = Matrix(P_matrix.tolist())
     C_mat = Matrix(C_matrix.tolist())
 
@@ -439,13 +464,14 @@ def rail_fence_decrypt(ciphertext, rails):
     pattern.sort()
 
     # Fill in characters
-    result = [''] * n
+    result = [""] * n
     ci = 0
     for _, orig_pos in pattern:
         result[orig_pos] = ciphertext[ci]
         ci += 1
 
-    return ''.join(result)
+    return "".join(result)
+
 
 # Brute force all rail counts
 for rails in range(2, 20):
@@ -469,15 +495,15 @@ def columnar_decrypt(ciphertext, key):
         full_cols = n_cols
 
     # Split ciphertext into columns (in key order)
-    columns = [''] * n_cols
+    columns = [""] * n_cols
     pos = 0
     for col_idx in order:
         col_len = n_rows if col_idx < full_cols else n_rows - 1
-        columns[col_idx] = ciphertext[pos:pos + col_len]
+        columns[col_idx] = ciphertext[pos : pos + col_len]
         pos += col_len
 
     # Read off row by row
-    plaintext = ''
+    plaintext = ""
     for row in range(n_rows):
         for col in range(n_cols):
             if row < len(columns[col]):
@@ -508,9 +534,7 @@ xortool ciphertext.bin -c 20       # assume most common char is space (0x20)
 ```python
 def xor_known_plaintext(ciphertext, known_plain, offset=0):
     """Recover XOR key from known plaintext at given offset."""
-    key_fragment = bytes(
-        c ^ p for c, p in zip(ciphertext[offset:], known_plain)
-    )
+    key_fragment = bytes(c ^ p for c, p in zip(ciphertext[offset:], known_plain))
     print(f"Key fragment: {key_fragment}")
 
     # If repeating key, infer full key from fragment
@@ -527,22 +551,42 @@ Binary encoding using two typefaces (A=normal, B=bold/italic).
 
 ```python
 BACON = {
-    'AAAAA': 'A', 'AAAAB': 'B', 'AAABA': 'C', 'AAABB': 'D',
-    'AABAA': 'E', 'AABAB': 'F', 'AABBA': 'G', 'AABBB': 'H',
-    'ABAAA': 'I', 'ABAAB': 'J', 'ABABA': 'K', 'ABABB': 'L',
-    'ABBAA': 'M', 'ABBAB': 'N', 'ABBBA': 'O', 'ABBBB': 'P',
-    'BAAAA': 'Q', 'BAAAB': 'R', 'BAABA': 'S', 'BAABB': 'T',
-    'BABAA': 'U', 'BABAB': 'V', 'BABBA': 'W', 'BABBB': 'X',
-    'BAAAA': 'Y', 'BAAAB': 'Z',
+    "AAAAA": "A",
+    "AAAAB": "B",
+    "AAABA": "C",
+    "AAABB": "D",
+    "AABAA": "E",
+    "AABAB": "F",
+    "AABBA": "G",
+    "AABBB": "H",
+    "ABAAA": "I",
+    "ABAAB": "J",
+    "ABABA": "K",
+    "ABABB": "L",
+    "ABBAA": "M",
+    "ABBAB": "N",
+    "ABBBA": "O",
+    "ABBBB": "P",
+    "BAAAA": "Q",
+    "BAAAB": "R",
+    "BAABA": "S",
+    "BAABB": "T",
+    "BABAA": "U",
+    "BABAB": "V",
+    "BABBA": "W",
+    "BABBB": "X",
+    "BAAAA": "Y",
+    "BAAAB": "Z",
 }
+
 
 def decode_bacon(text):
     """Decode Bacon cipher: uppercase=B, lowercase=A (or similar mapping)."""
-    binary = ''.join('B' if c.isupper() else 'A' for c in text if c.isalpha())
-    result = ''
+    binary = "".join("B" if c.isupper() else "A" for c in text if c.isalpha())
+    result = ""
     for i in range(0, len(binary) - 4, 5):
-        chunk = binary[i:i+5]
-        result += BACON.get(chunk, '?')
+        chunk = binary[i : i + 5]
+        result += BACON.get(chunk, "?")
     return result
 ```
 

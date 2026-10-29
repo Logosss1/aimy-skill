@@ -20,8 +20,7 @@ class TestUnionReflectionGuard:
             val = q.split("=", 1)[1] if "=" in q else ""
             return (200, {}, "<html><body>%s</body></html>" % val)
 
-        responses.add_callback(
-            responses.GET, re.compile(r"http://test\.com/page\?.*"), callback=cb)
+        responses.add_callback(responses.GET, re.compile(r"http://test\.com/page\?.*"), callback=cb)
         result = check("http://test.com/page", "q")
         assert result["vulnerable"] is False
 
@@ -137,6 +136,8 @@ class TestSqlInjectionPost:
             status=200,
         )
 
-        result = check("http://test.com/login", "user", post_body=True, post_data={"user": "1", "pass": "x"})
+        result = check(
+            "http://test.com/login", "user", post_body=True, post_data={"user": "1", "pass": "x"}
+        )
         assert result["vulnerable"] is True
         assert result["type"] == "error"

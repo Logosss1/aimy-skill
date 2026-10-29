@@ -13,7 +13,9 @@ class TestGraphQLAbuser:
         responses.add(
             responses.POST,
             re.compile(".*"),
-            json={"data": {"__schema": {"types": [{"name": "User"}], "queryType": {"name": "Query"}}}},
+            json={
+                "data": {"__schema": {"types": [{"name": "User"}], "queryType": {"name": "Query"}}}
+            },
             status=200,
         )
         abuser = GraphQLAbuser(sess=sess)

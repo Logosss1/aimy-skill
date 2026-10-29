@@ -1,4 +1,5 @@
 """Tests for tools.recon.dir_fuzzer - catch-all detection."""
+
 from tools.recon.dir_fuzzer import _detect_catchall, fuzz_directories
 
 
@@ -49,22 +50,25 @@ class TestFuzzDirectoriesCatchall:
     def test_catchall_server_reports_zero_interesting(self):
         """catch-all 服务器: 所有路径同 body => interesting 为空, 不污染下游."""
         sess = FakeSession(lambda url: FakeResp(200, b"ok"))
-        r = fuzz_directories("http://x.test", wordlist=["admin", "login", ".env"],
-                             sess=sess, timeout=2.0)
+        r = fuzz_directories(
+            "http://x.test", wordlist=["admin", "login", ".env"], sess=sess, timeout=2.0
+        )
         assert r["catchall_detected"] is True
         assert r["catchall_skipped"] > 0
         assert r["interesting"] == []
 
     def test_normal_server_reports_interesting(self):
         """正常服务器: 只有 /admin 存在 => 只报 /admin."""
+
         def handler(url):
             if url.endswith("/admin"):
                 return FakeResp(200, b"<html>admin panel</html>")
             return FakeResp(404, b"nope")
 
         sess = FakeSession(handler)
-        r = fuzz_directories("http://x.test", wordlist=["admin", "login", ".env"],
-                             sess=sess, timeout=2.0)
+        r = fuzz_directories(
+            "http://x.test", wordlist=["admin", "login", ".env"], sess=sess, timeout=2.0
+        )
         assert r["catchall_detected"] is False
         assert r["catchall_skipped"] == 0
         paths = [x["path"] for x in r["interesting"]]
@@ -73,14 +77,14 @@ class TestFuzzDirectoriesCatchall:
 
     def test_body_hash_not_leaked_in_output(self):
         """内部去重用的 body_hash 不应出现在对外结果里."""
+
         def handler(url):
             if url.endswith("/admin"):
                 return FakeResp(200, b"<html>admin</html>")
             return FakeResp(404, b"nope")
 
         sess = FakeSession(handler)
-        r = fuzz_directories("http://x.test", wordlist=["admin"],
-                             sess=sess, timeout=2.0)
+        r = fuzz_directories("http://x.test", wordlist=["admin"], sess=sess, timeout=2.0)
         for item in r["interesting"]:
             assert "body_hash" not in item
         for item in r["all"]:
@@ -88,7 +92,6 @@ class TestFuzzDirectoriesCatchall:
 
     def test_catchall_flag_present_always(self):
         sess = FakeSession(lambda url: FakeResp(404, b"x"))
-        r = fuzz_directories("http://x.test", wordlist=["admin"],
-                             sess=sess, timeout=2.0)
+        r = fuzz_directories("http://x.test", wordlist=["admin"], sess=sess, timeout=2.0)
         assert "catchall_detected" in r
         assert "catchall_skipped" in r

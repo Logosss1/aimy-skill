@@ -7,44 +7,57 @@ class TestAuthBypass:
     @responses.activate
     def test_path_bypass_found(self):
         responses.add(
-            responses.GET, 'http://test.com/admin',
-            body='login page', status=401,
+            responses.GET,
+            "http://test.com/admin",
+            body="login page",
+            status=401,
         )
         responses.add(
-            responses.GET, 'http://test.com/ADMIN',
-            body='admin content', status=200,
+            responses.GET,
+            "http://test.com/ADMIN",
+            body="admin content",
+            status=200,
         )
         responses.add(
-            responses.GET, re.compile(r'http://test\.com/.*'),
-            body='not found', status=404,
+            responses.GET,
+            re.compile(r"http://test\.com/.*"),
+            body="not found",
+            status=404,
         )
         import requests
+
         sess = requests.Session()
-        result = check('http://test.com/admin', sess)
-        assert result['vulnerable'] is True
+        result = check("http://test.com/admin", sess)
+        assert result["vulnerable"] is True
 
     @responses.activate
     def test_header_injection_bypass(self):
         responses.add(
-            responses.GET, 'http://test.com/admin',
-            body='admin content', status=200,
-            match=[responses.matchers.header_matcher({'X-Forwarded-For': '127.0.0.1'})],
+            responses.GET,
+            "http://test.com/admin",
+            body="admin content",
+            status=200,
+            match=[responses.matchers.header_matcher({"X-Forwarded-For": "127.0.0.1"})],
         )
         import requests
+
         sess = requests.Session()
-        result = check('http://test.com/admin', sess)
+        result = check("http://test.com/admin", sess)
         assert result is not None
 
     @responses.activate
     def test_no_bypass(self):
         responses.add(
-            responses.GET, re.compile(r'http://test\.com/.*'),
-            body='login page', status=401,
+            responses.GET,
+            re.compile(r"http://test\.com/.*"),
+            body="login page",
+            status=401,
         )
         import requests
+
         sess = requests.Session()
-        result = check('http://test.com/admin', sess)
-        assert result['vulnerable'] is False
+        result = check("http://test.com/admin", sess)
+        assert result["vulnerable"] is False
 
 
 class FakeResp:
@@ -85,6 +98,7 @@ class TestAuthBypassCatchall:
 
     def test_real_bypass_on_catchall_server(self):
         """catch-all 服务器上真实例外: /ADMIN 返回不同 body => 仍报绕过."""
+
         def handler(url):
             if url.rstrip("/").endswith("/ADMIN"):
                 return FakeResp(200, "real admin dashboard controls", url)
@@ -96,6 +110,7 @@ class TestAuthBypassCatchall:
 
     def test_normal_404_server_unaffected(self):
         """正常 404 服务器: catch-all 探测返回 404, 不影响原有逻辑."""
+
         def handler(url):
             if url.rstrip("/").endswith("/ADMIN"):
                 return FakeResp(200, "admin content", url)

@@ -29,7 +29,9 @@ class TLS12Adapter(HTTPAdapter):
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
         kwargs["ssl_context"] = ctx
-        return super().init_poolmanager(connections, maxsize=max(100, maxsize), block=block, **kwargs)
+        return super().init_poolmanager(
+            connections, maxsize=max(100, maxsize), block=block, **kwargs
+        )
 
 
 _ADAPTER_CACHE = None

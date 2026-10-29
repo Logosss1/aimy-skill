@@ -65,12 +65,12 @@ def md5_padding(message_len_bytes):
     bit_len = message_len_bytes * 8
 
     # Pad with 0x80 + zeros until length ≡ 56 (mod 64)
-    padding = b'\x80'
-    padding += b'\x00' * ((55 - message_len_bytes) % 64)
+    padding = b"\x80"
+    padding += b"\x00" * ((55 - message_len_bytes) % 64)
 
     # Append original length as 64-bit little-endian (MD5)
     # or big-endian (SHA)
-    padding += bit_len.to_bytes(8, 'little')  # MD5
+    padding += bit_len.to_bytes(8, "little")  # MD5
     # padding += bit_len.to_bytes(8, 'big')    # SHA
 
     return padding
@@ -100,13 +100,14 @@ hash_extender --data "original" \
 ```python
 import struct
 
+
 def md5_extend(original_mac, original_data_len, secret_len, extension):
     """
     Perform MD5 length extension attack.
     original_mac: hex string of H(secret || original_data)
     """
     # Parse MAC into MD5 internal state (4 × 32-bit words, little-endian)
-    h = struct.unpack('<4I', bytes.fromhex(original_mac))
+    h = struct.unpack("<4I", bytes.fromhex(original_mac))
 
     # Calculate total length after padding
     total_original = secret_len + original_data_len
@@ -120,9 +121,9 @@ def md5_extend(original_mac, original_data_len, secret_len, extension):
     # Use: hlextend library or custom MD5
 
     import hlextend
-    sha = hlextend.new('md5')
-    new_hash = sha.extend(extension, original_data, secret_len,
-                          original_mac)
+
+    sha = hlextend.new("md5")
+    new_hash = sha.extend(extension, original_data, secret_len, original_mac)
     new_data = sha.payload  # includes original + padding + extension
 
     return new_hash, new_data
@@ -250,6 +251,7 @@ collision in ~2^(k/2) attempts
 import hashlib
 import os
 
+
 def birthday_attack(hash_func, output_bits, max_attempts=2**28):
     """Find collision for truncated hash."""
     mask = (1 << output_bits) - 1
@@ -264,6 +266,7 @@ def birthday_attack(hash_func, output_bits, max_attempts=2**28):
         seen[h] = msg
 
     return None
+
 
 # Example: find collision for first 32 bits of SHA-256
 result = birthday_attack(hashlib.sha256, 32)
@@ -280,6 +283,7 @@ result = birthday_attack(hashlib.sha256, 32)
 def verify_hmac(received, expected):
     return received == expected  # Python == compares left to right
 
+
 # The comparison may short-circuit on first differing byte,
 # leaking timing information
 ```
@@ -289,6 +293,7 @@ def verify_hmac(received, expected):
 ```python
 import requests
 import time
+
 
 def hmac_timing_attack(url, data, hmac_len=32):
     """Byte-by-byte HMAC recovery via timing."""
@@ -308,7 +313,7 @@ def hmac_timing_attack(url, data, hmac_len=32):
                 elapsed = time.perf_counter_ns() - start
                 times.append(elapsed)
 
-            avg_time = sorted(times)[len(times)//2]  # median
+            avg_time = sorted(times)[len(times) // 2]  # median
             if avg_time > best_time:
                 best_time = avg_time
                 best_char = c
@@ -323,6 +328,7 @@ def hmac_timing_attack(url, data, hmac_len=32):
 
 ```python
 import hmac
+
 
 # SECURE: constant-time comparison
 def verify_hmac_secure(received, expected):
@@ -359,8 +365,9 @@ Space: O(2^(n/2))
 # Format 1: Find x such that SHA256(prefix + x) starts with N zero bits
 import hashlib
 
+
 def solve_pow_prefix(prefix, zero_bits):
-    target = '0' * (zero_bits // 4)
+    target = "0" * (zero_bits // 4)
     i = 0
     while True:
         candidate = prefix + str(i)
@@ -368,6 +375,7 @@ def solve_pow_prefix(prefix, zero_bits):
         if h.startswith(target):
             return str(i)
         i += 1
+
 
 # Format 2: Find x such that SHA256(x) ends with specific suffix
 def solve_pow_suffix(suffix_hex, hash_func=hashlib.sha256):

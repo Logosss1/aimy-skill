@@ -80,12 +80,35 @@ TYPE_CONFUSION_PAYLOADS = {
 }
 
 TOCTOU_PARAMS = {
-    "balance", "amount", "price", "cost", "total", "credit", "debit",
-    "stock", "quantity", "count", "inventory",
-    "coupon", "discount", "voucher", "promo",
-    "token", "nonce", "csrf", "ticket",
-    "role", "admin", "permission", "access", "level",
-    "email", "user", "account", "id", "uid",
+    "balance",
+    "amount",
+    "price",
+    "cost",
+    "total",
+    "credit",
+    "debit",
+    "stock",
+    "quantity",
+    "count",
+    "inventory",
+    "coupon",
+    "discount",
+    "voucher",
+    "promo",
+    "token",
+    "nonce",
+    "csrf",
+    "ticket",
+    "role",
+    "admin",
+    "permission",
+    "access",
+    "level",
+    "email",
+    "user",
+    "account",
+    "id",
+    "uid",
 }
 
 TOCTOU_PATTERNS = [
@@ -102,8 +125,9 @@ class TypeConfusionDetector:
         self.sess = sess
         self.timeout = timeout
 
-    def detect(self, url: str, param: str, method: str = "GET",
-               post_data: Optional[Dict] = None) -> List[TypeConfusionResult]:
+    def detect(
+        self, url: str, param: str, method: str = "GET", post_data: Optional[Dict] = None
+    ) -> List[TypeConfusionResult]:
         results = []
 
         baseline = self._send_request(url, param, "test", method, post_data)
@@ -119,8 +143,9 @@ class TypeConfusionDetector:
 
         return results
 
-    def detect_toctou(self, url: str, param: str, method: str = "GET",
-                      post_data: Optional[Dict] = None) -> List[TypeConfusionResult]:
+    def detect_toctou(
+        self, url: str, param: str, method: str = "GET", post_data: Optional[Dict] = None
+    ) -> List[TypeConfusionResult]:
         results = []
 
         if param.lower() not in TOCTOU_PARAMS:
@@ -135,23 +160,32 @@ class TypeConfusionDetector:
                 r1 = self._send_request(url, param, "1", method, post_data)
                 r2 = self._send_request(url, param, "2", method, post_data)
                 if r1 and r2 and self._responses_differ(r1, r2):
-                    results.append(TypeConfusionResult(
-                        param=param,
-                        original_type="concurrent_access",
-                        confused_type="race_condition",
-                        success=True,
-                        response_diff=True,
-                        evidence="concurrent_request_%d_detected" % i,
-                        risk_level="high",
-                        vuln_type="race_condition",
-                    ))
+                    results.append(
+                        TypeConfusionResult(
+                            param=param,
+                            original_type="concurrent_access",
+                            confused_type="race_condition",
+                            success=True,
+                            response_diff=True,
+                            evidence="concurrent_request_%d_detected" % i,
+                            risk_level="high",
+                            vuln_type="race_condition",
+                        )
+                    )
                     break
 
         return results
 
-    def _test_type(self, url: str, param: str, value: str, type_name: str,
-                   method: str, post_data: Optional[Dict],
-                   baseline: requests.Response) -> Optional[TypeConfusionResult]:
+    def _test_type(
+        self,
+        url: str,
+        param: str,
+        value: str,
+        type_name: str,
+        method: str,
+        post_data: Optional[Dict],
+        baseline: requests.Response,
+    ) -> Optional[TypeConfusionResult]:
         try:
             resp = self._send_request(url, param, value, method, post_data)
             if not resp:
@@ -177,10 +211,19 @@ class TypeConfusionDetector:
                     result.response_diff = True
 
             error_indicators = [
-                "exception", "error", "traceback", "stack trace",
-                "internal server error", "500", "type error",
-                "conversion", "parse error", "json decode",
-                " TypeError:", " ValueError:", " AttributeError:",
+                "exception",
+                "error",
+                "traceback",
+                "stack trace",
+                "internal server error",
+                "500",
+                "type error",
+                "conversion",
+                "parse error",
+                "json decode",
+                " TypeError:",
+                " ValueError:",
+                " AttributeError:",
             ]
             for indicator in error_indicators:
                 if indicator.lower() in resp.text.lower():
@@ -240,13 +283,16 @@ class TypeConfusionDetector:
 
         return None
 
-    def _send_request(self, url: str, param: str, value: str,
-                      method: str, post_data: Optional[Dict]) -> Optional[requests.Response]:
+    def _send_request(
+        self, url: str, param: str, value: str, method: str, post_data: Optional[Dict]
+    ) -> Optional[requests.Response]:
         try:
             if method.upper() == "POST" and post_data:
                 data = post_data.copy()
                 data[param] = value
-                return self.sess.post(url, data=data, timeout=self.timeout, verify=settings.verify_ssl)
+                return self.sess.post(
+                    url, data=data, timeout=self.timeout, verify=settings.verify_ssl
+                )
             else:
                 quoted = requests.utils.quote(value, safe="")
                 if param + "=" in url:
@@ -267,8 +313,9 @@ class TypeConfusionDetector:
         h2 = hashlib.md5(r2.text.encode()).hexdigest()  # nosec B324 - response diff
         return h1 != h2
 
-    def toctou_risk_assessment(self, param: str, method: str = "GET",
-                               post_data: Optional[Dict] = None) -> Dict:
+    def toctou_risk_assessment(
+        self, param: str, method: str = "GET", post_data: Optional[Dict] = None
+    ) -> Dict:
         param_lower = param.lower()
 
         risk_score = 0
@@ -281,6 +328,7 @@ class TypeConfusionDetector:
 
         for pattern, vuln_type in TOCTOU_PATTERNS:
             import re
+
             test_str = "%s %s" % (param_lower, method.lower())
             if re.search(pattern, test_str):
                 risk_score += 20

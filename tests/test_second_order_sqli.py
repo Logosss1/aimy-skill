@@ -18,6 +18,7 @@ class TestSecondOrderSqli:
             m = re.search(r"username=([^&]*)", body)
             val = m.group(1) if m else ""
             import urllib.parse
+
             stored["username"] = urllib.parse.unquote_plus(val)
             return (200, {}, "ok")
 

@@ -49,8 +49,10 @@ class TestDomXss:
 class TestFrameworkSinks:
     @responses.activate
     def test_vue_vhtml(self):
-        html = ("<div id='app'><div v-html='userInput'></div></div>"
-                "<script>var userInput = location.hash;</script>")
+        html = (
+            "<div id='app'><div v-html='userInput'></div></div>"
+            "<script>var userInput = location.hash;</script>"
+        )
         responses.add(responses.GET, "http://test.com/vue", body=html, status=200)
         sess = requests.Session()
         result = check("http://test.com/vue", sess=sess, timeout=5)
@@ -59,10 +61,12 @@ class TestFrameworkSinks:
 
     @responses.activate
     def test_react_dangerously_set_inner_html(self):
-        html = ("<script>"
-                "var d = location.hash;"
-                "React.createElement('div', {dangerouslySetInnerHTML: {__html: d}});"
-                "</script>")
+        html = (
+            "<script>"
+            "var d = location.hash;"
+            "React.createElement('div', {dangerouslySetInnerHTML: {__html: d}});"
+            "</script>"
+        )
         responses.add(responses.GET, "http://test.com/react", body=html, status=200)
         sess = requests.Session()
         result = check("http://test.com/react", sess=sess, timeout=5)
@@ -71,9 +75,7 @@ class TestFrameworkSinks:
 
     @responses.activate
     def test_jquery_html(self):
-        html = ("<script>"
-                "$('#out').html(location.hash);"
-                "</script>")
+        html = "<script>$('#out').html(location.hash);</script>"
         responses.add(responses.GET, "http://test.com/jquery", body=html, status=200)
         sess = requests.Session()
         result = check("http://test.com/jquery", sess=sess, timeout=5)
@@ -84,6 +86,7 @@ class TestFrameworkSinks:
         # textContent is not an XSS sink
         scripts = ["el.textContent = location.hash;"]
         findings = _analyze_scripts(scripts)
-        dangerous = [f for f in findings if f["sink"] in {
-            "innerHTML", "outerHTML", "document.write", "eval"}]
+        dangerous = [
+            f for f in findings if f["sink"] in {"innerHTML", "outerHTML", "document.write", "eval"}
+        ]
         assert not dangerous

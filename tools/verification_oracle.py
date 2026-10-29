@@ -119,9 +119,17 @@ class VerificationOracle:
         self.profiler = response_profiler or ResponseProfiler()
         self._differ = ResponseDiffer(DEFAULT_THRESHOLDS)
 
-    def verify(self, detector_type: str, finding: Dict, url: str, param: str,
-               sess: requests.Session, timeout: float = 10.0,
-               post_body: bool = False, post_data: dict = None) -> Dict:
+    def verify(
+        self,
+        detector_type: str,
+        finding: Dict,
+        url: str,
+        param: str,
+        sess: requests.Session,
+        timeout: float = 10.0,
+        post_body: bool = False,
+        post_data: dict = None,
+    ) -> Dict:
         if not finding.get("vulnerable"):
             finding["confidence_votes"] = []
             finding["confidence_score"] = 0.0
@@ -130,7 +138,9 @@ class VerificationOracle:
         voter = ConfidenceVoter()
 
         if detector_type == "sqli":
-            return self._verify_sqli(finding, url, param, sess, timeout, post_body, post_data, voter)
+            return self._verify_sqli(
+                finding, url, param, sess, timeout, post_body, post_data, voter
+            )
         elif detector_type == "cmdi":
             return self._verify_cmdi(finding, url, param, sess, timeout, voter)
         elif detector_type == "xss":
@@ -141,8 +151,9 @@ class VerificationOracle:
             return self._verify_ssrf(finding, voter)
         return finding
 
-    def _emit(self, finding: Dict, voter: ConfidenceVoter, vtype: str,
-              observed: Optional[int] = None) -> Dict:
+    def _emit(
+        self, finding: Dict, voter: ConfidenceVoter, vtype: str, observed: Optional[int] = None
+    ) -> Dict:
         """产出最终判定：复现性门控 + CVSS 向量推导。"""
         raw = voter.score
         effective, reproduced = reproduction_gate(vtype, observed, raw)
@@ -175,12 +186,18 @@ class VerificationOracle:
         from tools.payload_engine import generate, generate_sqli_boolean
 
         th = DEFAULT_THRESHOLDS
-        baseline_sec = baseline.elapsed if baseline.elapsed > 0 else self._measure_baseline(url, param, sess, timeout)
+        baseline_sec = (
+            baseline.elapsed
+            if baseline.elapsed > 0
+            else self._measure_baseline(url, param, sess, timeout)
+        )
 
         observed = 0
         time_ok = baseline_sec < timeout * 0.8
         if time_ok:
-            threshold = max(th.latency_floor_s, baseline_sec * th.latency_ratio + th.latency_margin_s)
+            threshold = max(
+                th.latency_floor_s, baseline_sec * th.latency_ratio + th.latency_margin_s
+            )
             time_payloads = generate("sqli", "time_mysql", "all", max_payloads=3)
             time_confirmed = 0
             for entry in time_payloads:
@@ -190,9 +207,11 @@ class VerificationOracle:
                     elapsed = time.time() - start
                     if elapsed >= threshold:
                         time_confirmed += 1
-                        voter.add_vote("time_delay",
-                                       voter.vote_time_elapsed(elapsed, baseline_sec, threshold),
-                                       family="time_delay")
+                        voter.add_vote(
+                            "time_delay",
+                            voter.vote_time_elapsed(elapsed, baseline_sec, threshold),
+                            family="time_delay",
+                        )
                 except requests.Timeout:
                     voter.add_vote("timeout", 0.7, family="time_delay")
                     time_confirmed += 1
@@ -202,7 +221,11 @@ class VerificationOracle:
             if time_confirmed >= 2:
                 voter.add_vote("time_confirmed", 0.85, family="time_delay")
 
-        ctx = "numeric" if param.lower() in ("id", "uid", "pid", "page", "limit", "offset") else "string"
+        ctx = (
+            "numeric"
+            if param.lower() in ("id", "uid", "pid", "page", "limit", "offset")
+            else "string"
+        )
         pairs = generate_sqli_boolean(ctx)
         bool_confirmed = 0
         for true_p, false_p in pairs[:4]:
@@ -236,6 +259,7 @@ class VerificationOracle:
         threshold = max(th.latency_floor_s, baseline_sec * th.latency_ratio + th.latency_margin_s)
 
         from tools.payload_engine import generate
+
         observed = 0
         time_seeds = generate("cmdi", "time", "all", max_payloads=4)
         for entry in time_seeds:
@@ -245,9 +269,11 @@ class VerificationOracle:
                 elapsed = time.time() - start
                 if elapsed >= threshold:
                     observed += 1
-                    voter.add_vote("time_delay",
-                                   voter.vote_time_elapsed(elapsed, baseline_sec, threshold),
-                                   family="time_delay")
+                    voter.add_vote(
+                        "time_delay",
+                        voter.vote_time_elapsed(elapsed, baseline_sec, threshold),
+                        family="time_delay",
+                    )
             except requests.Timeout:
                 voter.add_vote("timeout", 0.7, family="time_delay")
                 observed += 1
@@ -286,7 +312,11 @@ class VerificationOracle:
         confirmed = 0
         total = 0
 
-        contexts = [detected_ctx] if detected_ctx not in ("not_reflected", "unknown") else ["html", "attr", "js"]
+        contexts = (
+            [detected_ctx]
+            if detected_ctx not in ("not_reflected", "unknown")
+            else ["html", "attr", "js"]
+        )
         for ctx in contexts:
             seeds = generate("xss", ctx, "all", max_payloads=3)
             for entry in seeds:
@@ -305,16 +335,21 @@ class VerificationOracle:
                         if payload in r.text and escaped not in r.text:
                             confirmed += 1
                             voter.add_vote("unescaped_reflection", 0.65, family="reflection")
-                            if any(t in r.text for t in ["alert(1)", "onerror=", "onload=", "onfocus="]):
+                            if any(
+                                t in r.text for t in ["alert(1)", "onerror=", "onload=", "onfocus="]
+                            ):
                                 voter.add_vote("trigger_fired", 0.85, family="reflection")
                 except Exception:
                     continue
 
-        voter.add_vote("payload_ratio", voter.vote_multiple_payloads(confirmed, total), family="reflection")
+        voter.add_vote(
+            "payload_ratio", voter.vote_multiple_payloads(confirmed, total), family="reflection"
+        )
         return self._emit(finding, voter, "xss", observed=confirmed)
 
     def _verify_lfi(self, finding, url, param, sess, timeout, voter):
         from tools.payload_engine import generate
+
         seeds = generate("lfi", "encoded", "all", max_payloads=5)
         confirmed = 0
         for entry in seeds:

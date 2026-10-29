@@ -33,20 +33,19 @@ class OfflineOOBJudge:
             control_hit = control.get("responded", False)
             if open_hits and not control_hit:
                 evidence.append(
-                    "offline_diff: reachable probe responded while blackhole control "
-                    "hung/errored"
+                    "offline_diff: reachable probe responded while blackhole control hung/errored"
                 )
                 confidence = min(
                     self.thresholds.offline_oob_ceiling,
                     0.5 + 0.05 * min(len(open_hits), 4),
                 )
                 status = "suspected_offline"
-            elif open_hits and control_hit and any(
-                p.get("length", 0) != control.get("length", -1) for p in open_hits
+            elif (
+                open_hits
+                and control_hit
+                and any(p.get("length", 0) != control.get("length", -1) for p in open_hits)
             ):
-                evidence.append(
-                    "offline_diff: probe response diverges from blackhole control"
-                )
+                evidence.append("offline_diff: probe response diverges from blackhole control")
                 status = "suspected_offline"
                 confidence = 0.4
             else:
@@ -65,8 +64,7 @@ class OfflineOOBJudge:
 
         note = {
             "suspected_offline": (
-                "offline differential detected; no OOB callback. "
-                "Treat as suspected, not confirmed."
+                "offline differential detected; no OOB callback. Treat as suspected, not confirmed."
             ),
             "inconclusive": "inconclusive without OOB callback.",
         }.get(status, "")

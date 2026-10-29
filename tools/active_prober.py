@@ -46,46 +46,47 @@ TECH_PROBES = {
         {"path": "/", "header": "x-powered-by", "regex": r"ASP\.NET"},
     ],
     "php": [
-        {"path": "/?=PHPB8B5F2A0-3C92-11d3-A3A9-4C7B08C10000",
-         "body": r"PHP ([\d.]+)", "purpose": "PHP source detection hashes"},
+        {
+            "path": "/?=PHPB8B5F2A0-3C92-11d3-A3A9-4C7B08C10000",
+            "body": r"PHP ([\d.]+)",
+            "purpose": "PHP source detection hashes",
+        },
         {"path": "/phpinfo.php", "body": r"PHP Version => ([\d.]+)"},
         {"path": "/", "header": "x-powered-by", "regex": r"PHP/([\d.]+)"},
     ],
     "wordpress": [
         {"path": "/readme.html", "body": r"WordPress ([\d.]+)"},
-        {"path": "/wp-admin/css/colors.min.css", "hash": True,
-         "purpose": "version-specific CSS hash"},
+        {
+            "path": "/wp-admin/css/colors.min.css",
+            "hash": True,
+            "purpose": "version-specific CSS hash",
+        },
         {"path": "/wp-includes/version.php", "body": r"\$wp_version = '([\d.]+)'"},
-        {"path": "/?rest_route=/", "header": "link",
-         "regex": r'rel="https://api\.w\.org/"'},
+        {"path": "/?rest_route=/", "header": "link", "regex": r'rel="https://api\.w\.org/"'},
     ],
     "drupal": [
         {"path": "/CHANGELOG.txt", "body": r"Drupal ([\d.]+),"},
         {"path": "/core/CHANGELOG.txt", "body": r"Drupal ([\d.]+),"},
-        {"path": "/", "header": "x-generator",
-         "regex": r"Drupal ([\d.]+)"},
+        {"path": "/", "header": "x-generator", "regex": r"Drupal ([\d.]+)"},
     ],
     "joomla": [
         {"path": "/README.txt", "body": r"Joomla! ([\d.]+)"},
-        {"path": "/administrator/manifests/files/joomla.xml",
-         "body": r"<version>([\d.]+)"},
+        {"path": "/administrator/manifests/files/joomla.xml", "body": r"<version>([\d.]+)"},
     ],
     "laravel": [
         {"path": "/version", "body": r"Laravel ([\d.]+)"},
-        {"path": "/.env", "body": r"APP_VERSION=([\d.]+)",
-         "purpose": "exposed env version"},
+        {"path": "/.env", "body": r"APP_VERSION=([\d.]+)", "purpose": "exposed env version"},
     ],
     "thinkphp": [
-        {"path": "/ThinkPHP/Library/Think/Think.class.php",
-         "body": r"THINK_VERSION\s*=\s*'([\d.]+)'"},
+        {
+            "path": "/ThinkPHP/Library/Think/Think.class.php",
+            "body": r"THINK_VERSION\s*=\s*'([\d.]+)'",
+        },
     ],
     "spring": [
-        {"path": "/actuator/info",
-         "body": r'"version"\s*:\s*"([\d.]+)"'},
-        {"path": "/actuator/env",
-         "body": r'"java\.version"\s*:\s*"([\d._]+)"'},
-        {"path": "/", "header": "x-application-context",
-         "regex": r".+"},
+        {"path": "/actuator/info", "body": r'"version"\s*:\s*"([\d.]+)"'},
+        {"path": "/actuator/env", "body": r'"java\.version"\s*:\s*"([\d._]+)"'},
+        {"path": "/", "header": "x-application-context", "regex": r".+"},
     ],
     "tomcat": [
         {"path": "/", "header": "server", "regex": r"Apache Tomcat/([\d.]+)"},
@@ -103,46 +104,57 @@ TECH_PROBES = {
         {"path": "/ecp/", "body": r"Version[\s:]+([\d.]+)"},
     ],
     "openssh": [
-        {"path": None, "banner": True, "regex": r"SSH-[\d.]+-OpenSSH[_-]([\d.]+)",
-         "purpose": "SSH banner grab"},
+        {
+            "path": None,
+            "banner": True,
+            "regex": r"SSH-[\d.]+-OpenSSH[_-]([\d.]+)",
+            "purpose": "SSH banner grab",
+        },
     ],
     "mysql": [
-        {"path": None, "banner": True, "regex": r"mysql_native_password",
-         "purpose": "MySQL handshake detection"},
+        {
+            "path": None,
+            "banner": True,
+            "regex": r"mysql_native_password",
+            "purpose": "MySQL handshake detection",
+        },
     ],
     "redis": [
-        {"path": None, "banner": True, "send": "INFO\r\n",
-         "regex": r"-ERR|NOAUTH|redis_version",
-         "purpose": "Redis server detection"},
+        {
+            "path": None,
+            "banner": True,
+            "send": "INFO\r\n",
+            "regex": r"-ERR|NOAUTH|redis_version",
+            "purpose": "Redis server detection",
+        },
     ],
 }
 
 VULN_SIGNATURES: Dict[str, List[dict]] = {
     "spring": [
-        {"version_range": (None, "5.3.17"), "cve": "CVE-2022-22965",
-         "desc": "Spring4Shell RCE"},
-        {"version_range": ("5.3.0", "5.3.15"), "cve": "CVE-2022-22963",
-         "desc": "Spring Cloud Function SpEL RCE"},
-        {"version_range": (None, "5.2.19"), "cve": "CVE-2022-22965",
-         "desc": "Spring4Shell RCE"},
+        {"version_range": (None, "5.3.17"), "cve": "CVE-2022-22965", "desc": "Spring4Shell RCE"},
+        {
+            "version_range": ("5.3.0", "5.3.15"),
+            "cve": "CVE-2022-22963",
+            "desc": "Spring Cloud Function SpEL RCE",
+        },
+        {"version_range": (None, "5.2.19"), "cve": "CVE-2022-22965", "desc": "Spring4Shell RCE"},
     ],
     "wordpress": [
-        {"version_range": (None, "5.8.2"), "cve": "CVE-2021-29447",
-         "desc": "Media Library XXE"},
-        {"version_range": ("3.7", "5.7.4"), "cve": "CVE-2021-39200",
-         "desc": "User Meta IDOR"},
+        {"version_range": (None, "5.8.2"), "cve": "CVE-2021-29447", "desc": "Media Library XXE"},
+        {"version_range": ("3.7", "5.7.4"), "cve": "CVE-2021-39200", "desc": "User Meta IDOR"},
     ],
     "tomcat": [
-        {"version_range": ("9.0.0", "9.0.30"), "cve": "CVE-2020-1938",
-         "desc": "Ghostcat AJP RCE"},
-        {"version_range": ("8.5.0", "8.5.50"), "cve": "CVE-2020-1938",
-         "desc": "Ghostcat AJP RCE"},
-        {"version_range": ("7.0.0", "7.0.99"), "cve": "CVE-2020-1938",
-         "desc": "Ghostcat AJP RCE"},
+        {"version_range": ("9.0.0", "9.0.30"), "cve": "CVE-2020-1938", "desc": "Ghostcat AJP RCE"},
+        {"version_range": ("8.5.0", "8.5.50"), "cve": "CVE-2020-1938", "desc": "Ghostcat AJP RCE"},
+        {"version_range": ("7.0.0", "7.0.99"), "cve": "CVE-2020-1938", "desc": "Ghostcat AJP RCE"},
     ],
     "jenkins": [
-        {"version_range": (None, "2.440"), "cve": "CVE-2024-23897",
-         "desc": "CLI Arbitrary File Read"},
+        {
+            "version_range": (None, "2.440"),
+            "cve": "CVE-2024-23897",
+            "desc": "CLI Arbitrary File Read",
+        },
     ],
 }
 
@@ -196,8 +208,7 @@ class ActiveProber:
                 tech_tasks[tech] = filtered
         return tech_tasks
 
-    def _execute_probe(self, base_url: str, tech: str,
-                       probe: dict) -> ProbeResult:
+    def _execute_probe(self, base_url: str, tech: str, probe: dict) -> ProbeResult:
         path = probe.get("path", "")
         target = base_url.rstrip("/") + path
         method = "header"
@@ -243,17 +254,18 @@ class ActiveProber:
         if version:
             cve_hits = self._match_cves(tech, version)
             return ProbeResult(
-                tech=tech, version=version,
+                tech=tech,
+                version=version,
                 confidence=0.85 if version != "present" else 0.60,
-                method=method, evidence=evidence,
+                method=method,
+                evidence=evidence,
                 cve_hits=cve_hits,
                 exact_match=version != "present",
             )
 
         return ProbeResult(tech=tech, confidence=0.0)
 
-    def _probe_banner(self, host: str, port: int,
-                      tech: str) -> Optional[ProbeResult]:
+    def _probe_banner(self, host: str, port: int, tech: str) -> Optional[ProbeResult]:
         probe_list = TECH_PROBES.get(tech, [])
         for probe in probe_list:
             if not probe.get("banner"):
@@ -275,9 +287,11 @@ class ActiveProber:
             if m:
                 version = m.group(1) if (m.lastindex and m.group(1)) else "present"
                 return ProbeResult(
-                    tech=tech, version=version,
+                    tech=tech,
+                    version=version,
                     confidence=0.85 if version != "present" else 0.60,
-                    method="banner", evidence=text[:80].strip(),
+                    method="banner",
+                    evidence=text[:80].strip(),
                     cve_hits=self._match_cves(tech, version),
                     exact_match=version != "present",
                 )
@@ -298,8 +312,7 @@ class ActiveProber:
                 hits.append(sig["cve"])
         return hits
 
-    def _ver_in_range(self, version: str, low: Optional[str],
-                      high: Optional[str]) -> bool:
+    def _ver_in_range(self, version: str, low: Optional[str], high: Optional[str]) -> bool:
         try:
             ver_parts = [int(x) for x in version.split(".")]
         except (ValueError, AttributeError):

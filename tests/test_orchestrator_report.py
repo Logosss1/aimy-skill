@@ -38,23 +38,28 @@ class TestReportHelpers:
         assert s["param_hits"] == []
 
     def test_report_summary_critical_via_finding_flag(self):
-        findings = {"k": {"type": "sqli", "url": "http://x/", "param": "id",
-                          "result": {"rce_available": True}}}
-        s = Orchestrator._report_summary(findings, {"sqli": [findings["k"]]},
-                                         {"http://x/": ["sqli"]}, {}, {})
+        findings = {
+            "k": {
+                "type": "sqli",
+                "url": "http://x/",
+                "param": "id",
+                "result": {"rce_available": True},
+            }
+        }
+        s = Orchestrator._report_summary(
+            findings, {"sqli": [findings["k"]]}, {"http://x/": ["sqli"]}, {}, {}
+        )
         assert s["critical"] is True
         assert s["by_type"] == {"sqli": 1}
         assert s["param_hits"] == ["http://x/?id [sqli]"]
 
     def test_report_summary_critical_via_auth_bypass(self):
-        s = Orchestrator._report_summary({}, {}, {}, {},
-                                         {"total_bypasses": 2})
+        s = Orchestrator._report_summary({}, {}, {}, {}, {"total_bypasses": 2})
         assert s["critical"] is True
         assert s["exploit_ready_details"] == ["auth_bypass(2)"]
 
     def test_report_summary_exploit_ready(self):
-        exploits = {"e1": {"exploit_ready": True},
-                    "e2": {"exploit_ready": False}}
+        exploits = {"e1": {"exploit_ready": True}, "e2": {"exploit_ready": False}}
         s = Orchestrator._report_summary({}, {}, {}, exploits, {})
         assert s["exploit_ready"] == 2
         assert s["exploit_ready_details"] == ["e1"]
@@ -69,12 +74,20 @@ class TestReportHelpers:
             "attack_plan": {"risk_score": 7},
         }
         detection = {"test_points": 42}
-        crawl_summary = {"pages_crawled": 10, "endpoints_found": 5,
-                         "is_spa": True, "js_api_discovered": 3}
-        mine_data = {"/": {"all_params": ["a", "b"]},
-                     "/x": {"all_params": ["c"]}, "bad": "not-a-dict"}
-        r = Orchestrator._report_recon(recon, detection, crawl_summary,
-                                       mine_data, {"name": "cloudflare"})
+        crawl_summary = {
+            "pages_crawled": 10,
+            "endpoints_found": 5,
+            "is_spa": True,
+            "js_api_discovered": 3,
+        }
+        mine_data = {
+            "/": {"all_params": ["a", "b"]},
+            "/x": {"all_params": ["c"]},
+            "bad": "not-a-dict",
+        }
+        r = Orchestrator._report_recon(
+            recon, detection, crawl_summary, mine_data, {"name": "cloudflare"}
+        )
         assert r["technologies"] == ["PHP", "Nginx"]
         assert r["open_ports"] == [80, 443]
         assert r["git_exposed"] is True
@@ -103,17 +116,23 @@ class TestPhaseReport:
         o.state["phases"]["detect"] = {
             "test_points": 4,
             "findings": {
-                "k1": {"type": "sqli", "url": "http://x/?id=1", "param": "id",
-                       "confidence_score": 0.9, "result": {"dbms": "mysql"},
-                       "second_order_verified": True},
-                "k2": {"type": "xss", "url": "http://x/", "param": "q",
-                       "result": {}},
+                "k1": {
+                    "type": "sqli",
+                    "url": "http://x/?id=1",
+                    "param": "id",
+                    "confidence_score": 0.9,
+                    "result": {"dbms": "mysql"},
+                    "second_order_verified": True,
+                },
+                "k2": {"type": "xss", "url": "http://x/", "param": "q", "result": {}},
             },
         }
         o.state["phases"]["weaponize"] = {"k1": {"exploit_ready": True}}
         o.state["phases"]["auth_bypass"] = {
-            "vulnerable": True, "total_bypasses": 1,
-            "path_bypasses": [{"path": "/admin"}]}
+            "vulnerable": True,
+            "total_bypasses": 1,
+            "path_bypasses": [{"path": "/admin"}],
+        }
         o.state["phases"]["recon"] = {
             "technologies": {"technologies": [{"name": "nginx"}]},
             "open_ports": {"open_ports": [{"port": 80}]},
@@ -121,9 +140,14 @@ class TestPhaseReport:
             "directories": {"interesting": [{"path": "/a"}]},
             "attack_plan": {"risk_score": 5},
         }
-        o.state["phases"]["crawl"] = {"summary": {
-            "pages_crawled": 3, "endpoints_found": 2,
-            "is_spa": False, "js_api_discovered": 1}}
+        o.state["phases"]["crawl"] = {
+            "summary": {
+                "pages_crawled": 3,
+                "endpoints_found": 2,
+                "is_spa": False,
+                "js_api_discovered": 1,
+            }
+        }
         o.state["phases"]["param_mine"] = {"/": {"all_params": ["a", "b"]}}
         o.state["waf"] = {"name": "cloudflare"}
 
@@ -209,9 +233,9 @@ class TestStorageHelpers:
         storage.load_all_context.return_value = {"framework": "Spring"}
         storage.load_vuln_context.return_value = {"dbms": "mysql"}
         storage.load_all_phases.return_value = {"recon": {"x": 1}, "bad": "str"}
-        storage.load_findings.return_value = [{
-            "vuln_type": "sqli", "url": "u", "param": "id",
-            "detail": {"a": 1}, "confidence": 0.9}]
+        storage.load_findings.return_value = [
+            {"vuln_type": "sqli", "url": "u", "param": "id", "detail": {"a": 1}, "confidence": 0.9}
+        ]
         storage.load_report.return_value = {"r": 1}
         o = _orch()
         o._storage = storage
@@ -244,10 +268,14 @@ class TestStorageHelpers:
         o._save_findings({"k": {"type": "x"}})
         o._storage = MagicMock()
         findings = {
-            "high": {"type": "sqli", "url": "u", "param": "id",
-                     "confidence_score": 0.9, "result": {"a": 1}},
-            "low": {"type": "xss", "url": "u", "param": "q",
-                    "confidence_score": 0.4, "result": {}},
+            "high": {
+                "type": "sqli",
+                "url": "u",
+                "param": "id",
+                "confidence_score": 0.9,
+                "result": {"a": 1},
+            },
+            "low": {"type": "xss", "url": "u", "param": "q", "confidence_score": 0.4, "result": {}},
             "__meta__": {"type": "meta"},
         }
         o._save_findings(findings)
@@ -271,8 +299,9 @@ class TestWafCache:
     def test_cache_miss_sets_memory(self):
         o = _orch()
         o.context_memory.get.return_value = None
-        with patch("tools.orchestrator.waf_bypass.fingerprint_waf",
-                   return_value={"name": "akamai"}) as m:
+        with patch(
+            "tools.orchestrator.waf_bypass.fingerprint_waf", return_value={"name": "akamai"}
+        ) as m:
             info = o._fingerprint_waf_cached()
         m.assert_called_once()
         assert info["name"] == "akamai"
@@ -282,8 +311,7 @@ class TestWafCache:
     def test_cache_miss_without_name(self):
         o = _orch()
         o.context_memory.get.return_value = None
-        with patch("tools.orchestrator.waf_bypass.fingerprint_waf",
-                   return_value={}):
+        with patch("tools.orchestrator.waf_bypass.fingerprint_waf", return_value={}):
             info = o._fingerprint_waf_cached()
         assert info == {}
         o.context_memory.set.assert_not_called()

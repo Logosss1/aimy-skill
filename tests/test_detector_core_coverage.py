@@ -54,8 +54,9 @@ class FakeEvent:
         return self.flag
 
 
-def _install_fake_oob(monkeypatch, http_url=None, http_caught=False,
-                      dns_domain=None, dns_caught=False, counters=None):
+def _install_fake_oob(
+    monkeypatch, http_url=None, http_caught=False, dns_domain=None, dns_caught=False, counters=None
+):
     counters = counters if counters is not None else {}
 
     class FakeHttpListener:
@@ -89,14 +90,17 @@ def _install_fake_oob(monkeypatch, http_url=None, http_caught=False,
 
 
 class TestIsLocalTarget:
-    @pytest.mark.parametrize("url", [
-        "http://localhost/fetch",
-        "http://127.0.0.1/fetch",
-        "http://0.0.0.0/fetch",
-        "http://10.1.2.3/fetch",
-        "http://192.168.1.10/fetch",
-        "http://[::1]/fetch",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://localhost/fetch",
+            "http://127.0.0.1/fetch",
+            "http://0.0.0.0/fetch",
+            "http://10.1.2.3/fetch",
+            "http://192.168.1.10/fetch",
+            "http://[::1]/fetch",
+        ],
+    )
     def test_local_targets(self, url):
         assert ssrf_detector._is_local_target(url) is True
 
@@ -163,16 +167,16 @@ class TestGetLanIp:
 
 class TestOobListener:
     def test_custom_callback_short_circuits(self):
-        listener = ssrf_detector.OOBListener(timeout=0.01,
-                                            custom_callback="http://cb.example/oob")
+        listener = ssrf_detector.OOBListener(timeout=0.01, custom_callback="http://cb.example/oob")
         assert listener.start() == "http://cb.example/oob"
         assert listener.caught.is_set() is False
 
     def test_start_binds_and_returns_lan_url(self, monkeypatch):
         fake_server = mock.Mock()
         fake_server.server_address = ("127.0.0.1", 54321)
-        monkeypatch.setattr(ssrf_detector.http.server, "HTTPServer", mock.Mock(
-            return_value=fake_server))
+        monkeypatch.setattr(
+            ssrf_detector.http.server, "HTTPServer", mock.Mock(return_value=fake_server)
+        )
         monkeypatch.setattr(ssrf_detector, "_get_lan_ip", lambda: "192.168.7.7")
 
         listener = ssrf_detector.OOBListener(port=0, timeout=0.01)
@@ -184,8 +188,9 @@ class TestOobListener:
         fake_server.shutdown.assert_called_once()
 
     def test_start_bind_failure_returns_none(self, monkeypatch):
-        monkeypatch.setattr(ssrf_detector.http.server, "HTTPServer",
-                            mock.Mock(side_effect=OSError("port in use")))
+        monkeypatch.setattr(
+            ssrf_detector.http.server, "HTTPServer", mock.Mock(side_effect=OSError("port in use"))
+        )
         listener = ssrf_detector.OOBListener(timeout=0.01)
         assert listener.start() is None
 
@@ -234,13 +239,17 @@ def _dns_query(domain):
 
 
 class TestDnsOobListener:
-    @pytest.mark.parametrize("data,expected", [
-        (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x05hello\x03com\x00", "hello.com"),
-        (b"\x00", None),
-        (struct.pack("!HHHHHH", 1, 0, 0, 0, 0, 0), None),
-        (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x03abc\xc0\x0c", "abc"),
-        (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x10abc", None),
-    ], ids=["valid", "too-short", "qdcount-zero", "compression-pointer", "label-overflow"])
+    @pytest.mark.parametrize(
+        "data,expected",
+        [
+            (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x05hello\x03com\x00", "hello.com"),
+            (b"\x00", None),
+            (struct.pack("!HHHHHH", 1, 0, 0, 0, 0, 0), None),
+            (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x03abc\xc0\x0c", "abc"),
+            (struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\x10abc", None),
+        ],
+        ids=["valid", "too-short", "qdcount-zero", "compression-pointer", "label-overflow"],
+    )
     def test_parse_dns_query(self, data, expected):
         assert ssrf_detector.DnsOobListener._parse_dns_query(data) == expected
 
@@ -292,10 +301,12 @@ class TestDnsOobListener:
     def test_listen_captures_matching_query(self):
         listener = ssrf_detector.DnsOobListener(timeout=0.01)
         listener.domain_token = "tok12345"
-        listener._sock = _QueuedSock([
-            (_dns_query("tok12345.oob"), ("127.0.0.1", 5300)),
-            socket.timeout(),
-        ])
+        listener._sock = _QueuedSock(
+            [
+                (_dns_query("tok12345.oob"), ("127.0.0.1", 5300)),
+                socket.timeout(),
+            ]
+        )
         listener._listen()
         assert listener.caught.is_set() is True
         assert listener.queried_domain == "tok12345.oob"
@@ -304,10 +315,12 @@ class TestDnsOobListener:
     def test_listen_ignores_other_domains_then_times_out(self):
         listener = ssrf_detector.DnsOobListener(timeout=0.01)
         listener.domain_token = "tok12345"
-        listener._sock = _QueuedSock([
-            (_dns_query("attacker.example"), ("127.0.0.1", 5300)),
-            socket.timeout(),
-        ])
+        listener._sock = _QueuedSock(
+            [
+                (_dns_query("attacker.example"), ("127.0.0.1", 5300)),
+                socket.timeout(),
+            ]
+        )
         listener._listen()
         assert listener.caught.is_set() is False
         assert listener.queried_domain is None
@@ -330,8 +343,7 @@ class TestDnsOobListener:
 
 class TestTestOob:
     def test_http_callback_detected(self, monkeypatch):
-        _install_fake_oob(monkeypatch, http_url="http://10.0.0.9:4444/oob",
-                          http_caught=True)
+        _install_fake_oob(monkeypatch, http_url="http://10.0.0.9:4444/oob", http_caught=True)
         sess = FakeSession()
         result = ssrf_detector._test_oob("http://10.0.0.9/fetch", "url", sess, 1.0)
         assert result["vulnerable"] is True
@@ -341,9 +353,9 @@ class TestTestOob:
         assert "HTTP OOB" in result["evidence"][0]
 
     def test_external_target_gets_note_and_skips_dns(self, monkeypatch):
-        counters = _install_fake_oob(monkeypatch,
-                                     http_url="http://10.0.0.9:4444/oob",
-                                     http_caught=False)
+        counters = _install_fake_oob(
+            monkeypatch, http_url="http://10.0.0.9:4444/oob", http_caught=False
+        )
         sess = FakeSession()
         result = ssrf_detector._test_oob("http://ext.example/fetch", "url", sess, 0.1)
         assert result["vulnerable"] is False
@@ -351,8 +363,13 @@ class TestTestOob:
         assert counters.get("dns_started", 0) == 0
 
     def test_dns_callback_detected_for_local_target(self, monkeypatch):
-        _install_fake_oob(monkeypatch, http_url=None, http_caught=False,
-                          dns_domain="tok.10-0-0-1.oob", dns_caught=True)
+        _install_fake_oob(
+            monkeypatch,
+            http_url=None,
+            http_caught=False,
+            dns_domain="tok.10-0-0-1.oob",
+            dns_caught=True,
+        )
         sess = FakeSession()
         result = ssrf_detector._test_oob("http://localhost/fetch", "url", sess, 0.1)
         assert result["vulnerable"] is True
@@ -361,12 +378,13 @@ class TestTestOob:
         assert result["payload"] == "http://tok.10-0-0-1.oob/"
 
     def test_custom_callback_suppresses_external_note(self, monkeypatch):
-        _install_fake_oob(monkeypatch, http_url=None, http_caught=False,
-                          dns_domain=None, dns_caught=False)
+        _install_fake_oob(
+            monkeypatch, http_url=None, http_caught=False, dns_domain=None, dns_caught=False
+        )
         sess = FakeSession()
         result = ssrf_detector._test_oob(
-            "http://localhost/fetch", "url", sess, 0.1,
-            custom_callback="http://cb.example/oob")
+            "http://localhost/fetch", "url", sess, 0.1, custom_callback="http://cb.example/oob"
+        )
         assert result["vulnerable"] is False
         assert "note" not in result
         assert sess.calls
@@ -374,15 +392,18 @@ class TestTestOob:
 
     def test_oob_request_exceptions_are_swallowed(self, monkeypatch):
         counters = _install_fake_oob(
-            monkeypatch, http_url="http://10.0.0.9:4444/oob", http_caught=False,
-            dns_domain="tok.10-0-0-9.oob", dns_caught=False)
+            monkeypatch,
+            http_url="http://10.0.0.9:4444/oob",
+            http_caught=False,
+            dns_domain="tok.10-0-0-9.oob",
+            dns_caught=False,
+        )
 
         class RaisingSession:
             def get(self, *a, **k):
                 raise RuntimeError("connection refused")
 
-        result = ssrf_detector._test_oob("http://localhost/fetch", "url",
-                                         RaisingSession(), 0.1)
+        result = ssrf_detector._test_oob("http://localhost/fetch", "url", RaisingSession(), 0.1)
         assert result["vulnerable"] is False
         assert counters["http_started"] == 1
         assert counters["dns_started"] == 1
@@ -410,15 +431,15 @@ class TestCheck:
         disclosure; only cloud-specific evidence patterns count."""
         sess = FakeSession(lambda url: FakeResp(200, "<Config><Name>x</Name></Config>"))
         with self._patch_oob(return_value={"vulnerable": False, "oob_methods": []}):
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["type"] is None
         assert result["payload"] is None
         assert result["evidence"] == []
         assert result["confidence"] == "low"
         assert len(sess.calls) == len(ssrf_detector.SSRF_URLS) + 1 + len(
-            ssrf_detector.INTERNAL_PROBES)
+            ssrf_detector.INTERNAL_PROBES
+        )
 
     def test_internal_reachable_requires_response_distinct_from_control(self):
         """A generic fallback page identical to the unreachable-port control
@@ -427,13 +448,13 @@ class TestCheck:
         generic = "Welcome to our corporate site, please log in."
         sess = FakeSession(lambda url: FakeResp(200, generic))
         with self._patch_oob(return_value={"vulnerable": False, "oob_methods": []}):
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["type"] is None
         assert result["payload"] is None
         assert len(sess.calls) == len(ssrf_detector.SSRF_URLS) + 1 + len(
-            ssrf_detector.INTERNAL_PROBES)
+            ssrf_detector.INTERNAL_PROBES
+        )
 
         def handler(url):
             if "8080" in url:
@@ -441,8 +462,7 @@ class TestCheck:
             return FakeResp(404, "x" * 30)
 
         distinct = FakeSession(handler)
-        result2 = ssrf_detector.check("http://t.test/fetch", "url", sess=distinct,
-                                      timeout=1.0)
+        result2 = ssrf_detector.check("http://t.test/fetch", "url", sess=distinct, timeout=1.0)
         assert result2["vulnerable"] is True
         assert result2["type"] == "internal_reachable"
         assert result2["confidence"] == "medium"
@@ -453,23 +473,24 @@ class TestCheck:
     def test_internal_probe_filters_short_and_error_statuses(self):
         sess = FakeSession(lambda url: FakeResp(200, "short"))
         with self._patch_oob(return_value={"vulnerable": False, "oob_methods": []}):
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["type"] is None
         assert len(sess.calls) == len(ssrf_detector.SSRF_URLS) + 1 + len(
-            ssrf_detector.INTERNAL_PROBES)
+            ssrf_detector.INTERNAL_PROBES
+        )
 
     def test_oob_callback_promotes_finding_to_high_confidence(self):
         sess = FakeSession()
         oob_result = {
-            "vulnerable": True, "type": "oob_http_callback",
+            "vulnerable": True,
+            "type": "oob_http_callback",
             "evidence": ["HTTP OOB: {'path': '/oob'"],
-            "payload": "http://10.0.0.9:4444/oob", "oob_methods": ["http"],
+            "payload": "http://10.0.0.9:4444/oob",
+            "oob_methods": ["http"],
         }
         with self._patch_oob(return_value=oob_result):
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is True
         assert result["confidence"] == "high"
         assert result["confirmed"] is True
@@ -482,15 +503,19 @@ class TestCheck:
         confidence=high, confirmed=True, payload/evidence preserved from the retry."""
         sess = FakeSession()
         oob_retry = {
-            "vulnerable": True, "type": "oob_http_callback",
+            "vulnerable": True,
+            "type": "oob_http_callback",
             "evidence": ["HTTP OOB: {'path': '/oob'"],
-            "payload": "http://10.0.0.9:4444/oob", "oob_methods": ["http"],
+            "payload": "http://10.0.0.9:4444/oob",
+            "oob_methods": ["http"],
         }
-        with self._patch_oob(side_effect=[
-            {"vulnerable": False, "oob_methods": []}, oob_retry,
-        ]) as fake:
-            result = ssrf_detector.check("http://localhost/fetch", "url", sess=sess,
-                                         timeout=1.0)
+        with self._patch_oob(
+            side_effect=[
+                {"vulnerable": False, "oob_methods": []},
+                oob_retry,
+            ]
+        ) as fake:
+            result = ssrf_detector.check("http://localhost/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is True
         assert result["type"] == "oob_http_callback"
         assert result["confidence"] == "high"
@@ -503,28 +528,27 @@ class TestCheck:
 
     def test_oob_retry_exception_is_swallowed(self):
         sess = FakeSession()
-        with self._patch_oob(side_effect=[
-            {"vulnerable": False, "oob_methods": []},
-            RuntimeError("listener crashed"),
-        ]):
-            result = ssrf_detector.check("http://localhost/fetch", "url", sess=sess,
-                                         timeout=1.0)
+        with self._patch_oob(
+            side_effect=[
+                {"vulnerable": False, "oob_methods": []},
+                RuntimeError("listener crashed"),
+            ]
+        ):
+            result = ssrf_detector.check("http://localhost/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["confidence"] == "low"
 
     def test_oob_test_exception_keeps_oob_tested_false(self):
         sess = FakeSession()
         with self._patch_oob(side_effect=RuntimeError("listener crashed")):
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess, timeout=1.0)
         assert result["vulnerable"] is False
         assert result["oob_tested"] is False
 
     def test_external_target_not_retried_and_gets_note(self):
         sess = FakeSession()
         with self._patch_oob(return_value={"vulnerable": False, "oob_methods": []}) as fake:
-            result = ssrf_detector.check("http://ext.test/fetch", "url", sess=sess,
-                                         timeout=1.0)
+            result = ssrf_detector.check("http://ext.test/fetch", "url", sess=sess, timeout=1.0)
         assert fake.call_count == 1
         assert result["oob_tested"] is True
         assert "External target" in result["note"]
@@ -534,8 +558,13 @@ class TestCheck:
         sess = FakeSession()
         oob_result = {"vulnerable": False, "oob_methods": [], "note": "use --oob-server"}
         with self._patch_oob(return_value=oob_result) as fake:
-            result = ssrf_detector.check("http://t.test/fetch", "url", sess=sess,
-                                         timeout=1.0, oob_server="http://cb.example/oob")
+            result = ssrf_detector.check(
+                "http://t.test/fetch",
+                "url",
+                sess=sess,
+                timeout=1.0,
+                oob_server="http://cb.example/oob",
+            )
         assert result["oob_server_used"] == "http://cb.example/oob"
         assert result["oob_note"] == "use --oob-server"
         assert fake.call_args.kwargs["custom_callback"] == "http://cb.example/oob"
@@ -549,8 +578,9 @@ class TestCheck:
                 raise RuntimeError("connection refused")
 
         with self._patch_oob(return_value={"vulnerable": False, "oob_methods": []}):
-            result = ssrf_detector.check("http://t.test/fetch", "url",
-                                         sess=RaisingSession(), timeout=0.01)
+            result = ssrf_detector.check(
+                "http://t.test/fetch", "url", sess=RaisingSession(), timeout=0.01
+            )
         assert result["vulnerable"] is False
         assert result["confidence"] == "low"
         assert result["evidence"] == []
@@ -566,8 +596,7 @@ class TestCheck:
 
 class TestSemanticStructure:
     def test_extract_structure_counts_and_depth(self):
-        s = semantic_analyzer.extract_structure(
-            "<div><form><input></form></div><script></script>")
+        s = semantic_analyzer.extract_structure("<div><form><input></form></div><script></script>")
         assert s["tag_counts"]["div"] == 1
         assert s["tag_counts"]["form"] == 1
         assert s["tag_counts"]["input"] == 1
@@ -598,11 +627,14 @@ class TestSemanticStructure:
         """structure_hash() uses md5 instead of the PYTHONHASHSEED-randomized builtin
         hash(), so persisted hashes match across runs and processes."""
         root = Path(semantic_analyzer.__file__).resolve().parents[1]
-        code = ("from tools.semantic_analyzer import structure_hash;"
-                "print(structure_hash('<div><form></form></div>'))")
+        code = (
+            "from tools.semantic_analyzer import structure_hash;"
+            "print(structure_hash('<div><form></form></div>'))"
+        )
         outs = [
-            subprocess.run([sys.executable, "-c", code], cwd=str(root),
-                           capture_output=True, text=True).stdout.strip()
+            subprocess.run(
+                [sys.executable, "-c", code], cwd=str(root), capture_output=True, text=True
+            ).stdout.strip()
             for _ in range(2)
         ]
         assert outs[0]
@@ -611,25 +643,28 @@ class TestSemanticStructure:
 
 
 class TestSemanticErrors:
-    @pytest.mark.parametrize("text,label", [
-        ("SQL syntax near 'x' in MySQL", "mysql"),
-        ("Warning: mysql_connect refused", "mysql"),
-        ("Warning: something PHP failed", "php"),
-        ("java.lang.NullPointerException at x", "java_spring"),
-        ("PostgreSQL ERROR: relation missing", "postgresql"),
-        ("Microsoft OLE DB Provider for SQL", "mssql"),
-        ("ORA-01756: quoted string not terminated", "oracle"),
-        ("NameError: name 'x' is not defined", "python"),
-        ("Warning: SimpleXML invalid", "xml_xxe"),
-        ("Parse error: unexpected T_STRING", "php_parse"),
-        ("root@server:~# id", "shell_output"),
-        ("uid=33(www-data) gid=33(www-data)", "unix_id"),
-        ("<h1>404 Not Found</h1>", "not_found"),
-        ("<h1>500 Internal Server Error</h1>", "server_error"),
-        ("<h1>403 Forbidden</h1>", "forbidden"),
-        ("Warning: file_get_contents(x): failed to open stream", "file_read_error"),
-        ("Warning: include(x): failed to open", "include_error"),
-    ])
+    @pytest.mark.parametrize(
+        "text,label",
+        [
+            ("SQL syntax near 'x' in MySQL", "mysql"),
+            ("Warning: mysql_connect refused", "mysql"),
+            ("Warning: something PHP failed", "php"),
+            ("java.lang.NullPointerException at x", "java_spring"),
+            ("PostgreSQL ERROR: relation missing", "postgresql"),
+            ("Microsoft OLE DB Provider for SQL", "mssql"),
+            ("ORA-01756: quoted string not terminated", "oracle"),
+            ("NameError: name 'x' is not defined", "python"),
+            ("Warning: SimpleXML invalid", "xml_xxe"),
+            ("Parse error: unexpected T_STRING", "php_parse"),
+            ("root@server:~# id", "shell_output"),
+            ("uid=33(www-data) gid=33(www-data)", "unix_id"),
+            ("<h1>404 Not Found</h1>", "not_found"),
+            ("<h1>500 Internal Server Error</h1>", "server_error"),
+            ("<h1>403 Forbidden</h1>", "forbidden"),
+            ("Warning: file_get_contents(x): failed to open stream", "file_read_error"),
+            ("Warning: include(x): failed to open", "include_error"),
+        ],
+    )
     def test_error_pattern_labels(self, text, label):
         assert label in semantic_analyzer.extract_error_patterns(text)
 
@@ -639,14 +674,16 @@ class TestSemanticErrors:
     def test_python_pattern_matches_tracebacks_not_prose(self):
         """'File listings on line 5' is prose; python errors require a Traceback, a
         File "x", line N frame, or a named exception."""
-        assert "python" not in semantic_analyzer.extract_error_patterns(
-            "File listings on line 5")
+        assert "python" not in semantic_analyzer.extract_error_patterns("File listings on line 5")
         assert "python" in semantic_analyzer.extract_error_patterns(
-            "Traceback (most recent call last):")
+            "Traceback (most recent call last):"
+        )
         assert "python" in semantic_analyzer.extract_error_patterns(
-            'File "/app/server.py", line 5, in handle')
+            'File "/app/server.py", line 5, in handle'
+        )
         assert "python" in semantic_analyzer.extract_error_patterns(
-            "ValueError: invalid literal for int()")
+            "ValueError: invalid literal for int()"
+        )
 
 
 class TestAnalyzeSingleResponse:
@@ -674,15 +711,20 @@ class TestAnalyzeSingleResponse:
 
 class TestCompareResponses:
     def test_identical_responses_have_no_changes(self):
-        base = {"status": 200, "length": 10, "hash": "a", "errors": [],
-                "structure": {"tag_counts": {}}}
+        base = {
+            "status": 200,
+            "length": 10,
+            "hash": "a",
+            "errors": [],
+            "structure": {"tag_counts": {}},
+        }
         assert semantic_analyzer.compare_responses(dict(base), dict(base)) == {}
 
     def test_status_length_and_errors_are_reported(self):
-        baseline = semantic_analyzer.analyze_single_response(
-            "<div>hello</div>", 200, "text/html")
+        baseline = semantic_analyzer.analyze_single_response("<div>hello</div>", 200, "text/html")
         probe = semantic_analyzer.analyze_single_response(
-            "<form><input></form><p>500 Internal Server Error</p>", 500, "text/html")
+            "<form><input></form><p>500 Internal Server Error</p>", 500, "text/html"
+        )
         changes = semantic_analyzer.compare_responses(baseline, probe)
         assert changes["status"] == "200 -> 500"
         assert "length" in changes
@@ -692,38 +734,59 @@ class TestCompareResponses:
 
     def test_cleared_errors_reported(self):
         baseline = semantic_analyzer.analyze_single_response(
-            "<p>404 Not Found</p>", 404, "text/html")
+            "<p>404 Not Found</p>", 404, "text/html"
+        )
         probe = semantic_analyzer.analyze_single_response("<p>ok</p>", 200, "text/html")
         changes = semantic_analyzer.compare_responses(baseline, probe)
         assert changes["errors_cleared"] == ["not_found"]
 
     def test_same_tag_counts_but_different_depth_still_anomalous(self):
-        baseline = {"status": 200, "length": 10, "hash": "a", "errors": [],
-                    "structure": {"tag_counts": {"div": 2}}}
-        probe = {"status": 200, "length": 10, "hash": "b", "errors": [],
-                 "structure": {"tag_counts": {"div": 2}}}
+        baseline = {
+            "status": 200,
+            "length": 10,
+            "hash": "a",
+            "errors": [],
+            "structure": {"tag_counts": {"div": 2}},
+        }
+        probe = {
+            "status": 200,
+            "length": 10,
+            "hash": "b",
+            "errors": [],
+            "structure": {"tag_counts": {"div": 2}},
+        }
         changes = semantic_analyzer.compare_responses(baseline, probe)
         assert changes == {"structure_changed": True, "anomaly_score": 0.3}
 
-    @pytest.mark.parametrize("changes,expected", [
-        ({"new_errors": ["x"]}, 0.4),
-        ({"structure_changed": True}, 0.3),
-        ({"status": "200 -> 500"}, 0.2),
-        ({"new_errors": ["x"], "length": "+5 (25.0%)"}, 0.6),
-        ({"new_errors": ["x"], "length": "+5 (abc%)"}, 0.4),
-        ({"new_errors": ["x"], "structure_changed": True, "status": "1 -> 2",
-          "length": "+5 (50.0%)"}, 1.0),
-    ])
+    @pytest.mark.parametrize(
+        "changes,expected",
+        [
+            ({"new_errors": ["x"]}, 0.4),
+            ({"structure_changed": True}, 0.3),
+            ({"status": "200 -> 500"}, 0.2),
+            ({"new_errors": ["x"], "length": "+5 (25.0%)"}, 0.6),
+            ({"new_errors": ["x"], "length": "+5 (abc%)"}, 0.4),
+            (
+                {
+                    "new_errors": ["x"],
+                    "structure_changed": True,
+                    "status": "1 -> 2",
+                    "length": "+5 (50.0%)",
+                },
+                1.0,
+            ),
+        ],
+    )
     def test_score_anomaly(self, changes, expected):
         assert semantic_analyzer._score_anomaly(changes) == pytest.approx(expected)
 
 
 class TestResponseSignatureDiff:
     def test_diff_reports_all_change_classes(self):
-        sig1 = semantic_analyzer.ResponseSignature(
-            200, 100, "h1", ["a"], "text/html", title="Home")
+        sig1 = semantic_analyzer.ResponseSignature(200, 100, "h1", ["a"], "text/html", title="Home")
         sig2 = semantic_analyzer.ResponseSignature(
-            500, 200, "h2", ["a", "b"], "text/html", title="Error")
+            500, 200, "h2", ["a", "b"], "text/html", title="Error"
+        )
         changes = sig1.diff(sig2)
         assert changes["status"] == (200, 500)
         assert changes["length_ratio"] == 0.5
@@ -732,8 +795,7 @@ class TestResponseSignatureDiff:
 
     def test_diff_identical_has_no_changes(self):
         sig = semantic_analyzer.ResponseSignature(200, 10, "h", [], "text/html")
-        assert sig.diff(semantic_analyzer.ResponseSignature(200, 10, "h", [],
-                                                            "text/html")) == {}
+        assert sig.diff(semantic_analyzer.ResponseSignature(200, 10, "h", [], "text/html")) == {}
 
 
 class TestClusterTextSimilarity:
@@ -754,14 +816,15 @@ class TestClusterTextSimilarity:
 class TestDetectContentReflection:
     def test_plain_payload_reflected(self):
         result = semantic_analyzer.detect_content_reflection(
-            "alertPAYLOAD123", "<div>alertPAYLOAD123</div>")
+            "alertPAYLOAD123", "<div>alertPAYLOAD123</div>"
+        )
         assert result["reflected"] is True
         assert result["positions"][0]["offset"] == 5
 
     def test_escaped_payload_not_counted(self):
         result = semantic_analyzer.detect_content_reflection(
-            "<script>alert(1)</script>",
-            "&lt;script&gt;alert(1)&lt;/script&gt;")
+            "<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;"
+        )
         assert result["reflected"] is False
 
     def test_short_payloads_are_checked(self):
@@ -781,17 +844,21 @@ class TestDetectContentReflection:
         assert result["reflected"] is True
         assert len(result["positions"]) == 3
 
-    @pytest.mark.parametrize("body,expected", [
-        ("<script>var a=PAYLOAD123", "js"),
-        ("<img src=x onerror=PAYLOAD123>", "event_handler"),
-        ("<a href=PAYLOAD123>", "attribute"),
-        ('<div data-x="PAYLOAD123">', "attribute_value"),
-        ("PAYLOAD123", "html"),
-        ("<div>PAYLOAD123", "unknown"),
-    ])
+    @pytest.mark.parametrize(
+        "body,expected",
+        [
+            ("<script>var a=PAYLOAD123", "js"),
+            ("<img src=x onerror=PAYLOAD123>", "event_handler"),
+            ("<a href=PAYLOAD123>", "attribute"),
+            ('<div data-x="PAYLOAD123">', "attribute_value"),
+            ("PAYLOAD123", "html"),
+            ("<div>PAYLOAD123", "unknown"),
+        ],
+    )
     def test_reflection_context(self, body, expected):
-        assert semantic_analyzer.detect_content_reflection(
-            "PAYLOAD123", body)["context"] == expected
+        assert (
+            semantic_analyzer.detect_content_reflection("PAYLOAD123", body)["context"] == expected
+        )
 
     def test_long_script_block_context_detected_as_js(self):
         """An unclosed <script> anywhere before the payload makes the context 'js', not
@@ -801,5 +868,7 @@ class TestDetectContentReflection:
         assert result["reflected"] is True
         assert result["context"] == "js"
         closed = "<script>x</script><div>PAYLOAD123</div>"
-        assert semantic_analyzer.detect_content_reflection(
-            "PAYLOAD123", closed)["context"] == "unknown"
+        assert (
+            semantic_analyzer.detect_content_reflection("PAYLOAD123", closed)["context"]
+            == "unknown"
+        )

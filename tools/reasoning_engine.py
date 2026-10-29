@@ -8,15 +8,52 @@ from tools.log_utils import get_logger
 logger = get_logger("reasoning")
 
 TECH_PRIORITY = {
-    "spring": 1, "weblogic": 1, "thinkphp": 1, "php": 2,
-    "wordpress": 2, "tomcat": 2, "laravel": 2, "django": 2,
-    "flask": 3, "nodejs": 3, "express": 3, "asp.net": 2,
-    "graphql": 2, "nginx": 4, "iis": 4,
+    "spring": 1,
+    "weblogic": 1,
+    "thinkphp": 1,
+    "php": 2,
+    "wordpress": 2,
+    "tomcat": 2,
+    "laravel": 2,
+    "django": 2,
+    "flask": 3,
+    "nodejs": 3,
+    "express": 3,
+    "asp.net": 2,
+    "graphql": 2,
+    "nginx": 4,
+    "iis": 4,
 }
 
-PORT_CRITICAL = {21, 25, 389, 445, 1433, 1521, 2049, 2375, 2376, 3306,
-                 3389, 5432, 5555, 5900, 5984, 6379, 6443, 7001, 8161,
-                 8200, 8500, 8686, 8761, 9200, 27017, 50070, 61616}
+PORT_CRITICAL = {
+    21,
+    25,
+    389,
+    445,
+    1433,
+    1521,
+    2049,
+    2375,
+    2376,
+    3306,
+    3389,
+    5432,
+    5555,
+    5900,
+    5984,
+    6379,
+    6443,
+    7001,
+    8161,
+    8200,
+    8500,
+    8686,
+    8761,
+    9200,
+    27017,
+    50070,
+    61616,
+}
 
 
 @dataclass
@@ -49,16 +86,28 @@ class ReasoningEngine:
     def __init__(self, target: str):
         self.target = target.rstrip("/")
         self.bayesian_likelihoods = {
-            "rce": 0.95, "sqli": 0.90, "cmdi": 0.88, "deser": 0.85,
-            "ssrf": 0.82, "lfi": 0.80, "ssti": 0.75, "xss": 0.70,
-            "nosqli": 0.65, "auth_bypass": 0.60, "jwt_exploit": 0.55,
-            "proto_pollution": 0.50, "xxe": 0.50, "biz_logic": 0.45,
-            "info_disclosure": 0.40, "graphql_abuse": 0.35,
+            "rce": 0.95,
+            "sqli": 0.90,
+            "cmdi": 0.88,
+            "deser": 0.85,
+            "ssrf": 0.82,
+            "lfi": 0.80,
+            "ssti": 0.75,
+            "xss": 0.70,
+            "nosqli": 0.65,
+            "auth_bypass": 0.60,
+            "jwt_exploit": 0.55,
+            "proto_pollution": 0.50,
+            "xxe": 0.50,
+            "biz_logic": 0.45,
+            "info_disclosure": 0.40,
+            "graphql_abuse": 0.35,
         }
         self.prior_map: Dict[str, List[Hypothesis]] = {}
 
-    def update_with_evidence(self, hypotheses: List[Hypothesis],
-                              evidence: Dict[str, Dict]) -> List[Hypothesis]:
+    def update_with_evidence(
+        self, hypotheses: List[Hypothesis], evidence: Dict[str, Dict]
+    ) -> List[Hypothesis]:
         updated = []
         for h in hypotheses:
             vt = h.vuln_type
@@ -69,14 +118,20 @@ class ReasoningEngine:
                 ev = evidence[vt]
                 confirmed = ev.get("vulnerable") or ev.get("total_bypasses", 0) > 0
                 if confirmed:
-                    posterior = (prior * likelihood) / (prior * likelihood + (1 - prior) * (1 - likelihood))
+                    posterior = (prior * likelihood) / (
+                        prior * likelihood + (1 - prior) * (1 - likelihood)
+                    )
                     h.confidence = min(posterior * 1.05, 0.99)
-                    h.evidence.append("Confirmed by detector with %.0f%% likelihood" % (likelihood * 100))
+                    h.evidence.append(
+                        "Confirmed by detector with %.0f%% likelihood" % (likelihood * 100)
+                    )
                 else:
                     false_pos = 1.0 - likelihood
                     posterior = (prior * false_pos) / (prior * false_pos + (1 - prior) * likelihood)
                     h.confidence = max(posterior * 0.95, 0.01)
-                    h.evidence.append("Detector ran but no finding (fpr=%.0f%%)" % (false_pos * 100))
+                    h.evidence.append(
+                        "Detector ran but no finding (fpr=%.0f%%)" % (false_pos * 100)
+                    )
             else:
                 h.confidence *= 0.98
 
@@ -87,8 +142,9 @@ class ReasoningEngine:
 
         return updated
 
-    def update_from_findings(self, hypotheses: List[Hypothesis],
-                              findings: Dict[str, Dict]) -> List[Hypothesis]:
+    def update_from_findings(
+        self, hypotheses: List[Hypothesis], findings: Dict[str, Dict]
+    ) -> List[Hypothesis]:
         evidence_map = {}
         for key, f in findings.items():
             vt = f.get("type", "").lower()
@@ -115,13 +171,19 @@ class ReasoningEngine:
         crawled_endpoints = context.get("crawl_endpoints", {})
         plan = context.get("attack_plan", {})
 
-        for rule in self._all_rules(target=self.target, all_techs=all_techs,
-                                    ports=ports, port_data=port_data,
-                                    dirs=dirs, dir_full=dir_full,
-                                    git=git, existing_vulns=existing_vulns,
-                                    existing_types=existing_types,
-                                    crawled_endpoints=crawled_endpoints,
-                                    plan=plan):
+        for rule in self._all_rules(
+            target=self.target,
+            all_techs=all_techs,
+            ports=ports,
+            port_data=port_data,
+            dirs=dirs,
+            dir_full=dir_full,
+            git=git,
+            existing_vulns=existing_vulns,
+            existing_types=existing_types,
+            crawled_endpoints=crawled_endpoints,
+            plan=plan,
+        ):
             h = rule()
             if h is not None:
                 hypotheses.append(h)
@@ -164,8 +226,7 @@ class ReasoningEngine:
 
         return tree
 
-    def best_attack_paths(self, tree: AttackTree,
-                           min_confidence: float = 0.20) -> List[dict]:
+    def best_attack_paths(self, tree: AttackTree, min_confidence: float = 0.20) -> List[dict]:
         """Get ranked attack paths from the tree."""
         return tree.best_paths(min_confidence=min_confidence)
 
@@ -216,8 +277,7 @@ class ReasoningEngine:
                     if source.vuln_type == "sqli":
                         merge = Hypothesis(
                             vuln_type="rce",
-                            confidence=min(
-                                source.confidence * 0.80, 0.85),
+                            confidence=min(source.confidence * 0.80, 0.85),
                             evidence=["SQLi + LFI on same endpoint → MySQL INTO OUTFILE RCE"],
                             suggested_chain="sqli_to_rce",
                             priority=0,
@@ -241,8 +301,9 @@ class ReasoningEngine:
                 ordered.append(d)
         return ordered
 
-    def suggest_chains(self, hypotheses: List[Hypothesis],
-                       confirmed_types: set) -> List[Tuple[str, str, str]]:
+    def suggest_chains(
+        self, hypotheses: List[Hypothesis], confirmed_types: set
+    ) -> List[Tuple[str, str, str]]:
         chains = []
         seen = set()
         for h in hypotheses:
@@ -257,12 +318,42 @@ class ReasoningEngine:
         tech_set = set(t.lower() for t in techs)
 
         high_value = {
-            "file", "path", "page", "include", "template", "document",
-            "cmd", "command", "exec", "run", "ping", "nslookup",
-            "url", "host", "target", "redirect", "next", "callback",
-            "token", "jwt", "api_key", "secret", "password", "key",
-            "sql", "query", "id", "uid", "user_id", "order", "sort",
-            "email", "user", "username", "login", "pass",
+            "file",
+            "path",
+            "page",
+            "include",
+            "template",
+            "document",
+            "cmd",
+            "command",
+            "exec",
+            "run",
+            "ping",
+            "nslookup",
+            "url",
+            "host",
+            "target",
+            "redirect",
+            "next",
+            "callback",
+            "token",
+            "jwt",
+            "api_key",
+            "secret",
+            "password",
+            "key",
+            "sql",
+            "query",
+            "id",
+            "uid",
+            "user_id",
+            "order",
+            "sort",
+            "email",
+            "user",
+            "username",
+            "login",
+            "pass",
         }
         if name in high_value:
             return 0.9
@@ -403,7 +494,11 @@ def _rule_php_lfi(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_graphql(**ctx) -> Optional[Hypothesis]:
-    found_gql = _has_dir(ctx["dirs"], "/graphql") or _has_dir(ctx["dirs"], "/graphiql") or _has_dir(ctx["dirs"], "/playground")
+    found_gql = (
+        _has_dir(ctx["dirs"], "/graphql")
+        or _has_dir(ctx["dirs"], "/graphiql")
+        or _has_dir(ctx["dirs"], "/playground")
+    )
     if not found_gql:
         return None
     has_vuln = _has_vuln(ctx["existing_types"], "graphql")
@@ -451,7 +546,15 @@ def _rule_jwt_found(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_cloud_ssrf(**ctx) -> Optional[Hypothesis]:
-    cloud_providers = {"aws", "gcp", "azure", "cloudflare", "alibaba cloud", "tencent cloud", "huawei cloud"}
+    cloud_providers = {
+        "aws",
+        "gcp",
+        "azure",
+        "cloudflare",
+        "alibaba cloud",
+        "tencent cloud",
+        "huawei cloud",
+    }
     detected_cloud = any(c in ctx["all_techs"] for c in cloud_providers)
     has_ssrf = _has_vuln(ctx["existing_types"], "ssrf")
     if detected_cloud and has_ssrf:
@@ -571,7 +674,11 @@ def _rule_admin_panel(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_swagger_exposed(**ctx) -> Optional[Hypothesis]:
-    swagger = _has_dir(ctx["dirs"], "/swagger") or _has_dir(ctx["dirs"], "/v2/api-docs") or _has_dir(ctx["dirs"], "/v3/api-docs")
+    swagger = (
+        _has_dir(ctx["dirs"], "/swagger")
+        or _has_dir(ctx["dirs"], "/v2/api-docs")
+        or _has_dir(ctx["dirs"], "/v3/api-docs")
+    )
     if not swagger:
         swagger = _has_dir(ctx["dirs"], "/api-docs") or _has_dir(ctx["dirs"], "/openapi.json")
     if swagger:
@@ -585,7 +692,11 @@ def _rule_swagger_exposed(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_phpmyadmin(**ctx) -> Optional[Hypothesis]:
-    pma = _has_dir(ctx["dirs"], "/phpmyadmin") or _has_dir(ctx["dirs"], "/pma") or _has_dir(ctx["dirs"], "/adminer")
+    pma = (
+        _has_dir(ctx["dirs"], "/phpmyadmin")
+        or _has_dir(ctx["dirs"], "/pma")
+        or _has_dir(ctx["dirs"], "/adminer")
+    )
     if pma:
         return Hypothesis(
             vuln_type="unauthorized_access",
@@ -694,13 +805,17 @@ def _rule_ssrf_internal_es(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_sqli_and_lfi_composite(**ctx) -> Optional[Hypothesis]:
-    has_sqli = _has_vuln(ctx["existing_types"], "sqli") or _has_vuln(ctx["existing_types"], "sql_injection")
+    has_sqli = _has_vuln(ctx["existing_types"], "sqli") or _has_vuln(
+        ctx["existing_types"], "sql_injection"
+    )
     has_lfi = _has_vuln(ctx["existing_types"], "lfi")
     if has_sqli and has_lfi:
         return Hypothesis(
             vuln_type="rce",
             confidence=0.85,
-            evidence=["SQLi + LFI simultaneously — use SQLi INTO OUTFILE for shell, LFI for log poison"],
+            evidence=[
+                "SQLi + LFI simultaneously — use SQLi INTO OUTFILE for shell, LFI for log poison"
+            ],
             suggested_chain="sqli_to_rce",
             priority=0,
         )
@@ -726,13 +841,24 @@ def _rule_xss_sensitive_form(**ctx) -> Optional[Hypothesis]:
     if not has_xss:
         return None
     pages = ctx.get("crawled_endpoints", {})
-    sensitive_kw = {"transfer", "payment", "checkout", "order", "cart", "profile", "account", "admin"}
+    sensitive_kw = {
+        "transfer",
+        "payment",
+        "checkout",
+        "order",
+        "cart",
+        "profile",
+        "account",
+        "admin",
+    }
     found_sensitive = [p for p in pages if any(k in p.lower() for k in sensitive_kw)]
     if found_sensitive:
         return Hypothesis(
             vuln_type="xss_to_hijack",
             confidence=0.70,
-            evidence=["XSS + sensitive endpoint %s — account takeover via CSRF" % found_sensitive[0]],
+            evidence=[
+                "XSS + sensitive endpoint %s — account takeover via CSRF" % found_sensitive[0]
+            ],
             suggested_chain="xss_to_hijack",
             priority=1,
         )
@@ -787,7 +913,11 @@ def _rule_tomcat_manager(**ctx) -> Optional[Hypothesis]:
 
 
 def _rule_jenkins(**ctx) -> Optional[Hypothesis]:
-    jenkins = _has_dir(ctx["dirs"], "/jenkins") or _has_dir(ctx["dirs"], "/jenkins/") or _has_dir(ctx["dirs"], "/script")
+    jenkins = (
+        _has_dir(ctx["dirs"], "/jenkins")
+        or _has_dir(ctx["dirs"], "/jenkins/")
+        or _has_dir(ctx["dirs"], "/script")
+    )
     if not jenkins:
         jenkins = _has_dir(ctx["dirs"], "/cli") or _has_dir(ctx["dirs"], "/asynchPeople")
     if jenkins:
@@ -831,7 +961,9 @@ def _rule_ldap_anonymous(**ctx) -> Optional[Hypothesis]:
             return Hypothesis(
                 vuln_type="info_disclosure",
                 confidence=0.50,
-                evidence=["Port %d/%s exposed — anonymous bind possible, dump directory" % (p, svc)],
+                evidence=[
+                    "Port %d/%s exposed — anonymous bind possible, dump directory" % (p, svc)
+                ],
                 priority=1,
                 detail={"port": p, "service": svc.lower()},
             )
@@ -887,10 +1019,17 @@ def _rule_cve_database(**ctx) -> Optional[Hypothesis]:
         return Hypothesis(
             vuln_type=top.vuln_type,
             confidence=0.75 if top.exploit_available else 0.50,
-            evidence=["CVE match: %s — %s (exploit:%s)" % (
-                top.cve_id, top.description or top.vuln_type, "YES" if top.exploit_available else "maybe")],
-            suggested_detector=top.vuln_type if top.vuln_type in (
-                "sqli", "xss", "ssrf", "lfi", "ssti", "cmdi", "deser") else None,
+            evidence=[
+                "CVE match: %s — %s (exploit:%s)"
+                % (
+                    top.cve_id,
+                    top.description or top.vuln_type,
+                    "YES" if top.exploit_available else "maybe",
+                )
+            ],
+            suggested_detector=top.vuln_type
+            if top.vuln_type in ("sqli", "xss", "ssrf", "lfi", "ssti", "cmdi", "deser")
+            else None,
             suggested_chain=top.exploit_method if top.exploit_available else None,
             priority=top.severity,
             detail={"cve_id": top.cve_id, "matched_cves": [c.cve_id for c in matched[:3]]},
@@ -903,9 +1042,14 @@ def _rule_cve_database(**ctx) -> Optional[Hypothesis]:
                 return Hypothesis(
                     vuln_type="known_risks",
                     confidence=0.40,
-                    evidence=["%s has %d CVEs in database, %d with exploits" % (
-                        tech, len(_kg.tech_cves[tech]),
-                        sum(1 for c in _kg.tech_cves[tech] if c.exploit_available))],
+                    evidence=[
+                        "%s has %d CVEs in database, %d with exploits"
+                        % (
+                            tech,
+                            len(_kg.tech_cves[tech]),
+                            sum(1 for c in _kg.tech_cves[tech] if c.exploit_available),
+                        )
+                    ],
                     priority=1,
                     detail={"tech": tech, "cve_count": len(_kg.tech_cves[tech])},
                 )

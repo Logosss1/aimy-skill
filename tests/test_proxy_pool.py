@@ -118,6 +118,7 @@ class TestOPSECProxyIntegration:
         kwargs.setdefault("jitter_range", (0, 0))
         kwargs.setdefault("retries", 1)
         from tools.opsec_session import OPSECSession
+
         sess = OPSECSession(**kwargs)
         sess.trust_env = False
         monkeypatch.setattr(sess, "send", _ok_send)
@@ -155,6 +156,7 @@ class TestOPSECProxyIntegration:
     def test_pool_session_factory(self):
         sess = pool_session(["http://p1:8080"], max_concurrency=2, rate_limit=0.0)
         from tools.opsec_session import OPSECSession
+
         assert isinstance(sess, OPSECSession)
         assert sess.proxy_pool.health()["total"] == 1
         assert sess.throttle is not None

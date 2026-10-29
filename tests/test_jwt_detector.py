@@ -14,7 +14,7 @@ from tools.jwt_detector import (
 
 
 def _make_b64(data):
-    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip('=')
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
 
 
 class TestJWTDecode:
@@ -33,19 +33,22 @@ class TestJWTDecode:
 class TestCheckJwtNone:
     def test_alg_none_token_generated(self):
         result = check_jwt_none(sess=None, url=None)
-        assert 'token' in result
-        assert result['header']['alg'] == 'none'
+        assert "token" in result
+        assert result["header"]["alg"] == "none"
 
     @responses.activate
     def test_alg_none_accepted(self):
         responses.add(
-            responses.GET, 'http://test.com/admin',
-            body='admin panel', status=200,
+            responses.GET,
+            "http://test.com/admin",
+            body="admin panel",
+            status=200,
         )
         import requests
+
         sess = requests.Session()
-        result = check_jwt_none(sess, 'http://test.com/admin')
-        assert result['vulnerable'] is True
+        result = check_jwt_none(sess, "http://test.com/admin")
+        assert result["vulnerable"] is True
 
 
 class TestCheckJwtWeakSecret:
@@ -55,23 +58,25 @@ class TestCheckJwtWeakSecret:
         pld = _make_b64({"sub": "user"})
         import hashlib
         import hmac
+
         sig = hmac.new(test_secret.encode(), f"{hdr}.{pld}".encode(), hashlib.sha256).digest()
-        sig_b64 = base64.urlsafe_b64encode(sig).decode().rstrip('=')
+        sig_b64 = base64.urlsafe_b64encode(sig).decode().rstrip("=")
         token = f"{hdr}.{pld}.{sig_b64}"
         result = check_jwt_weak_secret(token)
-        assert result['vulnerable'] is True
-        assert result['found_secret'] == test_secret
+        assert result["vulnerable"] is True
+        assert result["found_secret"] == test_secret
 
     def test_no_weak_secret(self):
         hdr = _make_b64({"alg": "HS256"})
         pld = _make_b64({"sub": "user"})
         import hashlib
         import hmac
+
         sig = hmac.new(b"unknown_secret_12345", f"{hdr}.{pld}".encode(), hashlib.sha256).digest()
-        sig_b64 = base64.urlsafe_b64encode(sig).decode().rstrip('=')
+        sig_b64 = base64.urlsafe_b64encode(sig).decode().rstrip("=")
         token = f"{hdr}.{pld}.{sig_b64}"
         result = check_jwt_weak_secret(token)
-        assert result['vulnerable'] is False
+        assert result["vulnerable"] is False
 
 
 class TestJWTCheck:
@@ -81,22 +86,28 @@ class TestJWTCheck:
         token_pld = _make_b64({"sub": "admin", "role": "admin"})
         token = f"{token_hdr}.{token_pld}.signature"
         responses.add(
-            responses.GET, 'http://test.com/page',
-            body=f'<html>token: {token}</html>', status=200,
+            responses.GET,
+            "http://test.com/page",
+            body=f"<html>token: {token}</html>",
+            status=200,
         )
-        result = check('http://test.com/page')
-        assert result['vulnerable'] is True
-        assert len(result['tokens_found']) > 0
+        result = check("http://test.com/page")
+        assert result["vulnerable"] is True
+        assert len(result["tokens_found"]) > 0
 
     @responses.activate
     def test_no_jwt_found(self):
         responses.add(
-            responses.GET, 'http://test.com/static',
-            body='<html>no tokens here</html>', status=200,
+            responses.GET,
+            "http://test.com/static",
+            body="<html>no tokens here</html>",
+            status=200,
         )
         responses.add(
-            responses.GET, re.compile(r'http://test\.com/static.*'),
-            body='unauthorized', status=401,
+            responses.GET,
+            re.compile(r"http://test\.com/static.*"),
+            body="unauthorized",
+            status=401,
         )
-        result = check('http://test.com/static')
-        assert result['vulnerable'] is False
+        result = check("http://test.com/static")
+        assert result["vulnerable"] is False

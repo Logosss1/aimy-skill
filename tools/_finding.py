@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 
 class Severity(str, Enum):
     """漏洞严重程度枚举"""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -26,6 +27,7 @@ class Severity(str, Enum):
 
 class VulnType(str, Enum):
     """漏洞类型枚举 (与 Skill 类目一致)"""
+
     SQLI = "sqli"
     BLIND_SQLI = "sqli-blind"
     OOB_SQLI = "sqli-oob"
@@ -65,6 +67,7 @@ class VulnType(str, Enum):
 @dataclass
 class Evidence:
     """证据结构（标准化）"""
+
     request: Optional[Dict] = None  # {method, url, headers, body}
     response: Optional[Dict] = None  # {status, headers, body, time}
     headers: Optional[Dict] = None  # 关键响应头
@@ -181,10 +184,13 @@ class Finding:
         return f"[{self.severity.value.upper()}]{self.vuln_type} @ {self.endpoint}"
 
     def __repr__(self) -> str:
-        return f"Finding(id='{self.id}', vuln_type={self.vuln_type}, severity={self.severity}, target='{self.target}')"[:120]
+        return f"Finding(id='{self.id}', vuln_type={self.vuln_type}, severity={self.severity}, target='{self.target}')"[
+            :120
+        ]
 
 
 # 便捷工具函数
+
 
 def make_finding(
     vuln_type: str,
@@ -210,6 +216,7 @@ def make_finding(
         sev = Severity.MEDIUM
 
     import time
+
     finding_id = f"{vt.value}_{endpoint}_{parameter}_{int(kwargs.get('timestamp', time.time()))}"
 
     evidence = Evidence(
@@ -235,6 +242,7 @@ def make_finding(
 
 
 # 旧格式适配器
+
 
 class OldFormatFinding:
     """兼容旧格式 Finding 的适配器。
@@ -332,6 +340,7 @@ class OldFormatFinding:
 
         # 生成 ID
         import time
+
         finding_id = f"{vuln_type_str}_{endpoint}_{param}_{int(time.time())}"
 
         return Finding(

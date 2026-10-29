@@ -1,4 +1,5 @@
 """Tests for tools.orchestrator_engine.test_runner extracted helpers."""
+
 from unittest import mock
 
 from tools.orchestrator_engine import test_runner
@@ -7,8 +8,13 @@ from tools.orchestrator_engine import test_runner
 class TestRunDetector:
     def test_unknown_vtype_returns_none(self):
         result = test_runner.run_detector(
-            "nonexistent_detector", "http://x.test/", "id",
-            sess=None, waf_name="", oob={}, effective_timeout=5.0,
+            "nonexistent_detector",
+            "http://x.test/",
+            "id",
+            sess=None,
+            waf_name="",
+            oob={},
+            effective_timeout=5.0,
         )
         assert result is None
 
@@ -18,8 +24,13 @@ class TestRunDetector:
             return_value={"vulnerable": True},
         ):
             result = test_runner.run_detector(
-                "xsscheck", "http://x.test/", "q",
-                sess=None, waf_name="", oob={}, effective_timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                sess=None,
+                waf_name="",
+                oob={},
+                effective_timeout=5.0,
             )
         assert result is not None
         assert result["_vtype"] == "xsscheck"
@@ -31,8 +42,13 @@ class TestRunDetector:
             side_effect=RuntimeError("boom"),
         ):
             result = test_runner.run_detector(
-                "xsscheck", "http://x.test/", "q",
-                sess=None, waf_name="", oob={}, effective_timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                sess=None,
+                waf_name="",
+                oob={},
+                effective_timeout=5.0,
             )
         assert result is None
 
@@ -42,8 +58,13 @@ class TestRunDetector:
             return_value="not a dict",
         ):
             result = test_runner.run_detector(
-                "xsscheck", "http://x.test/", "q",
-                sess=None, waf_name="", oob={}, effective_timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                sess=None,
+                waf_name="",
+                oob={},
+                effective_timeout=5.0,
             )
         assert result is None
 
@@ -62,8 +83,15 @@ class TestCrossVerify:
             return_value={"vulnerable": False},
         ):
             out = test_runner.cross_verify(
-                "xsscheck", "http://x.test/", "q", "", {}, first,
-                oracle=oracle, sess=None, timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                "",
+                {},
+                first,
+                oracle=oracle,
+                sess=None,
+                timeout=5.0,
             )
         assert out["cross_verified"] == []
         assert out["confirmed"] is False
@@ -77,8 +105,15 @@ class TestCrossVerify:
             return_value={"vulnerable": True, "error": None},
         ):
             out = test_runner.cross_verify(
-                "xsscheck", "http://x.test/", "q", "", {}, first,
-                oracle=oracle, sess=None, timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                "",
+                {},
+                first,
+                oracle=oracle,
+                sess=None,
+                timeout=5.0,
             )
         assert "xsscheck" in out["cross_verified"]
         assert out["confirmed"] is True
@@ -92,8 +127,15 @@ class TestCrossVerify:
             return_value={"vulnerable": True},
         ):
             out = test_runner.cross_verify(
-                "xsscheck", "http://x.test/", "q", "", {}, first,
-                oracle=oracle, sess=None, timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                "",
+                {},
+                first,
+                oracle=oracle,
+                sess=None,
+                timeout=5.0,
             )
         assert out["confirmed"] is False
 
@@ -105,8 +147,15 @@ class TestCrossVerify:
             return_value={"error": "network timeout"},
         ):
             out = test_runner.cross_verify(
-                "xsscheck", "http://x.test/", "q", "", {}, first,
-                oracle=oracle, sess=None, timeout=5.0,
+                "xsscheck",
+                "http://x.test/",
+                "q",
+                "",
+                {},
+                first,
+                oracle=oracle,
+                sess=None,
+                timeout=5.0,
             )
         assert out["cross_verified"] == []
         assert out["confirmed"] is False
@@ -114,4 +163,5 @@ class TestCrossVerify:
 
 if __name__ == "__main__":
     import unittest
+
     unittest.main()

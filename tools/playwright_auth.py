@@ -142,7 +142,9 @@ class PlaywrightAuth:
                     time.sleep(1)
                     _prev = result.get("cookies")
                     _prev_n = len(_prev) if isinstance(_prev, (dict, list, tuple)) else 0
-                    result["success"] = "2fa" in page.url.lower() or len(self.engine.get_cookies()) > _prev_n
+                    result["success"] = (
+                        "2fa" in page.url.lower() or len(self.engine.get_cookies()) > _prev_n
+                    )
                 except Exception as e:
                     logger.debug("2fa callback: %s", e)
 
@@ -161,8 +163,12 @@ class PlaywrightAuth:
         return result
 
     def _auto_fill(
-        self, page, username: str, password: str,
-        user_field: str, pass_field: str,
+        self,
+        page,
+        username: str,
+        password: str,
+        user_field: str,
+        pass_field: str,
     ) -> bool:
         user_filled = False
         pass_filled = False
@@ -208,8 +214,12 @@ class PlaywrightAuth:
         return user_filled and pass_filled
 
     def _fill_fields(
-        self, page, username: str, password: str,
-        user_field: str, pass_field: str,
+        self,
+        page,
+        username: str,
+        password: str,
+        user_field: str,
+        pass_field: str,
     ) -> bool:
         try:
             el_user = page.query_selector(f'[name="{user_field}"]')
@@ -251,8 +261,7 @@ class PlaywrightAuth:
             logger.debug("oauth handler: %s", e)
             return False
 
-    def _api_login(self, url: str, username: str, password: str,
-                   result: Dict) -> Dict:
+    def _api_login(self, url: str, username: str, password: str, result: Dict) -> Dict:
         try:
             resp = requests.post(
                 url,
@@ -284,15 +293,14 @@ class PlaywrightAuth:
 
     def _get_local_storage(self, page) -> Dict:
         try:
-            return json.loads(
-                page.evaluate("JSON.stringify(window.localStorage)")
-            )
+            return json.loads(page.evaluate("JSON.stringify(window.localStorage)"))
         except Exception:
             return {}
 
     @staticmethod
     def cookies_to_session(
-        cookies: Dict[str, str], session: requests.Session,
+        cookies: Dict[str, str],
+        session: requests.Session,
     ) -> requests.Session:
         for k, v in cookies.items():
             session.cookies.set(k, v)
@@ -311,6 +319,9 @@ def browser_login(
     timeout: int = 30000,
 ) -> Dict:
     return PlaywrightAuth().login(
-        login_url, username, password,
-        auth_type=auth_type, timeout=timeout,
+        login_url,
+        username,
+        password,
+        auth_type=auth_type,
+        timeout=timeout,
     )

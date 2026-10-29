@@ -52,17 +52,32 @@ class FakeBannerSock:
 class TestAnalyzeJson:
     def test_dict_root_fields_sensitive_pagination_endpoints(self):
         analyzer = ResponseAnalyzer()
-        body = ('{"id": 1, "password": "s", "profile": {"email": "a@b.co"}, '
-                '"items": [{"url": "/i/1", "user_id": 5}], "total": 10, '
-                '"next": "/p?x=2"}')
-        result = analyzer.analyze("http://t/api/users/42", 200,
-                                  {"Content-Type": "application/json"}, body)
+        body = (
+            '{"id": 1, "password": "s", "profile": {"email": "a@b.co"}, '
+            '"items": [{"url": "/i/1", "user_id": 5}], "total": 10, '
+            '"next": "/p?x=2"}'
+        )
+        result = analyzer.analyze(
+            "http://t/api/users/42", 200, {"Content-Type": "application/json"}, body
+        )
         paths = {f.path for f in result.fields}
-        assert paths == {"$.id", "$.password", "$.profile", "$.profile.email",
-                         "$.items", "$.items[].url", "$.items[].user_id",
-                         "$.total", "$.next"}
-        assert set(result.sensitive_fields) == {"$.id", "$.password",
-                                                "$.profile.email", "$.items[].user_id"}
+        assert paths == {
+            "$.id",
+            "$.password",
+            "$.profile",
+            "$.profile.email",
+            "$.items",
+            "$.items[].url",
+            "$.items[].user_id",
+            "$.total",
+            "$.next",
+        }
+        assert set(result.sensitive_fields) == {
+            "$.id",
+            "$.password",
+            "$.profile.email",
+            "$.items[].user_id",
+        }
         assert result.pagination == {"field": "total", "value": 10}
         assert result.endpoints_linked == ["/p?x=2", "/i/1"]
         assert result.is_json is True
@@ -73,24 +88,24 @@ class TestAnalyzeJson:
 
     def test_list_root_uses_first_item(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/items", 200,
-                                  {"Content-Type": "application/json"},
-                                  '[{"a": 1}, {"a": 2}]')
+        result = analyzer.analyze(
+            "http://t/items", 200, {"Content-Type": "application/json"}, '[{"a": 1}, {"a": 2}]'
+        )
         assert result.pagination == {"type": "list", "count": 2}
         assert [f.path for f in result.fields] == ["$.a"]
 
     def test_empty_list_root(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/items", 200,
-                                  {"Content-Type": "application/json"}, "[]")
+        result = analyzer.analyze("http://t/items", 200, {"Content-Type": "application/json"}, "[]")
         assert result.pagination == {"type": "list", "count": 0}
         assert result.fields == []
         assert result.data_structure == ["unknown"]
 
     def test_scalar_root(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/v", 200,
-                                  {"Content-Type": "application/json"}, '"hello"')
+        result = analyzer.analyze(
+            "http://t/v", 200, {"Content-Type": "application/json"}, '"hello"'
+        )
         assert len(result.fields) == 1
         assert result.fields[0].name == "root"
         assert result.fields[0].value_type == "str"
@@ -98,25 +113,27 @@ class TestAnalyzeJson:
 
     def test_invalid_json_body_is_silently_ignored(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/bad", 200,
-                                  {"Content-Type": "application/json"}, "{oops")
+        result = analyzer.analyze(
+            "http://t/bad", 200, {"Content-Type": "application/json"}, "{oops"
+        )
         assert result.fields == []
         assert result.sensitive_fields == []
         assert result.data_structure == {}
 
     def test_content_type_with_charset(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/a", 200,
-                                  {"Content-Type": "application/json; charset=utf-8"},
-                                  '{"a": 1}')
+        result = analyzer.analyze(
+            "http://t/a", 200, {"Content-Type": "application/json; charset=utf-8"}, '{"a": 1}'
+        )
         assert result.is_json is True
 
     def test_uppercase_json_content_type_is_analyzed(self):
         """Content-Type values are matched case-insensitively, so 'Application/JSON'
         (legal per RFC) still triggers JSON field analysis."""
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/a", 200,
-                                  {"Content-Type": "Application/JSON"}, '{"a": 1}')
+        result = analyzer.analyze(
+            "http://t/a", 200, {"Content-Type": "Application/JSON"}, '{"a": 1}'
+        )
         assert result.is_json is True
         assert result.content_type == "Application/JSON"
         assert [f.path for f in result.fields] == ["$.a"]
@@ -126,26 +143,27 @@ class TestAnalyzeJson:
         """Header keys are matched case-insensitively, so a 'content-type' key is
         honored and body analysis runs."""
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/a", 200,
-                                  {"content-type": "application/json"}, '{"a": 1}')
+        result = analyzer.analyze(
+            "http://t/a", 200, {"content-type": "application/json"}, '{"a": 1}'
+        )
         assert result.content_type == "application/json"
         assert result.is_json is True
         assert [f.path for f in result.fields] == ["$.a"]
 
     def test_empty_body_skips_json_analysis(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/a", 200,
-                                  {"Content-Type": "application/json"}, "")
+        result = analyzer.analyze("http://t/a", 200, {"Content-Type": "application/json"}, "")
         assert result.fields == []
 
 
 class TestAnalyzeHtml:
     def test_extracts_inputs_and_data_attributes(self):
         analyzer = ResponseAnalyzer()
-        body = ('<form><input name="user"><input name=\'q\'>'
-                '<div data-role="admin" data-x=""></div></form>')
-        result = analyzer.analyze("http://t/form", 200,
-                                  {"Content-Type": "text/html"}, body)
+        body = (
+            "<form><input name=\"user\"><input name='q'>"
+            '<div data-role="admin" data-x=""></div></form>'
+        )
+        result = analyzer.analyze("http://t/form", 200, {"Content-Type": "text/html"}, body)
         paths = [f.path for f in result.fields]
         assert paths == ["form.input.user", "form.input.q", "data.role", "data.x"]
         assert result.fields[0].value_type == "html_input"
@@ -158,38 +176,48 @@ class TestAnalyzeHtml:
         """Only error/exception/failure/warning markers set is_error on HTML bodies;
         a benign 'message:' page stays a success response."""
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/welcome", 200,
-                                  {"Content-Type": "text/html"},
-                                  "<div>message: welcome to the site</div>")
+        result = analyzer.analyze(
+            "http://t/welcome",
+            200,
+            {"Content-Type": "text/html"},
+            "<div>message: welcome to the site</div>",
+        )
         assert result.is_error is False
         assert result.error_type == ""
-        failure = analyzer.analyze("http://t/fail", 200,
-                                   {"Content-Type": "text/html"},
-                                   "<div>error: upstream timeout</div>")
+        failure = analyzer.analyze(
+            "http://t/fail",
+            200,
+            {"Content-Type": "text/html"},
+            "<div>error: upstream timeout</div>",
+        )
         assert failure.is_error is True
 
     def test_html_without_inputs_has_no_fields(self):
         analyzer = ResponseAnalyzer()
-        result = analyzer.analyze("http://t/plain", 200,
-                                  {"Content-Type": "text/html"}, "<p>hello</p>")
+        result = analyzer.analyze(
+            "http://t/plain", 200, {"Content-Type": "text/html"}, "<p>hello</p>"
+        )
         assert result.fields == []
 
 
 class TestClassifyError:
-    @pytest.mark.parametrize("status,body,expected", [
-        (401, "", "unauthorized"),
-        (403, "", "forbidden"),
-        (404, "", "not_found"),
-        (405, "", "method_not_allowed"),
-        (500, "anything", "internal_error"),
-        (502, "", "bad_gateway"),
-        (429, "", "rate_limited"),
-        (400, "SQL syntax error near x", "sql_error"),
-        (400, "Traceback (most recent call last)", "traceback"),
-        (400, "JS exception thrown", "exception"),
-        (400, "plain failure", "http_400"),
-        (200, "", ""),
-    ])
+    @pytest.mark.parametrize(
+        "status,body,expected",
+        [
+            (401, "", "unauthorized"),
+            (403, "", "forbidden"),
+            (404, "", "not_found"),
+            (405, "", "method_not_allowed"),
+            (500, "anything", "internal_error"),
+            (502, "", "bad_gateway"),
+            (429, "", "rate_limited"),
+            (400, "SQL syntax error near x", "sql_error"),
+            (400, "Traceback (most recent call last)", "traceback"),
+            (400, "JS exception thrown", "exception"),
+            (400, "plain failure", "http_400"),
+            (200, "", ""),
+        ],
+    )
     def test_classification(self, status, body, expected):
         assert ResponseAnalyzer._classify_error(status, body) == expected
 
@@ -197,25 +225,31 @@ class TestClassifyError:
         """Body features are inspected before the status map, so SQL/traceback pages
         surface as sql_error/traceback even on a 500; a bare 500 stays internal_error."""
         assert ResponseAnalyzer._classify_error(500, "SQL syntax error: mysql_fetch") == (
-            "sql_error")
-        assert ResponseAnalyzer._classify_error(
-            500, "Traceback (most recent call last):") == "traceback"
+            "sql_error"
+        )
+        assert (
+            ResponseAnalyzer._classify_error(500, "Traceback (most recent call last):")
+            == "traceback"
+        )
         assert ResponseAnalyzer._classify_error(500, "boom") == "internal_error"
 
 
 class TestTypeOfAndSample:
-    @pytest.mark.parametrize("value,expected", [
-        (None, "null"),
-        (True, "boolean"),
-        (1, "integer"),
-        (1.5, "float"),
-        ("2024-01-01", "date"),
-        ("user@example.com", "email"),
-        ("x" * 101, "text(long)"),
-        ([1, 2], "list[2]"),
-        ({"a": 1}, "object[1]"),
-        ((1, 2), "tuple"),
-    ])
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (None, "null"),
+            (True, "boolean"),
+            (1, "integer"),
+            (1.5, "float"),
+            ("2024-01-01", "date"),
+            ("user@example.com", "email"),
+            ("x" * 101, "text(long)"),
+            ([1, 2], "list[2]"),
+            ({"a": 1}, "object[1]"),
+            ((1, 2), "tuple"),
+        ],
+    )
     def test_type_of(self, value, expected):
         assert ResponseAnalyzer()._type_of(value) == expected
 
@@ -239,8 +273,12 @@ class TestInferStructure:
         analyzer = ResponseAnalyzer()
         data = {"a": 1, "b": True, "c": 1.5, "d": "s", "e": [], "f": [{"g": 2}]}
         assert analyzer._infer_structure(data) == {
-            "a": "number", "b": "boolean", "c": "number", "d": "string",
-            "e": ["unknown"], "f": [{"g": "number"}],
+            "a": "number",
+            "b": "boolean",
+            "c": "number",
+            "d": "string",
+            "e": ["unknown"],
+            "f": [{"g": "number"}],
         }
 
 
@@ -273,8 +311,7 @@ class TestExtractFields:
 class TestPaginationAndEndpoints:
     def test_pagination_prefers_page_over_total(self):
         analyzer = ResponseAnalyzer()
-        assert analyzer._detect_pagination({"total": 1, "page": 2}) == {
-            "field": "page", "value": 2}
+        assert analyzer._detect_pagination({"total": 1, "page": 2}) == {"field": "page", "value": 2}
         assert analyzer._detect_pagination({}) is None
 
     def test_extract_endpoints_top_level_and_items(self):
@@ -284,12 +321,15 @@ class TestPaginationAndEndpoints:
 
 
 class TestInferResource:
-    @pytest.mark.parametrize("url,expected", [
-        ("http://t/api/users/42", "users"),
-        ("http://t/api/users", "users"),
-        ("http://t/", ""),
-        ("http://t/12345678", ""),
-    ])
+    @pytest.mark.parametrize(
+        "url,expected",
+        [
+            ("http://t/api/users/42", "users"),
+            ("http://t/api/users", "users"),
+            ("http://t/", ""),
+            ("http://t/12345678", ""),
+        ],
+    )
     def test_resource_inference(self, url, expected):
         assert ResponseAnalyzer._infer_resource(url) == expected
 
@@ -317,8 +357,9 @@ class TestSelectAndExecuteProbe:
             return ProberResp(200, "", {"Server": "nginx/1.25.3"})
 
         prober = active_prober.ActiveProber(ProberSession(handler))
-        result = prober._execute_probe("http://t.test", "nginx",
-                                       active_prober.TECH_PROBES["nginx"][0])
+        result = prober._execute_probe(
+            "http://t.test", "nginx", active_prober.TECH_PROBES["nginx"][0]
+        )
         assert result.version == "1.25.3"
         assert result.confidence == 0.85
         assert result.method == "header"
@@ -331,8 +372,7 @@ class TestSelectAndExecuteProbe:
             return ProberResp(200, "", {"X-Powered-By": "ASP.NET"})
 
         prober = active_prober.ActiveProber(ProberSession(handler))
-        result = prober._execute_probe("http://t.test", "iis",
-                                       active_prober.TECH_PROBES["iis"][1])
+        result = prober._execute_probe("http://t.test", "iis", active_prober.TECH_PROBES["iis"][1])
         assert result.version == "present"
         assert result.confidence == 0.60
         assert result.exact_match is False
@@ -341,7 +381,8 @@ class TestSelectAndExecuteProbe:
         """Body probes store their regex under 'body'; _execute_probe reads that key
         (no KeyError) and returns the captured version."""
         prober = active_prober.ActiveProber(
-            ProberSession(lambda url: ProberResp(200, "Drupal 7.58, 2018-03-28")))
+            ProberSession(lambda url: ProberResp(200, "Drupal 7.58, 2018-03-28"))
+        )
         probe = active_prober.TECH_PROBES["drupal"][0]
         assert "body" in probe and "regex" not in probe
         result = prober._execute_probe("http://t.test", "drupal", probe)
@@ -355,12 +396,16 @@ class TestSelectAndExecuteProbe:
     def test_body_probe_success_path_only_with_explicit_regex_key(self):
         """A body probe carrying an explicit 'body' regex yields the captured version;
         extra keys on the probe do not interfere with the match."""
+
         def handler(url):
             return ProberResp(200, "Drupal 7.58, 2018-03-28")
 
         prober = active_prober.ActiveProber(ProberSession(handler))
-        probe = {"path": "/CHANGELOG.txt", "body": r"Drupal ([\d.]+),",
-                 "regex": r"Drupal ([\d.]+),"}
+        probe = {
+            "path": "/CHANGELOG.txt",
+            "body": r"Drupal ([\d.]+),",
+            "regex": r"Drupal ([\d.]+),",
+        }
         result = prober._execute_probe("http://t.test", "drupal", probe)
         assert result.version == "7.58"
         assert result.method == "body"
@@ -370,7 +415,8 @@ class TestSelectAndExecuteProbe:
         """_match_version_hash() is a stub, so hash_match never fires in production;
         patching it shows the surrounding code works once the stub is implemented."""
         prober = active_prober.ActiveProber(
-            ProberSession(lambda url: ProberResp(200, "css-content")))
+            ProberSession(lambda url: ProberResp(200, "css-content"))
+        )
         monkeypatch.setattr(prober, "_match_version_hash", lambda tech, digest: "6.4.1")
         probe = [p for p in active_prober.TECH_PROBES["wordpress"] if p.get("hash")][0]
         result = prober._execute_probe("http://t.test", "wordpress", probe)
@@ -381,12 +427,14 @@ class TestSelectAndExecuteProbe:
     def test_error_page_is_not_fingerprinted(self):
         """probe responses with status >= 400 return zero confidence, so an error page
         echoing a banner string cannot fake a version hit."""
+
         def handler(url):
             return ProberResp(404, "not found", {"Server": "nginx/1.25.3"})
 
         prober = active_prober.ActiveProber(ProberSession(handler))
-        result = prober._execute_probe("http://t.test", "nginx",
-                                       active_prober.TECH_PROBES["nginx"][0])
+        result = prober._execute_probe(
+            "http://t.test", "nginx", active_prober.TECH_PROBES["nginx"][0]
+        )
         assert result.version is None
         assert result.confidence == 0.0
         assert result.method == ""
@@ -394,17 +442,23 @@ class TestSelectAndExecuteProbe:
         for status in (400, 404, 500, 503):
             prober.sess = ProberSession(
                 lambda url, status=status: ProberResp(
-                    status, "not found", {"Server": "nginx/1.25.3"}))
-            assert prober._execute_probe(
-                "http://t.test", "nginx",
-                active_prober.TECH_PROBES["nginx"][0]).confidence == 0.0
+                    status, "not found", {"Server": "nginx/1.25.3"}
+                )
+            )
+            assert (
+                prober._execute_probe(
+                    "http://t.test", "nginx", active_prober.TECH_PROBES["nginx"][0]
+                ).confidence
+                == 0.0
+            )
 
     def test_hash_probe_never_matches_defect(self):
         """DEFECT tools/active_prober.py:254-255: _match_version_hash() is a stub returning
         None, so every hash-based probe (e.g. WordPress colors.min.css) is dead code and
         that detection route can never fingerprint a version."""
         prober = active_prober.ActiveProber(
-            ProberSession(lambda url: ProberResp(200, "css-content")))
+            ProberSession(lambda url: ProberResp(200, "css-content"))
+        )
         probe = [p for p in active_prober.TECH_PROBES["wordpress"] if p.get("hash")][0]
         assert prober._execute_probe("http://t.test", "wordpress", probe).confidence == 0.0
         assert prober._match_version_hash("wordpress", "deadbeef") is None
@@ -414,16 +468,16 @@ class TestSelectAndExecuteProbe:
             raise RuntimeError("connection reset")
 
         prober = active_prober.ActiveProber(ProberSession(handler))
-        result = prober._execute_probe("http://t.test", "nginx",
-                                       active_prober.TECH_PROBES["nginx"][0])
+        result = prober._execute_probe(
+            "http://t.test", "nginx", active_prober.TECH_PROBES["nginx"][0]
+        )
         assert result.confidence == 0.0
         assert result.tech == "nginx"
 
     def test_probe_url_is_base_plus_path(self):
         session = ProberSession(lambda url: ProberResp(404, "x"))
         prober = active_prober.ActiveProber(session)
-        prober._execute_probe("http://t.test/", "nginx",
-                              active_prober.TECH_PROBES["nginx"][0])
+        prober._execute_probe("http://t.test/", "nginx", active_prober.TECH_PROBES["nginx"][0])
         assert session.calls == ["http://t.test/"]
 
 
@@ -431,10 +485,15 @@ class TestProbeTarget:
     def test_body_and_header_probes_both_fingerprint(self):
         """Body-based detection works: the WordPress readme probe yields its version
         alongside the nginx header hit, with no swallowed KeyError."""
-        session = ProberSession(lambda url: (
-            ProberResp(200, "WordPress 5.8.1") if url.endswith("/readme.html")
-            else ProberResp(200, "", {"Server": "nginx/1.25.3"})
-            if url.rstrip("/").endswith("t.test") else ProberResp(404, "not found")))
+        session = ProberSession(
+            lambda url: (
+                ProberResp(200, "WordPress 5.8.1")
+                if url.endswith("/readme.html")
+                else ProberResp(200, "", {"Server": "nginx/1.25.3"})
+                if url.rstrip("/").endswith("t.test")
+                else ProberResp(404, "not found")
+            )
+        )
         prober = active_prober.ActiveProber(session)
         results = prober.probe_target("http://t.test", [])
         assert set(results) == {"nginx", "wordpress"}
@@ -480,14 +539,16 @@ class TestProbeTarget:
             attempted.append(address)
             return socks[address[1]]
 
-        monkeypatch.setattr(active_prober.socket, "create_connection",
-                            fake_create_connection)
-        results = prober.probe_target("http://t.test:8080/app", [
-            {"port": 22, "service": "ssh"},
-            {"port": 6379, "service": "redis"},
-            {"port": 3306, "service": "mysql"},
-            {"port": 443, "service": "https"},
-        ])
+        monkeypatch.setattr(active_prober.socket, "create_connection", fake_create_connection)
+        results = prober.probe_target(
+            "http://t.test:8080/app",
+            [
+                {"port": 22, "service": "ssh"},
+                {"port": 6379, "service": "redis"},
+                {"port": 3306, "service": "mysql"},
+                {"port": 443, "service": "https"},
+            ],
+        )
         assert attempted == [("t.test", 22), ("t.test", 6379), ("t.test", 3306)]
         assert set(results) == {"openssh", "redis", "mysql"}
         assert results["openssh"].version == "8.9"
@@ -504,13 +565,21 @@ class TestProbeTarget:
         """probe_target stores whatever _probe_banner returns for each banner port."""
         prober = active_prober.ActiveProber(ProberSession(lambda url: ProberResp()))
         monkeypatch.setattr(prober, "_select_probes_from_url", lambda url: {})
-        monkeypatch.setattr(prober, "_probe_banner", lambda host, port, tech: (
-            active_prober.ProbeResult(tech=tech, version="8.9p1", confidence=0.85)))
-        results = prober.probe_target("http://t.test", [
-            {"port": 22, "service": "ssh"},
-            {"port": 6379, "service": "redis"},
-            {"port": 3306, "service": "mysql"},
-        ])
+        monkeypatch.setattr(
+            prober,
+            "_probe_banner",
+            lambda host, port, tech: active_prober.ProbeResult(
+                tech=tech, version="8.9p1", confidence=0.85
+            ),
+        )
+        results = prober.probe_target(
+            "http://t.test",
+            [
+                {"port": 22, "service": "ssh"},
+                {"port": 6379, "service": "redis"},
+                {"port": 3306, "service": "mysql"},
+            ],
+        )
         assert set(results) == {"openssh", "redis", "mysql"}
         assert results["openssh"].version == "8.9p1"
 
@@ -528,8 +597,7 @@ class TestProbeTarget:
         def fake_create_connection(address, timeout=None):
             return socks[address[1]]
 
-        monkeypatch.setattr(active_prober.socket, "create_connection",
-                            fake_create_connection)
+        monkeypatch.setattr(active_prober.socket, "create_connection", fake_create_connection)
         ssh = prober._probe_banner("127.0.0.1", 22, "openssh")
         assert ssh.version == "8.9"
         assert ssh.confidence == 0.85
@@ -555,8 +623,9 @@ class TestProbeTarget:
         prober = active_prober.ActiveProber(ProberSession(lambda url: ProberResp()))
         monkeypatch.setattr(prober, "_select_probes_from_url", lambda url: {})
         calls = []
-        monkeypatch.setattr(prober, "_probe_banner",
-                            lambda host, port, tech: calls.append((host, port, tech)))
+        monkeypatch.setattr(
+            prober, "_probe_banner", lambda host, port, tech: calls.append((host, port, tech))
+        )
         prober.probe_target("t.test", [{"port": 22, "service": "ssh"}])
         assert calls == [("t.test", 22, "openssh")]
 
@@ -576,15 +645,18 @@ class TestProbeTarget:
 
 
 class TestMatchCves:
-    @pytest.mark.parametrize("tech,version,expected", [
-        ("spring", "5.3.16", ["CVE-2022-22965"]),
-        ("spring", "5.3.10", ["CVE-2022-22965", "CVE-2022-22963"]),
-        ("tomcat", "9.0.31", []),
-        ("jenkins", "2.500", []),
-        ("unknown", "1.0", []),
-        ("spring", "present", []),
-        ("spring", "abc", []),
-    ])
+    @pytest.mark.parametrize(
+        "tech,version,expected",
+        [
+            ("spring", "5.3.16", ["CVE-2022-22965"]),
+            ("spring", "5.3.10", ["CVE-2022-22965", "CVE-2022-22963"]),
+            ("tomcat", "9.0.31", []),
+            ("jenkins", "2.500", []),
+            ("unknown", "1.0", []),
+            ("spring", "present", []),
+            ("spring", "abc", []),
+        ],
+    )
     def test_cve_matching(self, tech, version, expected):
         prober = active_prober.ActiveProber(ProberSession(lambda url: ProberResp()))
         assert prober._match_cves(tech, version) == expected
@@ -600,22 +672,25 @@ class TestMatchCves:
 
 
 class TestVerInRange:
-    @pytest.mark.parametrize("version,low,high,expected", [
-        ("5.3.16", "5.3.0", "5.3.15", False),
-        ("5.3.10", "5.3.0", "5.3.15", True),
-        ("5.3.20", "5.3.0", None, True),
-        ("5.3.0", "5.3.0", None, True),
-        ("2.9.9", "3.0", None, False),
-        ("9.0.0", "9.0.0", "9.0.30", True),
-        ("9.0.31", "9.0.0", "9.0.30", False),
-        ("5.4", "5.3.0", "5.3.15", False),
-        ("5.3", None, "5.3.17", True),
-        ("1.2.3.4", "1.2.3", "1.2.4", True),
-        ("1.2.3", "x.y", None, True),
-        ("1.2.3", None, "x", True),
-        ("bad", "1.0", None, False),
-        (None, "1.0", None, False),
-    ])
+    @pytest.mark.parametrize(
+        "version,low,high,expected",
+        [
+            ("5.3.16", "5.3.0", "5.3.15", False),
+            ("5.3.10", "5.3.0", "5.3.15", True),
+            ("5.3.20", "5.3.0", None, True),
+            ("5.3.0", "5.3.0", None, True),
+            ("2.9.9", "3.0", None, False),
+            ("9.0.0", "9.0.0", "9.0.30", True),
+            ("9.0.31", "9.0.0", "9.0.30", False),
+            ("5.4", "5.3.0", "5.3.15", False),
+            ("5.3", None, "5.3.17", True),
+            ("1.2.3.4", "1.2.3", "1.2.4", True),
+            ("1.2.3", "x.y", None, True),
+            ("1.2.3", None, "x", True),
+            ("bad", "1.0", None, False),
+            (None, "1.0", None, False),
+        ],
+    )
     def test_range_matrix(self, version, low, high, expected):
         prober = active_prober.ActiveProber(ProberSession(lambda url: ProberResp()))
         assert prober._ver_in_range(version, low, high) is expected

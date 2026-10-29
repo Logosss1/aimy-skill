@@ -100,15 +100,20 @@ class TestBuilders:
     def test_as_req_structure(self):
         req = build_as_req(DOMAIN, "alice", nonce=12345)
         assert req[0] == 0x6A
-        tag, value, _ = __import__("tools.domain_attacks", fromlist=["_parse_tlv"])._parse_tlv(req, 0)
+        tag, value, _ = __import__("tools.domain_attacks", fromlist=["_parse_tlv"])._parse_tlv(
+            req, 0
+        )
         assert tag == 0x6A
 
     def test_as_req_msg_type(self):
         from tools.domain_attacks import _seq_fields
+
         req = build_as_req(DOMAIN, "alice", nonce=1)
         _, value, _ = __import__("tools.domain_attacks", fromlist=["_parse_tlv"])._parse_tlv(req, 0)
         fields = dict((t, v) for t, v in _seq_fields(value))
-        _, iv, _ = __import__("tools.domain_attacks", fromlist=["_parse_tlv"])._parse_tlv(fields[0xA2], 0)
+        _, iv, _ = __import__("tools.domain_attacks", fromlist=["_parse_tlv"])._parse_tlv(
+            fields[0xA2], 0
+        )
         assert int.from_bytes(iv, "big") == 10
 
     def test_tgs_req_structure(self):
@@ -117,6 +122,7 @@ class TestBuilders:
 
     def test_tgs_req_sname(self):
         from tools.domain_attacks import _parse_tlv, _seq_fields
+
         req = build_tgs_req(DOMAIN, "mssql/db.corp.local", nonce=7)
         _, value, _ = _parse_tlv(req, 0)
         fields = dict((t, v) for t, v in _seq_fields(value))
@@ -181,13 +187,17 @@ class TestAsrepRoast:
 
 class TestLdap:
     def test_bind_and_search_roundtrip(self):
-        conn = FakeConn([
-            _bind_response(0),
-            _search_entry(2, "CN=alice,DC=corp,DC=local",
-                          {"sAMAccountName": ["alice"],
-                           "userAccountControl": ["512"]}),
-            _search_done(2, 0),
-        ])
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_entry(
+                    2,
+                    "CN=alice,DC=corp,DC=local",
+                    {"sAMAccountName": ["alice"], "userAccountControl": ["512"]},
+                ),
+                _search_done(2, 0),
+            ]
+        )
         client = NativeLdapClient("10.0.0.2", conn=conn)
         assert client.bind()["success"] is True
         out = client.search(_base_dn(DOMAIN), attributes=["sAMAccountName"])
@@ -195,12 +205,13 @@ class TestLdap:
         assert out["entries"][0]["attributes"]["sAMAccountName"] == ["alice"]
 
     def test_ldap_anonymous_enum(self):
-        conn = FakeConn([
-            _bind_response(0),
-            _search_entry(2, "CN=alice,DC=corp,DC=local",
-                          {"sAMAccountName": ["alice"]}),
-            _search_done(2, 0),
-        ])
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_entry(2, "CN=alice,DC=corp,DC=local", {"sAMAccountName": ["alice"]}),
+                _search_done(2, 0),
+            ]
+        )
         result = ldap_anonymous_enum("10.0.0.2", DOMAIN, conn=conn)
         assert result["success"] is True
         assert result["bound"] is True
@@ -219,23 +230,32 @@ class TestLdap:
 
 class TestSpnEnum:
     def test_anonymous_spn_enum(self):
-        conn = FakeConn([
-            _bind_response(0),
-            _search_entry(2, "CN=svc,DC=corp,DC=local",
-                          {"sAMAccountName": ["svc_account"],
-                           "servicePrincipalName": ["MSSQL/db.corp.local:1433"]}),
-            _search_done(2, 0),
-        ])
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_entry(
+                    2,
+                    "CN=svc,DC=corp,DC=local",
+                    {
+                        "sAMAccountName": ["svc_account"],
+                        "servicePrincipalName": ["MSSQL/db.corp.local:1433"],
+                    },
+                ),
+                _search_done(2, 0),
+            ]
+        )
         result = spn_enum("10.0.0.2", DOMAIN, conn=conn)
         assert result["success"] is True
         assert result["spns"][0]["spn"] == "MSSQL/db.corp.local:1433"
         assert result["spns"][0]["sam"] == "svc_account"
 
     def test_credential_bind_used(self):
-        conn = FakeConn([
-            _bind_response(0),
-            _search_done(2, 0),
-        ])
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_done(2, 0),
+            ]
+        )
         result = spn_enum("10.0.0.2", DOMAIN, username="user", password="pass", conn=conn)
         assert result["success"] is True
         assert "user@corp.local" in conn.sent[0].decode("latin1") or True
@@ -243,13 +263,20 @@ class TestSpnEnum:
 
 class TestKerberoastSkeleton:
     def test_skeleton_builds_requests(self):
-        conn = FakeConn([
-            _bind_response(0),
-            _search_entry(2, "CN=svc,DC=corp,DC=local",
-                          {"sAMAccountName": ["svc_account"],
-                           "servicePrincipalName": ["http/www.corp.local"]}),
-            _search_done(2, 0),
-        ])
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_entry(
+                    2,
+                    "CN=svc,DC=corp,DC=local",
+                    {
+                        "sAMAccountName": ["svc_account"],
+                        "servicePrincipalName": ["http/www.corp.local"],
+                    },
+                ),
+                _search_done(2, 0),
+            ]
+        )
         result = kerberoast_skeleton("10.0.0.2", DOMAIN, username="u", password="p", conn=conn)
         assert result["success"] is True
         assert result["spns"] == ["http/www.corp.local"]
@@ -272,11 +299,16 @@ class TestRun:
 
     def test_run_with_userlist_roast(self):
         sender = FakeSender(_synthetic_as_rep(cipher=b"\xcc" * 8))
-        conn = FakeConn([
-            _bind_response(0), _search_done(2, 0),  # ldap_anonymous_enum
-            _bind_response(0), _search_done(2, 0),  # kerberoast_skeleton
-        ])
-        result = run(DOMAIN, dc_ip="10.0.0.2", domain=DOMAIN, userlist=["alice"],
-                     sender=sender, conn=conn)
+        conn = FakeConn(
+            [
+                _bind_response(0),
+                _search_done(2, 0),  # ldap_anonymous_enum
+                _bind_response(0),
+                _search_done(2, 0),  # kerberoast_skeleton
+            ]
+        )
+        result = run(
+            DOMAIN, dc_ip="10.0.0.2", domain=DOMAIN, userlist=["alice"], sender=sender, conn=conn
+        )
         assert result["asrep_roast"]["success"] is True
         assert result["kerberoast"]["success"] is True

@@ -111,6 +111,7 @@ def _install_session_factory(monkeypatch, handler):
 def _static_handler(status=200, text="ok", headers=None):
     def handler(sess, method, url, kwargs):
         return FakeResponse(status, text, headers)
+
     return handler
 
 
@@ -118,16 +119,22 @@ def _raiser(sess, method, url, kwargs):
     raise RuntimeError("network down")
 
 
-def _trace_step(index, method="GET", url="http://t.test/x", status=200,
-                role=StepRole.READ):
-    return TraceStep(index=index, method=method, url=url, params={}, body=None,
-                     response_status=status, response_body="ok",
-                     response_headers={}, role=role)
+def _trace_step(index, method="GET", url="http://t.test/x", status=200, role=StepRole.READ):
+    return TraceStep(
+        index=index,
+        method=method,
+        url=url,
+        params={},
+        body=None,
+        response_status=status,
+        response_body="ok",
+        response_headers={},
+        role=role,
+    )
 
 
 def _patch(sess, status=200, text="ok", index=0):
-    return {"index": index, "status": status, "body": text,
-            "length": len(text), "elapsed_ms": 1.0}
+    return {"index": index, "status": status, "body": text, "length": len(text), "elapsed_ms": 1.0}
 
 
 class TestSessionMatrixBasics:
@@ -162,6 +169,7 @@ class TestSessionMatrixBasics:
         assert sess.cookies.get("sid") == "s1"
         assert sess.headers["X-Token"] == "t1"
         from tools.settings import settings
+
         assert sess.verify == settings.verify_ssl
 
 
@@ -182,8 +190,11 @@ class TestSessionMatrixAuthenticate:
         assert identity.cookies == {"sid": "abc"}
         assert created[0].closed is True
         assert created[0].calls == [
-            ("POST", "http://t.test/login",
-             {"data": {"username": "alice", "password": "pw"}, "timeout": 10.0}),
+            (
+                "POST",
+                "http://t.test/login",
+                {"data": {"username": "alice", "password": "pw"}, "timeout": 10.0},
+            ),
         ]
 
     def test_authenticate_all_skips_already_authenticated(self, monkeypatch, tmp_path):
@@ -217,7 +228,8 @@ class TestSessionMatrixAuthenticate:
         assert isinstance(kwargs["auth"], HTTPBasicAuth)
 
     def test_authenticate_all_basic_success_persists_authorization_header(
-            self, monkeypatch, tmp_path):
+        self, monkeypatch, tmp_path
+    ):
         """Basic auth success stores no cookies, so authenticate_all() persists
         the encoded credentials explicitly and make_session() replays them for
         the supposedly authenticated identity."""
@@ -273,8 +285,7 @@ class TestSessionMatrixAuthenticate:
         assert matrix.authenticate_all("http://t.test/login") == {"alice": False}
         assert identity.authenticated is False
 
-    def test_authenticate_all_does_not_scrape_session_headers(
-            self, monkeypatch, tmp_path):
+    def test_authenticate_all_does_not_scrape_session_headers(self, monkeypatch, tmp_path):
         """Login-time session headers are not copied into the identity; only
         basic mode persists an explicit Authorization header, so headers set by
         the target application cannot leak into other sessions."""
@@ -340,10 +351,19 @@ class TestSessionMatrixPersistence:
 
     def test_load_restores_records_and_skips_existing(self, monkeypatch, tmp_path):
         target = tmp_path / "sessions.json"
-        payload = {"alice": {"label": "alice", "username": "alice", "password": "p",
-                             "role": "admin", "cookies": {"sid": "1"},
-                             "headers": {}, "tokens": {"t": "1"},
-                             "authenticated": True, "metadata": {"m": 1}}}
+        payload = {
+            "alice": {
+                "label": "alice",
+                "username": "alice",
+                "password": "p",
+                "role": "admin",
+                "cookies": {"sid": "1"},
+                "headers": {},
+                "tokens": {"t": "1"},
+                "authenticated": True,
+                "metadata": {"m": 1},
+            }
+        }
         target.write_text(json.dumps(payload), encoding="utf-8")
         monkeypatch.setattr(session_matrix, "SESSION_FILE", str(target))
         matrix = SessionMatrix()
@@ -415,10 +435,10 @@ class TestSessionMatrixCrossSession:
     def test_cross_session_test_missing_session(self):
         matrix = SessionMatrix("http://t.test")
         assert matrix.cross_session_test("ghost", "other", "http://t.test/x") == {
-            "error": "session not found"}
+            "error": "session not found"
+        }
 
-    def test_cross_session_test_error_is_swallowed_by_callers_defect(
-            self, monkeypatch, tmp_path):
+    def test_cross_session_test_error_is_swallowed_by_callers_defect(self, monkeypatch, tmp_path):
         """Transport errors produce {"error": ...} with no authz_gap key, so the
         oracle's `result.get("authz_gap")` checks silently lose the signal."""
         matrix = self._matrix_with_two(monkeypatch, tmp_path, _raiser)
@@ -426,8 +446,7 @@ class TestSessionMatrixCrossSession:
         assert result == {"error": "network down"}
         assert "authz_gap" not in result
 
-    def test_cross_session_test_identical_bodies_are_not_authz_gap(
-            self, monkeypatch, tmp_path):
+    def test_cross_session_test_identical_bodies_are_not_authz_gap(self, monkeypatch, tmp_path):
         """Identical responses for two identities (a public page reachable by
         both) are not a cross-user authz gap: the gap requires the actor to
         succeed while the target is denied (session_matrix.py:132)."""
@@ -440,17 +459,16 @@ class TestSessionMatrixCrossSession:
     def test_cross_session_test_short_body_never_flags_defect(self, monkeypatch, tmp_path):
         """The len(text) > 50 gate drops real access whose body is short, e.g.
         JSON APIs answering {"ok": true} (session_matrix.py:128)."""
-        matrix = self._matrix_with_two(
-            monkeypatch, tmp_path, _static_handler(200, '{"ok": true}'))
+        matrix = self._matrix_with_two(monkeypatch, tmp_path, _static_handler(200, '{"ok": true}'))
         result = matrix.cross_session_test("alice", "bob", "http://t.test/api/me")
         assert result["actor"]["status"] == 200
         assert result["authz_gap"] is False
 
     def test_cross_session_test_post_passes_kwargs(self, monkeypatch, tmp_path):
-        matrix = self._matrix_with_two(
-            monkeypatch, tmp_path, _static_handler(201, "created " * 10))
-        result = matrix.cross_session_test("alice", "bob", "http://t.test/orders",
-                                           method="POST", data={"item": "1"})
+        matrix = self._matrix_with_two(monkeypatch, tmp_path, _static_handler(201, "created " * 10))
+        result = matrix.cross_session_test(
+            "alice", "bob", "http://t.test/orders", method="POST", data={"item": "1"}
+        )
         assert result["actor"]["status"] == 201
         assert result["body_match"] is True
         assert result["authz_gap"] is False
@@ -487,7 +505,8 @@ class TestSessionComparator:
         sess_handler = _static_handler(200, "same page")
         matrix = self._matrix(monkeypatch, tmp_path, sess_handler)
         result = SessionComparator(matrix).compare(
-            "http://t.test/x", "alice", "bob", method="POST", data={"a": "1"})
+            "http://t.test/x", "alice", "bob", method="POST", data={"a": "1"}
+        )
         assert result["a"]["status"] == 200
         assert result["identical"] is True
 
@@ -598,6 +617,7 @@ class TestDeviationOracleFindings:
                     return FakeResponse(403, "forbidden")
                 return FakeResponse(200, "admin panel")
             return FakeResponse(404, "nope")
+
         return DeviationOracle("http://t.test", FakeSession(handler))
 
     def test_method_tampering_flags_every_successful_write_method(self):
@@ -672,8 +692,7 @@ class TestDeviationOracleFindings:
         oracle = DeviationOracle("http://t.test")
         assert oracle._collect_urls_for_identity("ghost") == []
 
-    def test_authz_gap_identical_public_bodies_are_not_reported(
-            self, monkeypatch, tmp_path):
+    def test_authz_gap_identical_public_bodies_are_not_reported(self, monkeypatch, tmp_path):
         """A path that merely requires login is not a BOLA finding: both
         identities receive byte-identical bodies, so session_matrix reports no
         authz_gap and the oracle adds no finding (session_matrix.py:132)."""
@@ -708,14 +727,30 @@ class TestDeviationOracleFindings:
         ~/.aimy-skill/sessions.json are ignored and authz/IDOR checks are
         silently skipped (session_matrix.py:153, deviation_oracle.py:18)."""
         target = tmp_path / "sessions.json"
-        payload = {"alice": {"label": "alice", "username": "a", "password": "p",
-                             "role": "admin", "cookies": {"sid": "1"},
-                             "headers": {}, "tokens": {}, "authenticated": True,
-                             "metadata": {}},
-                   "bob": {"label": "bob", "username": "b", "password": "p",
-                           "role": "user", "cookies": {"sid": "2"},
-                           "headers": {}, "tokens": {}, "authenticated": True,
-                           "metadata": {}}}
+        payload = {
+            "alice": {
+                "label": "alice",
+                "username": "a",
+                "password": "p",
+                "role": "admin",
+                "cookies": {"sid": "1"},
+                "headers": {},
+                "tokens": {},
+                "authenticated": True,
+                "metadata": {},
+            },
+            "bob": {
+                "label": "bob",
+                "username": "b",
+                "password": "p",
+                "role": "user",
+                "cookies": {"sid": "2"},
+                "headers": {},
+                "tokens": {},
+                "authenticated": True,
+                "metadata": {},
+            },
+        }
         target.write_text(json.dumps(payload), encoding="utf-8")
         monkeypatch.setattr(session_matrix, "SESSION_FILE", str(target))
         oracle = DeviationOracle("http://t.test", FakeSession(_static_handler(404, "no")))
@@ -750,8 +785,7 @@ class TestDeviationOracleFindings:
         assert finding["actor"] == "bob"
         assert finding["target"] == "alice"
 
-    def test_idor_chain_matches_trace_name_not_identity_label_defect(
-            self, monkeypatch, tmp_path):
+    def test_idor_chain_matches_trace_name_not_identity_label_defect(self, monkeypatch, tmp_path):
         """_collect_urls_for_identity() looks up tracer.traces by identity label,
         but traces are keyed by trace name, so a normal trace key makes the whole
         IDOR chain return nothing (deviation_oracle.py:233)."""
@@ -762,8 +796,9 @@ class TestDeviationOracleFindings:
             identity = oracle.matrix.register(label, label, "pw")
             identity.cookies = {"who": label}
             identity.authenticated = True
-        trace = WorkflowTrace(name="checkout-flow", identity_label="alice",
-                              base_url="http://t.test")
+        trace = WorkflowTrace(
+            name="checkout-flow", identity_label="alice", base_url="http://t.test"
+        )
         trace.add_step(_trace_step(0, url="http://t.test/order?id=3"))
         oracle.tracer.traces["checkout-flow"] = trace
         assert oracle._collect_urls_for_identity("alice") == []
@@ -773,10 +808,8 @@ class TestDeviationOracleFindings:
 
 def _replay_trace(name="flow"):
     trace = WorkflowTrace(name=name, identity_label="alice", base_url="http://t.test")
-    trace.add_step(_trace_step(0, method="POST", url="http://t.test/auth",
-                               role=StepRole.AUTH))
-    trace.add_step(_trace_step(1, method="POST", url="http://t.test/orders",
-                               role=StepRole.CREATE))
+    trace.add_step(_trace_step(0, method="POST", url="http://t.test/auth", role=StepRole.AUTH))
+    trace.add_step(_trace_step(1, method="POST", url="http://t.test/orders", role=StepRole.CREATE))
     return trace
 
 
@@ -840,7 +873,8 @@ class TestDeviationOracleConstraints:
         sess = FakeSession(_raiser)
         oracle = DeviationOracle("http://t.test", sess)
         oracle.constraint_graph.ingest_request(
-            "http://t.test/checkout", None, {"price": "10", "qty": "2"})
+            "http://t.test/checkout", None, {"price": "10", "qty": "2"}
+        )
         oracle._test_constraint_breaks()
         assert len(oracle.findings) == 29
         assert all(f["type"] == "constraint_break" for f in oracle.findings)
@@ -859,10 +893,16 @@ class TestDeviationOraclePipeline:
         def matrix_handler(sess, method, url, kwargs):
             who = sess.cookies.get("who")
             if "order" in url:
-                return (FakeResponse(200, "resource " * 10) if who == "bob"
-                        else FakeResponse(403, "denied"))
-            return (FakeResponse(200, "admin area " * 10) if who == "alice"
-                    else FakeResponse(403, "denied"))
+                return (
+                    FakeResponse(200, "resource " * 10)
+                    if who == "bob"
+                    else FakeResponse(403, "denied")
+                )
+            return (
+                FakeResponse(200, "admin area " * 10)
+                if who == "alice"
+                else FakeResponse(403, "denied")
+            )
 
         _install_session_factory(monkeypatch, matrix_handler)
 
@@ -887,14 +927,20 @@ class TestDeviationOraclePipeline:
         trace.add_step(_trace_step(2, url="http://t.test/order?id=3"))
         oracle.tracer.traces["alice"] = trace
         oracle.constraint_graph.ingest_request(
-            "http://t.test/checkout", None, {"price": "10", "qty": "2"})
+            "http://t.test/checkout", None, {"price": "10", "qty": "2"}
+        )
 
         result = oracle.run()
         assert result["vulnerable"] is True
         assert result["total"] == len(oracle.findings) == 60
         assert {f["type"] for f in result["findings"]} == {
-            "authz_gap", "idor", "workflow_bypass", "state_replay",
-            "method_tampering", "mass_assignment", "constraint_break",
+            "authz_gap",
+            "idor",
+            "workflow_bypass",
+            "state_replay",
+            "method_tampering",
+            "mass_assignment",
+            "constraint_break",
         }
 
     def test_check_wrapper_returns_clean_result(self):
@@ -997,15 +1043,16 @@ class TestRaceProfilerAnalysis:
         assert window.resource_created_twice is False
 
     def test_resource_created_twice_mixed_ids_is_the_only_hit(self):
-        responses = [_patch(None, 200, json.dumps({"id": 1})),
-                     _patch(None, 200, json.dumps({"id": 1})),
-                     _patch(None, 200, json.dumps({"id": 2}))]
+        responses = [
+            _patch(None, 200, json.dumps({"id": 1})),
+            _patch(None, 200, json.dumps({"id": 1})),
+            _patch(None, 200, json.dumps({"id": 2})),
+        ]
         window = self._profiler()._analyze_window(responses, 200, "{}", 2, 3)
         assert window.resource_created_twice is True
 
     def test_resource_id_parsing_ignores_non_json_success(self):
-        responses = [_patch(None, 200, "not json"),
-                     _patch(None, 201, json.dumps({"uuid": "u-1"}))]
+        responses = [_patch(None, 200, "not json"), _patch(None, 201, json.dumps({"uuid": "u-1"}))]
         window = self._profiler()._analyze_window(responses, 200, "", 0, 2)
         assert window.resource_created_twice is False
         assert window.duplicate_success is True
@@ -1015,7 +1062,8 @@ class TestRaceProfilerDetect:
     def test_detect_windows_found_for_all_concurrencies(self):
         sess = FakeSession(_static_handler(200, "ok"))
         result = RaceProfiler(sess, timeout=1.0).detect_windows(
-            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"})
+            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"}
+        )
         assert result["window_found"] is True
         assert [w.concurrency for w in result["windows"]] == [5, 10, 20, 50]
         assert len(sess.calls) == 1 + 5 + 10 + 20 + 50
@@ -1023,14 +1071,16 @@ class TestRaceProfilerDetect:
     def test_detect_windows_none_when_all_race_requests_fail(self):
         sess = FakeSession(_static_handler(400, "rate limited"))
         result = RaceProfiler(sess, timeout=1.0).detect_windows(
-            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"})
+            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"}
+        )
         assert result == {"window_found": False, "windows": []}
         assert len(sess.calls) == 1 + 3 * (5 + 10 + 20 + 50)
 
     def test_detect_windows_baseline_failure_returns_empty(self):
         sess = FakeSession(_raiser)
         result = RaceProfiler(sess, timeout=1.0).detect_windows(
-            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"})
+            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"}
+        )
         assert result == {"window_found": False, "windows": []}
         assert len(sess.calls) == 1
 
@@ -1048,7 +1098,8 @@ class TestRaceProfilerDetect:
 
         sess = FakeSession(handler)
         result = RaceProfiler(sess, timeout=1.0).detect_windows(
-            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"})
+            "http://t.test/redeem", "coupon", "POST", {"coupon": "1"}
+        )
         assert result["window_found"] is True
         window = result["windows"][0]
         bodies = {r["body"] for r in window.responses}
@@ -1110,8 +1161,11 @@ class TestRaceProfilerState:
         probe = TransactionProbe(FakeSession(_static_handler(200, "state-1")))
         assert probe.checkpoint("a", "http://t.test/a") == "state-1"
         assert probe.verify("a", "a") == {
-            "checkpoint_a": "a", "checkpoint_b": "a",
-            "changed": False, "len_before": 7, "len_after": 7,
+            "checkpoint_a": "a",
+            "checkpoint_b": "a",
+            "changed": False,
+            "len_before": 7,
+            "len_after": 7,
         }
 
     def test_transaction_probe_verify_reports_changed(self):
@@ -1185,8 +1239,9 @@ class TestCrossValidatorSqliLfi:
     URL = "http://t.test/item?id=1"
 
     def test_unix_passwd_leak_detected(self):
-        sess = FakeSession(_static_handler(
-            200, "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon"))
+        sess = FakeSession(
+            _static_handler(200, "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon")
+        )
         result = cross_validator.validate_sqli_with_lfi(self.URL, "id", sess)
         assert result["vulnerable"] is True
         assert result["confidence"] == 0.9
@@ -1223,8 +1278,12 @@ class TestCrossValidatorSqliLfi:
         (cross_validator.py:32-33)."""
         sess = FakeSession(_raiser)
         result = cross_validator.validate_sqli_with_lfi(self.URL, "id", sess)
-        assert result == {"vulnerable": False, "method": "sqli_lfi_cross",
-                          "confidence": 0.0, "evidence": []}
+        assert result == {
+            "vulnerable": False,
+            "method": "sqli_lfi_cross",
+            "confidence": 0.0,
+            "evidence": [],
+        }
         assert len(sess.calls) == 9
 
 
@@ -1232,8 +1291,9 @@ class TestCrossValidatorSsrfLfi:
     URL = "http://t.test/fetch?url=x"
 
     def test_file_read_detected_and_breaks(self):
-        sess = FakeSession(_static_handler(
-            200, "PATH=/usr/local/bin:/usr/bin:/bin\nHOSTNAME=web-1"))
+        sess = FakeSession(
+            _static_handler(200, "PATH=/usr/local/bin:/usr/bin:/bin\nHOSTNAME=web-1")
+        )
         result = cross_validator.validate_ssrf_with_lfi(self.URL, "url", sess)
         assert result["vulnerable"] is True
         assert result["confidence"] == 0.85
@@ -1250,8 +1310,7 @@ class TestCrossValidatorSsrfLfi:
         assert len(sess.calls) == 5
 
     def test_unrelated_body_not_flagged(self):
-        sess = FakeSession(_static_handler(
-            200, "no such file here, sorry for the inconvenience"))
+        sess = FakeSession(_static_handler(200, "no such file here, sorry for the inconvenience"))
         result = cross_validator.validate_ssrf_with_lfi(self.URL, "url", sess)
         assert result["vulnerable"] is False
         assert len(sess.calls) == 5
@@ -1336,8 +1395,7 @@ class TestCrossValidatorSecondOrder:
         assert result["evidence"][0]["method"] == "second_order_injection"
         assert len(sess.calls) == 4
 
-    def test_param_substring_replacement_breaks_confirmation_defect(
-            self, monkeypatch):
+    def test_param_substring_replacement_breaks_confirmation_defect(self, monkeypatch):
         """`url.replace(param + '=', ...)` rewrites any parameter whose name
         ends with the tested param (userid= -> userid=SORD_...1), so the marker
         is never injected as the value of `id` and the confirmation URL is
@@ -1438,19 +1496,21 @@ class TestCrossValidatorDispatch:
     def _vuln(self, confidence):
         def fn(url, param, sess, timeout=10.0):
             return {"vulnerable": True, "confidence": confidence, "method": "stub"}
+
         return fn
 
     def _safe(self):
         def fn(url, param, sess, timeout=10.0):
             return {"vulnerable": False, "confidence": 0.0, "method": "stub"}
+
         return fn
 
     def test_sqli_merges_both_cross_checks(self, monkeypatch):
         monkeypatch.setattr(cross_validator, "validate_sqli_with_lfi", self._vuln(0.8))
-        monkeypatch.setattr(cross_validator, "validate_sqli_with_second_order",
-                            self._vuln(0.6))
+        monkeypatch.setattr(cross_validator, "validate_sqli_with_second_order", self._vuln(0.6))
         result = cross_validator.run_cross_validation(
-            "sqli", "http://t.test/x", "id", FakeSession())
+            "sqli", "http://t.test/x", "id", FakeSession()
+        )
         assert result["vulnerable"] is True
         assert result["confidence"] == 0.8
         assert set(result["cross_checks"]) == {"sqli_to_lfi", "second_order"}
@@ -1458,37 +1518,36 @@ class TestCrossValidatorDispatch:
     def test_ssrf_check(self, monkeypatch):
         monkeypatch.setattr(cross_validator, "validate_ssrf_with_lfi", self._vuln(0.85))
         result = cross_validator.run_cross_validation(
-            "ssrf", "http://t.test/x", "url", FakeSession())
+            "ssrf", "http://t.test/x", "url", FakeSession()
+        )
         assert set(result["cross_checks"]) == {"ssrf_to_file_read"}
         assert result["confidence"] == 0.85
 
     def test_lfi_check(self, monkeypatch):
-        monkeypatch.setattr(cross_validator, "validate_lfi_with_log_poison",
-                            self._vuln(0.95))
+        monkeypatch.setattr(cross_validator, "validate_lfi_with_log_poison", self._vuln(0.95))
         result = cross_validator.run_cross_validation(
-            "lfi", "http://t.test/x", "file", FakeSession())
+            "lfi", "http://t.test/x", "file", FakeSession()
+        )
         assert set(result["cross_checks"]) == {"lfi_to_rce"}
 
     def test_auth_bypass_check(self, monkeypatch):
-        monkeypatch.setattr(cross_validator, "validate_auth_with_sqli",
-                            self._vuln(0.75))
+        monkeypatch.setattr(cross_validator, "validate_auth_with_sqli", self._vuln(0.75))
         result = cross_validator.run_cross_validation(
-            "auth_bypass", "http://t.test/x", "user", FakeSession())
+            "auth_bypass", "http://t.test/x", "user", FakeSession()
+        )
         assert set(result["cross_checks"]) == {"auth_sqli_bypass"}
 
     def test_negative_result_has_no_cross_checks(self, monkeypatch):
         monkeypatch.setattr(cross_validator, "validate_sqli_with_lfi", self._safe())
-        monkeypatch.setattr(cross_validator, "validate_sqli_with_second_order",
-                            self._safe())
+        monkeypatch.setattr(cross_validator, "validate_sqli_with_second_order", self._safe())
         result = cross_validator.run_cross_validation(
-            "sqli", "http://t.test/x", "id", FakeSession())
-        assert result == {"vulnerable": False, "confidence": 0.0,
-                          "method": "cross_validation"}
+            "sqli", "http://t.test/x", "id", FakeSession()
+        )
+        assert result == {"vulnerable": False, "confidence": 0.0, "method": "cross_validation"}
 
     def test_unknown_vtype_runs_nothing(self):
         sess = FakeSession(_raiser)
-        result = cross_validator.run_cross_validation(
-            "xss", "http://t.test/x", "q", sess)
+        result = cross_validator.run_cross_validation("xss", "http://t.test/x", "q", sess)
         assert result["vulnerable"] is False
         assert sess.calls == []
 
@@ -1501,8 +1560,7 @@ class TestCrossValidatorDispatch:
             return FakeResponse(200, "no leak")
 
         sess = FakeSession(handler)
-        result = cross_validator.run_cross_validation(
-            "sqli", "http://t.test/item?id=1", "id", sess)
+        result = cross_validator.run_cross_validation("sqli", "http://t.test/item?id=1", "id", sess)
         assert result["vulnerable"] is True
         assert set(result["cross_checks"]) == {"second_order"}
 
@@ -1511,12 +1569,14 @@ class TestCsrfTokenParsing:
     def test_name_before_value_order(self):
         html = '<input type="hidden" name="csrfmiddlewaretoken" value="abc123">'
         assert csrf_scanner._find_csrf_token(html) == [
-            {"name": "csrfmiddlewaretoken", "value": "abc123"}]
+            {"name": "csrfmiddlewaretoken", "value": "abc123"}
+        ]
 
     def test_value_before_name_order(self):
         html = '<input value="tok-xyz" name="authenticity_token">'
         assert csrf_scanner._find_csrf_token(html) == [
-            {"name": "authenticity_token", "value": "tok-xyz"}]
+            {"name": "authenticity_token", "value": "tok-xyz"}
+        ]
 
     def test_data_attribute(self):
         html = '<div data-csrf="d1"></div>'
@@ -1529,24 +1589,26 @@ class TestCsrfTokenParsing:
 
     def test_case_insensitive_match(self):
         html = '<input name="CSRF_TOKEN" value="tok">'
-        assert csrf_scanner._find_csrf_token(html) == [
-            {"name": "csrf_token", "value": "tok"}]
+        assert csrf_scanner._find_csrf_token(html) == [{"name": "csrf_token", "value": "tok"}]
 
     def test_meta_tag_token_is_found(self):
         """`<meta name="csrf-token" content="...">` is parsed like an input
         token (csrf_scanner.py:40)."""
         html = '<head><meta name="csrf-token" content="meta-value"></head>'
         assert csrf_scanner._find_csrf_token(html) == [
-            {"name": "csrf-token", "value": "meta-value"}]
+            {"name": "csrf-token", "value": "meta-value"}
+        ]
 
     def test_no_token(self):
         assert csrf_scanner._find_csrf_token("<html><body>plain</body></html>") == []
 
     def test_has_csrf_header_upper_and_lower(self):
-        assert csrf_scanner._has_csrf_header(
-            FakeResponse(headers={"X-XSRF-TOKEN": "t"})) == ["X-XSRF-TOKEN"]
-        assert csrf_scanner._has_csrf_header(
-            FakeResponse(headers={"x-csrf-token": "t"})) == ["X-CSRF-TOKEN"]
+        assert csrf_scanner._has_csrf_header(FakeResponse(headers={"X-XSRF-TOKEN": "t"})) == [
+            "X-XSRF-TOKEN"
+        ]
+        assert csrf_scanner._has_csrf_header(FakeResponse(headers={"x-csrf-token": "t"})) == [
+            "X-CSRF-TOKEN"
+        ]
         assert csrf_scanner._has_csrf_header(FakeResponse()) == []
 
     def test_find_forms_actions_methods_and_inputs(self):
@@ -1558,8 +1620,11 @@ class TestCsrfTokenParsing:
         )
         forms = csrf_scanner._find_forms(html, "http://t.test/dir/page")
         assert [f["action"] for f in forms] == [
-            "http://t.test/dir/update", "http://t.test/dir/page",
-            "http://t.test/abs", "http://other.test/x"]
+            "http://t.test/dir/update",
+            "http://t.test/dir/page",
+            "http://t.test/abs",
+            "http://other.test/x",
+        ]
         assert [f["method"] for f in forms] == ["POST", "POST", "GET", "POST"]
         assert forms[2]["inputs"] == ["c"]
 
@@ -1568,8 +1633,8 @@ class TestCsrfTokenParsing:
         as their action."""
         html = '<form method="post"><input name="secret"></form>'
         assert csrf_scanner._find_forms(html, "http://t.test/") == [
-            {"action": "http://t.test/", "method": "POST",
-             "inputs": ["secret"]}]
+            {"action": "http://t.test/", "method": "POST", "inputs": ["secret"]}
+        ]
 
     def test_is_sensitive_depends_on_action_and_method(self):
         assert csrf_scanner._is_sensitive("/user/update", "POST") is True
@@ -1580,41 +1645,42 @@ class TestCsrfTokenParsing:
 
 class TestCsrfCheck:
     def test_missing_token_on_post_form(self):
-        html = ('<form method="post" action="/update">'
-                '<input name="username"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        html = '<form method="post" action="/update"><input name="username"></form>'
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["csrf_protected"] is False
         assert result["forms_analyzed"] == 1
-        assert result["findings"] == [{
-            "type": "missing_csrf_token", "action": "http://t.test/update",
-            "method": "POST", "inputs": ["username"], "sensitive": True}]
+        assert result["findings"] == [
+            {
+                "type": "missing_csrf_token",
+                "action": "http://t.test/update",
+                "method": "POST",
+                "inputs": ["username"],
+                "sensitive": True,
+            }
+        ]
         assert result["vulnerable"] is True
 
     def test_token_present_is_not_vulnerable(self):
-        html = ('<form method="post" action="/profile/update">'
-                '<input type="hidden" name="csrf_token" value="tok">'
-                '<input name="email"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        html = (
+            '<form method="post" action="/profile/update">'
+            '<input type="hidden" name="csrf_token" value="tok">'
+            '<input name="email"></form>'
+        )
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["csrf_protected"] is True
         assert result["findings"] == []
         assert result["vulnerable"] is False
 
     def test_get_forms_are_ignored(self):
-        html = ('<form method="get" action="/search">'
-                '<input name="q"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        html = '<form method="get" action="/search"><input name="q"></form>'
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["forms_analyzed"] == 1
         assert result["findings"] == []
         assert result["vulnerable"] is False
 
     def test_javascript_action_is_skipped_and_not_vulnerable(self):
-        html = ('<form method="post" action="javascript:submit()">'
-                '<input name="a"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        html = '<form method="post" action="javascript:submit()"><input name="a"></form>'
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["forms_analyzed"] == 1
         assert result["findings"] == []
         assert result["vulnerable"] is False
@@ -1629,10 +1695,9 @@ class TestCsrfCheck:
             '<input name="username"><input name="password"></form>'
             '<form method="post" action="/search">'
             '<input name="q"><input type="hidden" name="csrf_token" value="tok">'
-            '</form>'
+            "</form>"
         )
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["csrf_protected"] is True
         assert len(result["findings"]) == 1
         assert result["findings"][0]["action"] == "http://t.test/auth/login"
@@ -1648,21 +1713,26 @@ class TestCsrfCheck:
             '<form method="post" action="/account/delete">'
             '<input name="confirm"></form>'
         )
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
-        assert result["token_in_page"] == [
-            {"name": "csrf-token", "value": "meta-value"}]
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
+        assert result["token_in_page"] == [{"name": "csrf-token", "value": "meta-value"}]
         assert result["csrf_protected"] is True
-        assert result["findings"] == [{
-            "type": "missing_csrf_token", "action": "http://t.test/account/delete",
-            "method": "POST", "inputs": ["confirm"], "sensitive": True}]
+        assert result["findings"] == [
+            {
+                "type": "missing_csrf_token",
+                "action": "http://t.test/account/delete",
+                "method": "POST",
+                "inputs": ["confirm"],
+                "sensitive": True,
+            }
+        ]
         assert result["vulnerable"] is True
 
     def test_csrf_header_marks_protected(self):
-        html = ('<form method="post" action="/search">'
-                '<input name="q"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html, headers={"X-CSRF-TOKEN": "abc"})))
+        html = '<form method="post" action="/search"><input name="q"></form>'
+        result = csrf_scanner.check(
+            "http://t.test/",
+            sess=FakeSession(_static_handler(200, html, headers={"X-CSRF-TOKEN": "abc"})),
+        )
         assert result["csrf_header"] == ["X-CSRF-TOKEN"]
         assert result["csrf_protected"] is True
         assert result["vulnerable"] is False
@@ -1671,10 +1741,11 @@ class TestCsrfCheck:
         """A sensitive form without a hidden token is still listed as a finding
         even when the application enforces CSRF via a response header, but the
         header protection keeps it from being reported vulnerable."""
-        html = ('<form method="post" action="/account/delete">'
-                '<input name="confirm"></form>')
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html, headers={"X-CSRF-TOKEN": "abc"})))
+        html = '<form method="post" action="/account/delete"><input name="confirm"></form>'
+        result = csrf_scanner.check(
+            "http://t.test/",
+            sess=FakeSession(_static_handler(200, html, headers={"X-CSRF-TOKEN": "abc"})),
+        )
         assert result["csrf_header"] == ["X-CSRF-TOKEN"]
         assert result["csrf_protected"] is True
         assert len(result["findings"]) == 1
@@ -1685,8 +1756,7 @@ class TestCsrfCheck:
         """A POST form with no inputs has nothing to protect and generates
         neither a finding nor vulnerable=True (csrf_scanner.py:128)."""
         html = '<form method="post" action="/search"></form>'
-        result = csrf_scanner.check("http://t.test/", sess=FakeSession(
-            _static_handler(200, html)))
+        result = csrf_scanner.check("http://t.test/", sess=FakeSession(_static_handler(200, html)))
         assert result["forms_analyzed"] == 1
         assert result["findings"] == []
         assert result["vulnerable"] is False
@@ -1697,13 +1767,13 @@ class TestCsrfCheck:
         assert result["vulnerable"] is False
 
     def test_default_session_is_configured(self, monkeypatch):
-        html = ('<form method="post" action="/update">'
-                '<input name="a"></form>')
+        html = '<form method="post" action="/update"><input name="a"></form>'
         created = _install_session_factory(monkeypatch, _static_handler(200, html))
         result = csrf_scanner.check("http://t.test/")
         assert result["forms_analyzed"] == 1
         assert created[0].headers["User-Agent"].startswith("Mozilla/5.0")
         from tools.settings import settings
+
         assert created[0].verify == settings.verify_ssl
 
 
@@ -1714,8 +1784,12 @@ class TestCsrfBypass:
         sess = FakeSession(_static_handler(200, "ok"))
         result = csrf_scanner.bypass_check(self.URL, "/action", {"a": "1"}, sess)
         assert [t["test"] for t in result["tests"]] == [
-            "no_referer", "no_origin", "wrong_origin", "method_override",
-            "json_content_type"]
+            "no_referer",
+            "no_origin",
+            "wrong_origin",
+            "method_override",
+            "json_content_type",
+        ]
         assert result["bypassable"] is True
         assert sess.calls[3][0] == "GET"
         assert sess.calls[3][2]["params"] == {"a": "1"}

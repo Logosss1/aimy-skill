@@ -14,8 +14,7 @@ NBT_NS_PORT = 137
 
 
 class LLMNRPoisoner:
-    def __init__(self, listen_ip: str = "0.0.0.0",
-                 capture_file: str = "/tmp/llmnr_hashes.txt"):
+    def __init__(self, listen_ip: str = "0.0.0.0", capture_file: str = "/tmp/llmnr_hashes.txt"):
         self.listen_ip = listen_ip
         self.capture_file = capture_file
         self._sock: Optional[socket.socket] = None
@@ -71,16 +70,18 @@ class LLMNRPoisoner:
                     pos += 1
                     break
                 pos += 1
-                qname_parts.append(data[pos:pos + length].decode("utf-8", errors="replace"))
+                qname_parts.append(data[pos : pos + length].decode("utf-8", errors="replace"))
                 pos += length
             qname = ".".join(qname_parts)
-            self.captured_hashes.append({
-                "timestamp": datetime.utcnow().isoformat(),
-                "source_ip": addr[0],
-                "source_port": addr[1],
-                "query": qname,
-                "raw_size": len(data),
-            })
+            self.captured_hashes.append(
+                {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "source_ip": addr[0],
+                    "source_port": addr[1],
+                    "query": qname,
+                    "raw_size": len(data),
+                }
+            )
             logger.info("[LLMNR] %s queried %s", addr[0], qname)
         except Exception:
             pass
@@ -123,12 +124,14 @@ class NBTNSPoisoner:
         while self._running:
             try:
                 data, addr = self._sock.recvfrom(4096)
-                self.captured.append({
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "source_ip": addr[0],
-                    "type": "nbt_ns",
-                    "raw_size": len(data),
-                })
+                self.captured.append(
+                    {
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "source_ip": addr[0],
+                        "type": "nbt_ns",
+                        "raw_size": len(data),
+                    }
+                )
                 logger.info("[NBT-NS] packet from %s (%d bytes)", addr[0], len(data))
             except Exception:
                 break

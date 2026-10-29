@@ -1,4 +1,3 @@
-
 from tools.waf_bypass import (
     BYPASS_PAYLOADS,
     BypassEncoder,
@@ -140,6 +139,7 @@ class TestBypassEncoder:
 
     def test_case_random(self):
         import random
+
         random.seed(42)
         result = BypassEncoder.case_random("OR 1=1")
         assert "OR" in result or "or" in result
@@ -171,6 +171,7 @@ class TestApplyEncoderChain:
     def test_encoder_failure_continues(self):
         def bad_enc(s):
             raise ValueError("fail")
+
         result = apply_encoder_chain("test", [bad_enc, BypassEncoder.url_encode])
         assert result == "test"
 

@@ -80,8 +80,9 @@ def sqlmap_detect(url: str, param: str, dbms: Optional[str] = None) -> Dict:
 
     # Try to read extracted data from sqlmap output
     data_pattern = re.compile(
-        r'\[\d+:\d+:\d+\]\s*\[INFO\]\s*table\s*\'(.+?)\'\.\'(.+?)\'.*?\n'
-        r'(.*?)(?=\n\[|\Z)', re.DOTALL
+        r"\[\d+:\d+:\d+\]\s*\[INFO\]\s*table\s*\'(.+?)\'\.\'(.+?)\'.*?\n"
+        r"(.*?)(?=\n\[|\Z)",
+        re.DOTALL,
     )
     data_matches = data_pattern.findall(stdout)
     for table, column, data_block in data_matches:
@@ -104,8 +105,9 @@ def sqlmap_detect(url: str, param: str, dbms: Optional[str] = None) -> Dict:
     return result
 
 
-def sqlmap_extract(url: str, param: str, dbms: Optional[str] = None,
-                   queries: Optional[List[str]] = None) -> Dict:
+def sqlmap_extract(
+    url: str, param: str, dbms: Optional[str] = None, queries: Optional[List[str]] = None
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -175,9 +177,7 @@ def sqlmap_extract(url: str, param: str, dbms: Optional[str] = None,
     stdout = r.get("stdout", "")
 
     # 解析 dump: "Table: X" 之后跟一行 "[N entries]" 再跟表格行
-    dump_re = re.compile(
-        r"Table:\s+(.+?)\n.*?\[(\d+)\s+entr.*?\n(.*?)(?=\n\[|\Z)", re.DOTALL
-    )
+    dump_re = re.compile(r"Table:\s+(.+?)\n.*?\[(\d+)\s+entr.*?\n(.*?)(?=\n\[|\Z)", re.DOTALL)
     for match in dump_re.finditer(stdout):
         tbl = match.group(1).strip()
         rows = re.findall(r"\|(.+?)\|", match.group(3))
@@ -192,8 +192,10 @@ def sqlmap_extract(url: str, param: str, dbms: Optional[str] = None,
 # nmap wrapper
 # ---------------------------------------------------------------------------
 
-def nmap_scan(target: str, ports: str = "21,22,80,443,3306,6379,8080,8443,9200,27017",
-              fast: bool = True) -> Dict:
+
+def nmap_scan(
+    target: str, ports: str = "21,22,80,443,3306,6379,8080,8443,9200,27017", fast: bool = True
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -238,8 +240,13 @@ def nmap_scan(target: str, ports: str = "21,22,80,443,3306,6379,8080,8443,9200,2
 # ffuf wrapper
 # ---------------------------------------------------------------------------
 
-def ffuf_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt",
-                  extensions: str = "", threads: int = 50) -> Dict:
+
+def ffuf_discover(
+    url: str,
+    wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    extensions: str = "",
+    threads: int = 50,
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -259,11 +266,13 @@ def ffuf_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.tx
     try:
         data = json.loads(stdout)
         for entry in data.get("results", []):
-            results.append({
-                "path": entry.get("input", {}).get("FUZZ", ""),
-                "status": entry.get("status"),
-                "size": entry.get("length", 0),
-            })
+            results.append(
+                {
+                    "path": entry.get("input", {}).get("FUZZ", ""),
+                    "status": entry.get("status"),
+                    "size": entry.get("length", 0),
+                }
+            )
     except (json.JSONDecodeError, TypeError):
         for line in stdout.splitlines():
             m = re.match(r"FUZZ:\s*(\S+)", line)
@@ -282,8 +291,8 @@ def ffuf_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.tx
 # nuclei wrapper
 # ---------------------------------------------------------------------------
 
-def nuclei_scan(target: str, severity: str = "medium,high,critical",
-                templates: str = "") -> Dict:
+
+def nuclei_scan(target: str, severity: str = "medium,high,critical", templates: str = "") -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -306,13 +315,15 @@ def nuclei_scan(target: str, severity: str = "medium,high,critical",
             continue
         try:
             entry = json.loads(line)
-            findings.append({
-                "template": entry.get("template-id", ""),
-                "name": entry.get("info", {}).get("name", ""),
-                "severity": entry.get("info", {}).get("severity", ""),
-                "matched": entry.get("matched-at", ""),
-                "type": entry.get("type", ""),
-            })
+            findings.append(
+                {
+                    "template": entry.get("template-id", ""),
+                    "name": entry.get("info", {}).get("name", ""),
+                    "severity": entry.get("info", {}).get("severity", ""),
+                    "matched": entry.get("matched-at", ""),
+                    "type": entry.get("type", ""),
+                }
+            )
         except json.JSONDecodeError:
             pass
 
@@ -332,10 +343,16 @@ def nuclei_scan(target: str, severity: str = "medium,high,critical",
 # hydra wrapper
 # ---------------------------------------------------------------------------
 
-def hydra_brute(target: str, service: str = "ssh",
-                userlist: str = "/usr/share/wordlists/metasploit/namelist.txt",
-                passlist: str = "/usr/share/wordlists/rockyou.txt.gz",
-                user: str = "", threads: int = 4, port: int = 0) -> Dict:
+
+def hydra_brute(
+    target: str,
+    service: str = "ssh",
+    userlist: str = "/usr/share/wordlists/metasploit/namelist.txt",
+    passlist: str = "/usr/share/wordlists/rockyou.txt.gz",
+    user: str = "",
+    threads: int = 4,
+    port: int = 0,
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -345,26 +362,40 @@ def hydra_brute(target: str, service: str = "ssh",
     port_opt = "-s %d" % port if port else ""
     if user:
         cmd = "hydra -l %s -P %s %s %s %s %s 2>&1" % (
-            shlex.quote(user), shlex.quote(passlist),
-            port_opt, shlex.quote(target), shlex.quote(service), "-t %d" % threads)
+            shlex.quote(user),
+            shlex.quote(passlist),
+            port_opt,
+            shlex.quote(target),
+            shlex.quote(service),
+            "-t %d" % threads,
+        )
     else:
         cmd = "hydra -L %s -P %s %s %s %s %s 2>&1" % (
-            shlex.quote(userlist), shlex.quote(passlist),
-            port_opt, shlex.quote(target), shlex.quote(service), "-t %d" % threads)
+            shlex.quote(userlist),
+            shlex.quote(passlist),
+            port_opt,
+            shlex.quote(target),
+            shlex.quote(service),
+            "-t %d" % threads,
+        )
 
     r = kali.run(cmd, timeout=600)
     stdout = r.get("stdout", "")
 
     found = []
     for line in stdout.splitlines():
-        m = re.search(r"\[(\d+)\]\[(\w+)\]\s+host:\s+\S+\s+login:\s+(\S+)\s+password:\s+(\S+)", line)
+        m = re.search(
+            r"\[(\d+)\]\[(\w+)\]\s+host:\s+\S+\s+login:\s+(\S+)\s+password:\s+(\S+)", line
+        )
         if m:
-            found.append({
-                "port": int(m.group(1)),
-                "service": m.group(2),
-                "username": m.group(3),
-                "password": m.group(4),
-            })
+            found.append(
+                {
+                    "port": int(m.group(1)),
+                    "service": m.group(2),
+                    "username": m.group(3),
+                    "password": m.group(4),
+                }
+            )
 
     return {
         "success": bool(found) or r["success"],
@@ -380,6 +411,7 @@ def hydra_brute(target: str, service: str = "ssh",
 # nikto wrapper
 # ---------------------------------------------------------------------------
 
+
 def nikto_scan(url: str, max_time: int = 60, ssl: bool = False) -> Dict:
     kali = get_kali()
     if not kali:
@@ -388,8 +420,10 @@ def nikto_scan(url: str, max_time: int = 60, ssl: bool = False) -> Dict:
         return {"success": False, "error": "nikto not found on Kali"}
 
     ssl_opt = "-ssl" if ssl else ""
-    cmd = "nikto -h %s %s -Format json -o /tmp/nikto_out.json -maxtime %d 2>&1 && cat /tmp/nikto_out.json 2>/dev/null" % (
-        shlex.quote(url), ssl_opt, max_time)
+    cmd = (
+        "nikto -h %s %s -Format json -o /tmp/nikto_out.json -maxtime %d 2>&1 && cat /tmp/nikto_out.json 2>/dev/null"
+        % (shlex.quote(url), ssl_opt, max_time)
+    )
 
     r = kali.run(cmd, timeout=max_time + 30)
     stdout = r.get("stdout", "")
@@ -398,20 +432,24 @@ def nikto_scan(url: str, max_time: int = 60, ssl: bool = False) -> Dict:
     try:
         data = json.loads(stdout)
         for item in data if isinstance(data, list) else data.get("vulnerabilities", []):
-            findings.append({
-                "id": item.get("id", ""),
-                "method": item.get("method", ""),
-                "url": item.get("url", ""),
-                "description": item.get("msg", item.get("description", "")),
-            })
+            findings.append(
+                {
+                    "id": item.get("id", ""),
+                    "method": item.get("method", ""),
+                    "url": item.get("url", ""),
+                    "description": item.get("msg", item.get("description", "")),
+                }
+            )
     except (json.JSONDecodeError, TypeError):
         for line in stdout.splitlines():
             m = re.search(r"\+ (OSVDB-\d+|NIKTO-\d+):\s*(.+)", line)
             if m:
-                findings.append({
-                    "id": m.group(1),
-                    "description": m.group(2).strip(),
-                })
+                findings.append(
+                    {
+                        "id": m.group(1),
+                        "description": m.group(2).strip(),
+                    }
+                )
 
     return {
         "success": True,
@@ -426,9 +464,13 @@ def nikto_scan(url: str, max_time: int = 60, ssl: bool = False) -> Dict:
 # gobuster wrapper
 # ---------------------------------------------------------------------------
 
-def gobuster_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt",
-                      extensions: str = "php,txt,zip,bak,html,asp,aspx,jsp",
-                      threads: int = 30) -> Dict:
+
+def gobuster_discover(
+    url: str,
+    wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    extensions: str = "php,txt,zip,bak,html,asp,aspx,jsp",
+    threads: int = 30,
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -436,8 +478,10 @@ def gobuster_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/commo
         return {"success": False, "error": "gobuster not found on Kali"}
 
     ext_opt = "-x %s" % shlex.quote(extensions) if extensions else ""
-    cmd = "gobuster dir -u %s -w %s %s -t %d -q -o /tmp/gobuster_out.txt 2>&1 && cat /tmp/gobuster_out.txt 2>/dev/null" % (
-        shlex.quote(url), shlex.quote(wordlist), ext_opt, threads)
+    cmd = (
+        "gobuster dir -u %s -w %s %s -t %d -q -o /tmp/gobuster_out.txt 2>&1 && cat /tmp/gobuster_out.txt 2>/dev/null"
+        % (shlex.quote(url), shlex.quote(wordlist), ext_opt, threads)
+    )
 
     r = kali.run(cmd, timeout=180)
     stdout = r.get("stdout", "")
@@ -446,10 +490,12 @@ def gobuster_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/commo
     for line in stdout.splitlines():
         m = re.match(r"(/\S+)\s+\(Status:\s*(\d+)\)", line)
         if m:
-            results.append({
-                "path": m.group(1),
-                "status": int(m.group(2)),
-            })
+            results.append(
+                {
+                    "path": m.group(1),
+                    "status": int(m.group(2)),
+                }
+            )
 
     return {
         "success": True,
@@ -463,8 +509,8 @@ def gobuster_discover(url: str, wordlist: str = "/usr/share/wordlists/dirb/commo
 # wpscan wrapper
 # ---------------------------------------------------------------------------
 
-def wpscan_scan(url: str, enumerate_all: bool = True,
-                api_token: str = "") -> Dict:
+
+def wpscan_scan(url: str, enumerate_all: bool = True, api_token: str = "") -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -473,8 +519,10 @@ def wpscan_scan(url: str, enumerate_all: bool = True,
 
     enum_opt = "--enumerate ap,at,tt,cb,dbe,u,m" if enumerate_all else ""
     token_opt = "--api-token %s" % shlex.quote(api_token) if api_token else ""
-    cmd = "wpscan --url %s %s %s --format json -o /tmp/wpscan_out.json 2>/dev/null && cat /tmp/wpscan_out.json 2>/dev/null" % (
-        shlex.quote(url), enum_opt, token_opt)
+    cmd = (
+        "wpscan --url %s %s %s --format json -o /tmp/wpscan_out.json 2>/dev/null && cat /tmp/wpscan_out.json 2>/dev/null"
+        % (shlex.quote(url), enum_opt, token_opt)
+    )
 
     r = kali.run(cmd, timeout=300)
     stdout = r.get("stdout", "")
@@ -483,12 +531,14 @@ def wpscan_scan(url: str, enumerate_all: bool = True,
     try:
         data = json.loads(stdout)
         for finding in data.get("findings", []):
-            vulns.append({
-                "type": finding.get("type", ""),
-                "title": finding.get("title", ""),
-                "severity": finding.get("severity", ""),
-                "fixed_in": finding.get("fixed_in", ""),
-            })
+            vulns.append(
+                {
+                    "type": finding.get("type", ""),
+                    "title": finding.get("title", ""),
+                    "severity": finding.get("severity", ""),
+                    "fixed_in": finding.get("fixed_in", ""),
+                }
+            )
     except (json.JSONDecodeError, TypeError):
         for line in stdout.splitlines():
             m = re.search(r"\[!\]\s*(.+)", line)
@@ -508,9 +558,15 @@ def wpscan_scan(url: str, enumerate_all: bool = True,
 # metasploit wrapper (resource script execution)
 # ---------------------------------------------------------------------------
 
-def metasploit_run(resource_script: str, payload: str = "",
-                   lhost: str = "", lport: int = 4444,
-                   rhost: str = "", rport: int = 80) -> Dict:
+
+def metasploit_run(
+    resource_script: str,
+    payload: str = "",
+    lhost: str = "",
+    lport: int = 4444,
+    rhost: str = "",
+    rport: int = 80,
+) -> Dict:
     kali = get_kali()
     if not kali:
         return {"success": False, "error": "Kali not connected"}
@@ -545,9 +601,15 @@ def metasploit_run(resource_script: str, payload: str = "",
     }
 
 
-def metasploit_exploit(module: str, rhost: str, rport: int = 80,
-                       payload: str = "", lhost: str = "",
-                       lport: int = 4444, ssl: bool = False) -> Dict:
+def metasploit_exploit(
+    module: str,
+    rhost: str,
+    rport: int = 80,
+    payload: str = "",
+    lhost: str = "",
+    lport: int = 4444,
+    ssl: bool = False,
+) -> Dict:
     rc = "use %s\n" % module
     rc += "set RHOSTS %s\n" % rhost
     rc += "set RPORT %d\n" % rport
@@ -559,8 +621,7 @@ def metasploit_exploit(module: str, rhost: str, rport: int = 80,
         rc += "set SSL true\n"
     rc += "set ExitOnSession false\n"
     rc += "run -j\n"
-    return metasploit_run(rc, payload=payload, lhost=lhost, lport=lport,
-                          rhost=rhost, rport=rport)
+    return metasploit_run(rc, payload=payload, lhost=lhost, lport=lport, rhost=rhost, rport=rport)
 
 
 # ---------------------------------------------------------------------------
@@ -568,19 +629,18 @@ def metasploit_exploit(module: str, rhost: str, rport: int = 80,
 # ---------------------------------------------------------------------------
 
 KALI_EXPLOIT_MAP = {
-    "sqli":      {"tool": "sqlmap",       "func": "sqlmap_detect"},
-    "cmdi":      {"tool": "metasploit",   "func": "metasploit_exploit"},
-    "xss":       {"tool": "metasploit",   "func": "metasploit_exploit"},
-    "lfi":       {"tool": "metasploit",   "func": "metasploit_exploit"},
-    "ssrf":      {"tool": "metasploit",   "func": "metasploit_exploit"},
-    "http":      {"tool": "nikto",        "func": "nikto_scan"},
-    "service":   {"tool": "hydra",        "func": "hydra_brute"},
-    "wordpress": {"tool": "wpscan",       "func": "wpscan_scan"},
+    "sqli": {"tool": "sqlmap", "func": "sqlmap_detect"},
+    "cmdi": {"tool": "metasploit", "func": "metasploit_exploit"},
+    "xss": {"tool": "metasploit", "func": "metasploit_exploit"},
+    "lfi": {"tool": "metasploit", "func": "metasploit_exploit"},
+    "ssrf": {"tool": "metasploit", "func": "metasploit_exploit"},
+    "http": {"tool": "nikto", "func": "nikto_scan"},
+    "service": {"tool": "hydra", "func": "hydra_brute"},
+    "wordpress": {"tool": "wpscan", "func": "wpscan_scan"},
 }
 
 
-def autoexploit(url: str, vuln_type: str, param: str = "",
-                extra: Optional[Dict] = None) -> Dict:
+def autoexploit(url: str, vuln_type: str, param: str = "", extra: Optional[Dict] = None) -> Dict:
     result = {"vuln_type": vuln_type, "exploits": {}}
 
     if vuln_type == "sqli":
@@ -619,10 +679,10 @@ def autoexploit(url: str, vuln_type: str, param: str = "",
 
     if vuln_type in ("cmdi", "xss", "lfi", "ssrf"):
         msf_module_map = {
-            "cmdi":  "exploit/multi/http/http_cmd_exec",
-            "xss":   "auxiliary/gather/http_xss_scanner",
-            "lfi":   "exploit/unix/webapp/local_file_include",
-            "ssrf":  "auxiliary/scanner/http/ssrf_scanner",
+            "cmdi": "exploit/multi/http/http_cmd_exec",
+            "xss": "auxiliary/gather/http_xss_scanner",
+            "lfi": "exploit/unix/webapp/local_file_include",
+            "ssrf": "auxiliary/scanner/http/ssrf_scanner",
         }
         mod = msf_module_map.get(vuln_type)
         if mod:
@@ -652,7 +712,7 @@ def whatweb_identify(target: str) -> Dict:
     stdout = r.get("stdout", "")
 
     techs = []
-    tech_m = re.findall(r'([\w\s]+?)\[', stdout)
+    tech_m = re.findall(r"([\w\s]+?)\[", stdout)
     if tech_m:
         techs = [t.strip() for t in tech_m if t.strip()]
 

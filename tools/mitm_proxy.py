@@ -15,8 +15,8 @@ logger = get_logger("mitm_proxy")
 CREDENTIAL_PATTERNS = [
     (r'(?i)(password|passwd|pwd)=([^&\s"]+)', "password"),
     (r'(?i)(secret|api_key|apikey)=([^&\s"]+)', "api_key"),
-    (r'(?i)authorization:\s*basic\s+([^\s\r\n]+)', "basic_auth"),
-    (r'(?i)bearer\s+([a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+)', "jwt"),
+    (r"(?i)authorization:\s*basic\s+([^\s\r\n]+)", "basic_auth"),
+    (r"(?i)bearer\s+([a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+)", "jwt"),
     (r'(?i)(token|jwt)=([^&\s"]+)', "token"),
     (r'(?i)session[_-]?id=([^&\s"]+)', "session"),
 ]
@@ -40,6 +40,7 @@ def _ensure_ca_dir():
 def _openssl_available() -> bool:
     try:
         import subprocess
+
         r = subprocess.run(["openssl", "version"], capture_output=True, text=True, timeout=5)
         return r.returncode == 0
     except Exception:
@@ -54,15 +55,32 @@ def generate_ca() -> bool:
         logger.error("openssl not found, cannot generate CA cert")
         return False
     import subprocess
+
     try:
         subprocess.run(
             ["openssl", "genrsa", "-out", CA_KEY, "2048"],
-            check=True, capture_output=True, timeout=30
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         subprocess.run(
-            ["openssl", "req", "-new", "-x509", "-days", "3650", "-key", CA_KEY,
-             "-out", CA_CERT, "-subj", CA_SUBJECT],
-            check=True, capture_output=True, timeout=30
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "3650",
+                "-key",
+                CA_KEY,
+                "-out",
+                CA_CERT,
+                "-subj",
+                CA_SUBJECT,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         logger.info("MITM CA generated: %s", CA_CERT)
         return True
@@ -78,6 +96,7 @@ def _generate_host_cert(hostname: str) -> Optional[str]:
     if os.path.isfile(cert_path) and os.path.isfile(key_path):
         return cert_path
     import subprocess
+
     try:
         san = f"DNS:{hostname}"
         if hostname.count(".") >= 2:
@@ -85,24 +104,55 @@ def _generate_host_cert(hostname: str) -> Optional[str]:
             san += f",DNS:*.{wild}"
         csr_path = os.path.join(CERTS_DIR, f"{hostname}.csr")
         subprocess.run(
-            ["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
-             "-keyout", key_path, "-out", csr_path,
-             "-subj", f"/CN={hostname}"],
-            check=True, capture_output=True, timeout=30
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-keyout",
+                key_path,
+                "-out",
+                csr_path,
+                "-subj",
+                f"/CN={hostname}",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         extfile = os.path.join(CERTS_DIR, f"{hostname}.ext")
         with open(extfile, "w") as f:
             f.write(f"subjectAltName={san}\n")
         subprocess.run(
-            ["openssl", "x509", "-req", "-days", "365",
-             "-in", csr_path, "-CA", CA_CERT, "-CAkey", CA_KEY,
-             "-CAcreateserial", "-out", cert_path,
-             "-extfile", extfile],
-            check=True, capture_output=True, timeout=30
+            [
+                "openssl",
+                "x509",
+                "-req",
+                "-days",
+                "365",
+                "-in",
+                csr_path,
+                "-CA",
+                CA_CERT,
+                "-CAkey",
+                CA_KEY,
+                "-CAcreateserial",
+                "-out",
+                cert_path,
+                "-extfile",
+                extfile,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         for tmp in [csr_path, extfile]:
-            try: os.remove(tmp)
-            except Exception: pass
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
         return cert_path
     except subprocess.CalledProcessError as e:
         err = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr or "")
@@ -165,6 +215,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _connect_upstream(self, host: str, port: int):
         import socket
+
         sock = socket.create_connection((host, port), timeout=15)
         if port == 443:
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -177,6 +228,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.connection.setblocking(True)
         upstream.setblocking(True)
         import select
+
         socks = [self.connection, upstream]
         try:
             while True:
@@ -194,8 +246,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except (ConnectionResetError, BrokenPipeError, OSError):
             pass
         finally:
-            try: upstream.close()
-            except Exception: pass
+            try:
+                upstream.close()
+            except Exception:
+                pass
 
     def _proxy_http(self, upstream, host: str, tag: str):
         buf = b""
@@ -233,8 +287,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except (ConnectionResetError, BrokenPipeError, OSError) as e:
             logger.debug("[%s] tunnel closed: %s", tag, e)
         finally:
-            try: upstream.close()
-            except Exception: pass
+            try:
+                upstream.close()
+            except Exception:
+                pass
 
     def _capture_http_request(self):
         content_len = int(self.headers.get("Content-Length", 0))
@@ -259,8 +315,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         try:
             import urllib.request
+
             req = urllib.request.Request(
-                url, data=body or None,
+                url,
+                data=body or None,
                 headers=dict(self.headers),
                 method=self.command,
             )
@@ -274,9 +332,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(502, str(e))
 
-    def _capture(self, method="", uri="", host="", url="",
-                 req_headers=None, req_body="",
-                 resp_headers=None, resp_body="", status=0):
+    def _capture(
+        self,
+        method="",
+        uri="",
+        host="",
+        url="",
+        req_headers=None,
+        req_body="",
+        resp_headers=None,
+        resp_body="",
+        status=0,
+    ):
         global CAPTURED
         entry = {
             "ts": datetime.utcnow().isoformat(),
@@ -293,7 +360,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         with CAPTURE_LOCK:
             CAPTURED.append(entry)
             if len(CAPTURED) > MAX_CAPTURED:
-                CAPTURED[:MAX_CAPTURED // 2] = []
+                CAPTURED[: MAX_CAPTURED // 2] = []
 
     def _parse_headers(self, raw: bytes) -> Dict:
         headers = {}
@@ -302,9 +369,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 break
             if b":" in line:
                 k, v = line.split(b":", 1)
-                headers[k.decode("utf-8", errors="replace").strip()] = (
-                    v.decode("utf-8", errors="replace").strip()
-                )
+                headers[k.decode("utf-8", errors="replace").strip()] = v.decode(
+                    "utf-8", errors="replace"
+                ).strip()
         return headers
 
     def _extract_body(self, raw: bytes) -> str:
@@ -318,8 +385,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
 
 class MITMProxy:
-    def __init__(self, port: int = 8080, host: str = "127.0.0.1",
-                 threads: int = 10, auto_feed: bool = False):
+    def __init__(
+        self, port: int = 8080, host: str = "127.0.0.1", threads: int = 10, auto_feed: bool = False
+    ):
         self.port = port
         self.host = host
         self.threads = threads
@@ -364,8 +432,7 @@ class MITMProxy:
 
         self._server = HTTPServer((self.host, self.port), Handler)
         self._thread = threading.Thread(
-            target=self._server.serve_forever, daemon=True,
-            name="mitm-proxy"
+            target=self._server.serve_forever, daemon=True, name="mitm-proxy"
         )
         self._thread.start()
         logger.info("MITM proxy listening on %s:%d", self.host, self.port)
@@ -390,12 +457,14 @@ class MITMProxy:
             raw += "\n".join(f"{k}: {v}" for k, v in entry.get("req_headers", {}).items())
             for pattern, label in CREDENTIAL_PATTERNS:
                 for m in re.finditer(pattern, raw):
-                    findings.append({
-                        "type": label,
-                        "match": m.group(0)[:80],
-                        "value": m.group(2) if m.lastindex >= 2 else m.group(1),
-                        "url": entry.get("url", ""),
-                    })
+                    findings.append(
+                        {
+                            "type": label,
+                            "match": m.group(0)[:80],
+                            "value": m.group(2) if m.lastindex >= 2 else m.group(1),
+                            "url": entry.get("url", ""),
+                        }
+                    )
         return findings
 
     def extract_sessions(self, captured: List[Dict] = None) -> List[Dict]:
@@ -405,11 +474,13 @@ class MITMProxy:
         for entry in captured:
             raw = entry.get("req_body", "")
             for m in re.finditer(r'(?i)(session[_-]?id|token|jwt)=([^&\s"]+)', raw):
-                sessions.append({
-                    "param": m.group(1),
-                    "value": m.group(2),
-                    "url": entry.get("url", ""),
-                })
+                sessions.append(
+                    {
+                        "param": m.group(1),
+                        "value": m.group(2),
+                        "url": entry.get("url", ""),
+                    }
+                )
         return sessions
 
     def capture_with_duration(self, duration: int = 60) -> Dict:
@@ -431,8 +502,7 @@ def get_proxy() -> Optional[MITMProxy]:
     return _GLOBAL_PROXY
 
 
-def start_proxy(port: int = 8080, host: str = "127.0.0.1",
-                threads: int = 10) -> MITMProxy:
+def start_proxy(port: int = 8080, host: str = "127.0.0.1", threads: int = 10) -> MITMProxy:
     global _GLOBAL_PROXY
     proxy = MITMProxy(port=port, host=host, threads=threads)
     proxy.start()

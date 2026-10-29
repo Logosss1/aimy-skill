@@ -11,6 +11,7 @@ logger = get_logger("xss_browser_verify")
 HAS_PLAYWRIGHT = False
 try:
     from playwright.sync_api import sync_playwright
+
     HAS_PLAYWRIGHT = True
 except ImportError:
     pass
@@ -18,13 +19,13 @@ except ImportError:
 
 def _build_url(base: str, param: str, value: str) -> str:
     import urllib.parse
+
     parsed = urllib.parse.urlparse(base)
     qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     qs[param] = [value]
     new_qs = urllib.parse.urlencode(qs, doseq=True)
     return urllib.parse.ParseResult(
-        parsed.scheme, parsed.netloc, parsed.path,
-        parsed.params, new_qs, parsed.fragment
+        parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_qs, parsed.fragment
     ).geturl()
 
 
@@ -36,7 +37,7 @@ CONFIRM_PAYLOADS = [
     "<details open ontoggle=alert(1)>",
     "<input autofocus onfocus=alert(1)>",
     "javascript:alert(1)",
-    "\"-alert(1)-\"",
+    '"-alert(1)-"',
     "';-alert(1)-'",
 ]
 
@@ -66,15 +67,18 @@ def _verify_playwright(url: str, param: str, timeout: float) -> Dict:
                 dialog_caught[0] = False
                 dialog_text[0] = ""
                 try:
-                    page.goto(_build_url(url, param, payload),
-                              wait_until="domcontentloaded",
-                              timeout=int(timeout * 1000))
+                    page.goto(
+                        _build_url(url, param, payload),
+                        wait_until="domcontentloaded",
+                        timeout=int(timeout * 1000),
+                    )
                     time.sleep(0.3)
                     if dialog_caught[0]:
                         result["vulnerable"] = True
                         result["confirmed"] = True
                         result["evidence"].append(
-                            f"Playwright confirmed: alert({dialog_text[0]}) via {payload[:30]}")
+                            f"Playwright confirmed: alert({dialog_text[0]}) via {payload[:30]}"
+                        )
                         break
                 except Exception as e:
                     logger.debug("playwright payload %s: %s", payload[:20], e)
@@ -87,15 +91,17 @@ def _verify_playwright(url: str, param: str, timeout: float) -> Dict:
     return result
 
 
-def _verify_http(url: str, param: str, sess: "requests.Session",
-                 timeout: float) -> Dict:
-    result = {"vulnerable": False, "confirmed": False,
-              "evidence": [], "note": "HTTP fallback (no Playwright)"}
+def _verify_http(url: str, param: str, sess: "requests.Session", timeout: float) -> Dict:
+    result = {
+        "vulnerable": False,
+        "confirmed": False,
+        "evidence": [],
+        "note": "HTTP fallback (no Playwright)",
+    }
 
     for payload in CONFIRM_PAYLOADS:
         try:
-            r = sess.get(_build_url(url, param, payload),
-                         timeout=timeout)
+            r = sess.get(_build_url(url, param, payload), timeout=timeout)
             if payload in r.text.replace("&lt;", "<").replace("&gt;", ">"):
                 result["vulnerable"] = True
                 result["evidence"].append(f"payload reflected: {payload[:25]}")
@@ -106,8 +112,9 @@ def _verify_http(url: str, param: str, sess: "requests.Session",
     return result
 
 
-def check(url: str, param: str, sess: Optional["requests.Session"] = None,
-          timeout: float = 10.0) -> Dict:
+def check(
+    url: str, param: str, sess: Optional["requests.Session"] = None, timeout: float = 10.0
+) -> Dict:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl

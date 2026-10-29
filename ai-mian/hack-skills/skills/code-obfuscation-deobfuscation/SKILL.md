@@ -65,7 +65,8 @@ Conditional branches where the condition is always true or always false, but thi
 
 ```python
 import z3
-x = z3.BitVec('x', 32)
+
+x = z3.BitVec("x", 32)
 s = z3.Solver()
 s.add(x * (x + 1) % 2 != 0)
 print(s.check())  # unsat → always true
@@ -151,7 +152,7 @@ Each block sets `state = next_state` before jumping back to the dispatcher.
 ```python
 import angr, claripy
 
-proj = angr.Project('./obfuscated')
+proj = angr.Project("./obfuscated")
 cfg = proj.analyses.CFGFast()
 
 # Find dispatcher block (highest in-degree basic block)

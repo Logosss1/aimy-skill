@@ -7,6 +7,7 @@
     from tools.batch_recon import run
     report = run(["1.2.3.4", "5.6.7.8"])
 """
+
 import concurrent.futures
 import re
 import socket
@@ -26,8 +27,14 @@ DEFAULT_PORTS = "21,22,23,25,53,80,443,3306,3389,5432,6379,8080,8443,9200,27017"
 
 # Ports that signal high-value targets (data stores / admin / middleware).
 HIGH_VALUE_PORTS = {3306, 3389, 5432, 6379, 8080, 8443, 9200, 27017}
-DB_PORTS = {3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis",
-            9200: "Elasticsearch", 27017: "MongoDB", 3389: "RDP"}
+DB_PORTS = {
+    3306: "MySQL",
+    5432: "PostgreSQL",
+    6379: "Redis",
+    9200: "Elasticsearch",
+    27017: "MongoDB",
+    3389: "RDP",
+}
 WEB_PORTS = {80, 443, 8080, 8443}
 
 TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
@@ -68,32 +75,50 @@ def _probe_web(ip: str, ports: List[int], timeout: float) -> List[Dict]:
                 continue
             url = "%s://%s:%d/" % (scheme, ip, port)
             try:
-                r = requests.get(url, timeout=timeout, verify=False, allow_redirects=True,
-                                 headers={"User-Agent": UA})  # nosec B501 - target TLS is out of our control
+                r = requests.get(
+                    url,
+                    timeout=timeout,
+                    verify=False,
+                    allow_redirects=True,
+                    headers={"User-Agent": UA},
+                )  # nosec B501 - target TLS is out of our control
                 body = r.text[:200000]
                 tm = TITLE_RE.search(body)
                 gm = GEN_RE.search(body)
-                out.append({
-                    "url": url,
-                    "status": r.status_code,
-                    "server": r.headers.get("Server", ""),
-                    "title": (tm.group(1).strip()[:80] if tm else ""),
-                    "generator": (gm.group(1).strip()[:60] if gm else ""),
-                    "has_login": bool(PW_RE.search(body) or LOGIN_RE.search(body)),
-                    "final_url": r.url[:100],
-                })
+                out.append(
+                    {
+                        "url": url,
+                        "status": r.status_code,
+                        "server": r.headers.get("Server", ""),
+                        "title": (tm.group(1).strip()[:80] if tm else ""),
+                        "generator": (gm.group(1).strip()[:60] if gm else ""),
+                        "has_login": bool(PW_RE.search(body) or LOGIN_RE.search(body)),
+                        "final_url": r.url[:100],
+                    }
+                )
             except Exception:
                 continue
     return out
 
 
-def run(hosts_file: str, ports: str = DEFAULT_PORTS, threads: int = 100,
-        timeout: float = 3.0, unauth: bool = False) -> Dict:
+def run(
+    hosts_file: str,
+    ports: str = DEFAULT_PORTS,
+    threads: int = 100,
+    timeout: float = 3.0,
+    unauth: bool = False,
+) -> Dict:
     """Batch asset discovery over a hosts file."""
     hosts = _parse_hosts(hosts_file)
     port_list = [int(p) for p in (ports or DEFAULT_PORTS).split(",") if p.strip().isdigit()]
-    report = {"targets": len(hosts), "alive": [], "web": [], "high_priority": [],
-              "honeypots": [], "unauth": []}
+    report = {
+        "targets": len(hosts),
+        "alive": [],
+        "web": [],
+        "high_priority": [],
+        "honeypots": [],
+        "unauth": [],
+    }
 
     results = []
 
@@ -116,12 +141,14 @@ def run(hosts_file: str, ports: str = DEFAULT_PORTS, threads: int = 100,
         db = [DB_PORTS[p] for p in r["open_ports"] if p in DB_PORTS]
         interesting_web = any(w["has_login"] for w in r["web"])
         if db or interesting_web:
-            report["high_priority"].append({
-                "ip": r["ip"],
-                "open_ports": r["open_ports"],
-                "db_services": db,
-                "has_login_web": interesting_web,
-            })
+            report["high_priority"].append(
+                {
+                    "ip": r["ip"],
+                    "open_ports": r["open_ports"],
+                    "db_services": db,
+                    "has_login_web": interesting_web,
+                }
+            )
 
     if unauth:
         db_hosts = []
