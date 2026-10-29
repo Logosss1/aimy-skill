@@ -11,6 +11,7 @@
     <i>Next-generation AI-native penetration testing toolkit</i>
   </p>
 <p><strong>维护状态：持续维护中</strong></p>
+项目可以继续更新了，兄弟们
 
 <p>当前版本 v3.7.5：已补齐 wheel 资源打包、离线测试、CI 质量门禁、SARIF/Markdown 报告与 <code>--json</code> 机器可读输出。欢迎提交 Issue / PR。</p>
 <div align="center">
