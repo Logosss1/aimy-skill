@@ -1,6 +1,31 @@
 # aimy-skill 命令实战参考（按 SRC 场景分类）
 
-> 所有命令输出 JSON，AI Agent 可直接解析。全局参数：--timeout --delay --session-file --mode。
+> 所有命令输出 JSON，AI Agent 可直接解析。全局参数：--timeout --delay --session-file --mode
+> --json（stdout 纯 JSON，进度走 stderr）--quiet（静默进度）。
+>
+> Claude / Agent 先执行 `python main.py --json manifest` 获取命令、参数、必填项与 choices。
+
+## 〇、弱口令字典（授权测试专用）
+
+    # 内置字典统计
+    python main.py --json wordgen --list-bundled
+
+    # 导出内置口令字典（top_users / top_passwords / top_passwords_cn）
+    python main.py --json wordgen --bundled top_passwords,top_passwords_cn --out pw.txt
+
+    # 按目标信息生成定制字典（大小写 + leet + 数字/年份后缀 + 短符号）
+    python main.py --json wordgen --keywords acme,alibaba --years 2024 --years 2025 \
+        --max-suffix 99 --domains corp.com --out target.txt
+
+    # 合并多个字典去重
+    python main.py --json wordgen --merge a.txt,b.txt --out merged.txt
+
+    # 配合 hydra 爆破（kali 已配置时）
+    python main.py kali hydra http-post-form ... -l admin -P target.txt
+
+    # 配合 john / hashcat 的规则文件
+    john --wordlist=wordlists/top_passwords.txt --rules=aimy hashes.txt
+    hashcat -a 0 -m 0 hashes.txt wordlists/top_passwords.txt -r wordlists/hashcat_common.rule
 
 ## 一、认证与会话（SRC 第一步）
 

@@ -11,7 +11,9 @@
 评分: TP / FP / FN / TN 四象限 + 按漏洞类召回率 + precision/recall/F1 + 耗时。
 产出: reports/bench_<profile>_<ts>.json / .md
 """
+
 import argparse
+import concurrent.futures
 import json
 import os
 import sys
@@ -41,8 +43,14 @@ DETECTORS = {
     "nosqli": nosqli_detector.check,
 }
 
-BENIGN_VALUE = {"sqli": "1", "xss": "hello", "cmdi": "127.0.0.1",
-                "lfi": "include.php", "ssti": "world", "nosqli": "1"}
+BENIGN_VALUE = {
+    "sqli": "1",
+    "xss": "hello",
+    "cmdi": "127.0.0.1",
+    "lfi": "include.php",
+    "ssti": "world",
+    "nosqli": "1",
+}
 
 
 def build_request(case, base_url):
@@ -77,6 +85,18 @@ def run_case(case, sess, timeout):
         return False, "", "%s: %s" % (type(e).__name__, str(e)[:80])
 
 
+def run_case_bounded(case, sess, timeout, deadline):
+    """Run one case with a hard wall-clock deadline (detectors can be slow)."""
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(run_case, case, sess, timeout)
+    try:
+        return future.result(timeout=deadline)
+    except concurrent.futures.TimeoutError:
+        return False, "", "case deadline exceeded (%ss)" % deadline
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def verdict(detected, expected):
     if detected and expected:
         return "TP"
@@ -99,36 +119,65 @@ def metrics(results):
     for r in results:
         c = by_class.setdefault(r["vuln_class"], {"tp": 0, "fp": 0, "fn": 0, "tn": 0})
         c[r["verdict"].lower()] += 1
-    return {"tp": len(tps), "fp": len(fps), "fn": len(fns), "tn": len(tns),
-            "precision": round(precision, 3), "recall": round(recall, 3),
-            "f1": round(f1, 3), "by_class": by_class}
+    return {
+        "tp": len(tps),
+        "fp": len(fps),
+        "fn": len(fns),
+        "tn": len(tns),
+        "precision": round(precision, 3),
+        "recall": round(recall, 3),
+        "f1": round(f1, 3),
+        "by_class": by_class,
+    }
 
 
 def render_markdown(profile, results, m, skipped):
-    lines = ["# aimy-skill 基准验收报告 (profile: %s)" % profile, "",
-             "| 指标 | 值 |", "|---|---|",
-             "| TP | %d |" % m["tp"],
-             "| FP | %d |" % m["fp"],
-             "| FN | %d |" % m["fn"],
-             "| TN | %d |" % m["tn"],
-             "| Precision (精确率) | %.1f%% |" % (100 * m["precision"]),
-             "| Recall (检出率) | %.1f%% |" % (100 * m["recall"]),
-             "| F1 | %.3f |" % m["f1"], "",
-             "## 按漏洞类", "", "| 漏洞类 | TP | FP | FN | TN |", "|---|---|---|---|---|"]
+    lines = [
+        "# aimy-skill 基准验收报告 (profile: %s)" % profile,
+        "",
+        "| 指标 | 值 |",
+        "|---|---|",
+        "| TP | %d |" % m["tp"],
+        "| FP | %d |" % m["fp"],
+        "| FN | %d |" % m["fn"],
+        "| TN | %d |" % m["tn"],
+        "| Precision (精确率) | %.1f%% |" % (100 * m["precision"]),
+        "| Recall (检出率) | %.1f%% |" % (100 * m["recall"]),
+        "| F1 | %.3f |" % m["f1"],
+        "",
+        "## 按漏洞类",
+        "",
+        "| 漏洞类 | TP | FP | FN | TN |",
+        "|---|---|---|---|---|",
+    ]
     for cls, c in sorted(m["by_class"].items()):
         lines.append("| %s | %d | %d | %d | %d |" % (cls, c["tp"], c["fp"], c["fn"], c["tn"]))
-    lines += ["", "## 用例明细", "",
-              "| 判定 | 用例 | 级别 | 漏洞类 | 期望 | 检出 | 类型 | 耗时s | 备注 |",
-              "|---|---|---|---|---|---|---|---|---|"]
+    lines += [
+        "",
+        "## 用例明细",
+        "",
+        "| 判定 | 用例 | 级别 | 漏洞类 | 期望 | 检出 | 类型 | 耗时s | 备注 |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
     mark = {"TP": "✅", "TN": "✅", "FP": "❌", "FN": "❌"}
     for r in results:
-        lines.append("| %s%s | %s | %s | %s | %s | %s | %s | %.1f | %s |" % (
-            mark[r["verdict"]], r["verdict"], r["name"], r["level"],
-            r["vuln_class"], r["expected"], r["detected"],
-            r["type"] or "-", r["time_s"], (r["error"] or r.get("note", "") or "-")[:60]))
+        lines.append(
+            "| %s%s | %s | %s | %s | %s | %s | %s | %.1f | %s |"
+            % (
+                mark[r["verdict"]],
+                r["verdict"],
+                r["name"],
+                r["level"],
+                r["vuln_class"],
+                r["expected"],
+                r["detected"],
+                r["type"] or "-",
+                r["time_s"],
+                (r["error"] or r.get("note", "") or "-")[:60],
+            )
+        )
     if skipped:
-        lines += ["", "## 跳过用例 (契约外)", "",
-                  "| 用例 | 级别 | 原因 |", "|---|---|---|"]
+        lines += ["", "## 跳过用例 (契约外)", "", "| 用例 | 级别 | 原因 |", "|---|---|---|"]
         for s in skipped:
             lines.append("| %s | %s | %s |" % (s["name"], s["level"], s.get("skip_reason", "-")))
     return "\n".join(lines) + "\n"
@@ -140,9 +189,17 @@ def main():
     ap.add_argument("--base-url", default=None, help="覆盖清单中的 base_url")
     ap.add_argument("--levels", default="low,medium,high", help="DVWA 要跑的安全级别")
     ap.add_argument("--timeout", type=float, default=10.0)
+    ap.add_argument(
+        "--case-timeout",
+        type=float,
+        default=120.0,
+        help="单用例硬超时（秒），防止某个 detector 拖垮整轮基准",
+    )
     ap.add_argument("--out", default="reports")
     ap.add_argument("--user", default="admin")
     ap.add_argument("--password", default="password")
+    ap.add_argument("--only", default="", help="只跑指定用例名，逗号分隔")
+    ap.add_argument("--limit", type=int, default=0, help="最多跑 N 个用例（0=全部）")
     ap.add_argument("--fail-on-fp", action="store_true", help="存在 FP 时退出码为 1")
     args = ap.parse_args()
 
@@ -152,17 +209,25 @@ def main():
     base_url = (args.base_url or prof["base_url"]).rstrip("/")
     cases = [c for c in prof["cases"] if not c.get("status")]
     skipped = [c for c in prof["cases"] if c.get("status")]
+    if args.only:
+        wanted = {name.strip() for name in args.only.split(",") if name.strip()}
+        cases = [c for c in cases if c.get("name") in wanted]
+    if args.limit > 0:
+        cases = cases[: args.limit]
 
     # ---- 会话准备 ----
     dvwa = None
     if prof.get("requires_login"):
         from bench.dvwa_client import connect
+
         print("[*] DVWA 连接: %s (user=%s)" % (base_url, args.user))
         dvwa = connect(base_url, args.user, args.password)
         print("[*] 登录成功")
+        dvwa.sess.trust_env = False  # lab/DVWA is local; ignore system proxies
         plain_sess = None
     else:
         plain_sess = make_session()
+        plain_sess.trust_env = False
 
     want_levels = [l.strip() for l in args.levels.split(",") if l.strip()]
 
@@ -186,37 +251,62 @@ def main():
         for case in level_cases:
             case["_base_url"] = base_url
             t0 = time.time()
-            detected, vtype, err = run_case(case, sess, args.timeout)
+            detected, vtype, err = run_case_bounded(case, sess, args.timeout, args.case_timeout)
             elapsed = round(time.time() - t0, 1)
             v = verdict(detected, case["expected"])
-            results.append({
-                "name": case["name"], "level": case.get("level", "any"),
-                "vuln_class": case["vuln_class"], "expected": case["expected"],
-                "detected": detected, "type": vtype, "verdict": v,
-                "time_s": elapsed, "error": err, "note": case.get("note", ""),
-            })
+            results.append(
+                {
+                    "name": case["name"],
+                    "level": case.get("level", "any"),
+                    "vuln_class": case["vuln_class"],
+                    "expected": case["expected"],
+                    "detected": detected,
+                    "type": vtype,
+                    "verdict": v,
+                    "time_s": elapsed,
+                    "error": err,
+                    "note": case.get("note", ""),
+                }
+            )
             tag = {"TP": "OK  ", "TN": "OK  ", "FP": "!!FP", "FN": "MISS"}[v]
-            print("  [%s] %-20s lvl=%-6s %-6s exp=%-5s got=%-5s type=%-14s %.1fs%s" % (
-                tag, case["name"], case.get("level", "any"), case["vuln_class"],
-                case["expected"], detected, vtype or "-", elapsed,
-                ("  " + err) if err else ""))
+            print(
+                "  [%s] %-20s lvl=%-6s %-6s exp=%-5s got=%-5s type=%-14s %.1fs%s"
+                % (
+                    tag,
+                    case["name"],
+                    case.get("level", "any"),
+                    case["vuln_class"],
+                    case["expected"],
+                    detected,
+                    vtype or "-",
+                    elapsed,
+                    ("  " + err) if err else "",
+                ),
+                flush=True,
+            )
 
     # ---- 汇总 ----
     m = metrics(results)
     print("=" * 84)
     print("  TP=%d  FP=%d  FN=%d  TN=%d" % (m["tp"], m["fp"], m["fn"], m["tn"]))
-    print("  Precision=%.1f%%  Recall(检出率)=%.1f%%  F1=%.3f" % (
-        100 * m["precision"], 100 * m["recall"], m["f1"]))
+    print(
+        "  Precision=%.1f%%  Recall(检出率)=%.1f%%  F1=%.3f"
+        % (100 * m["precision"], 100 * m["recall"], m["f1"])
+    )
     for cls, c in sorted(m["by_class"].items()):
-        print("    %-8s recall=%s  fp=%d" % (
-            cls, "%d/%d" % (c["tp"], c["tp"] + c["fn"]), c["fp"]))
+        print("    %-8s recall=%s  fp=%d" % (cls, "%d/%d" % (c["tp"], c["tp"] + c["fn"]), c["fp"]))
     print("=" * 84)
 
     os.makedirs(args.out, exist_ok=True)
     ts = time.strftime("%Y%m%d_%H%M%S")
-    payload = {"profile": args.profile, "base_url": base_url,
-               "timestamp": ts, "metrics": m, "results": results,
-               "skipped": skipped}
+    payload = {
+        "profile": args.profile,
+        "base_url": base_url,
+        "timestamp": ts,
+        "metrics": m,
+        "results": results,
+        "skipped": skipped,
+    }
     jpath = os.path.join(args.out, "bench_%s_%s.json" % (args.profile, ts))
     mpath = os.path.join(args.out, "bench_%s_%s.md" % (args.profile, ts))
     with open(jpath, "w", encoding="utf-8") as f:

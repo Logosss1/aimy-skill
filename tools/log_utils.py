@@ -4,11 +4,11 @@ import time
 from functools import wraps
 from typing import Any, Callable, Optional
 
-import urllib3
-
 from tools.settings import settings
 
 if os.environ.get("AIMY_DISABLE_SSL_WARNING", "").lower() in ("1", "true", "yes"):
+    import urllib3
+
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(
@@ -30,6 +30,7 @@ def set_log_level(level: str) -> None:
 
 def timed(logger: logging.Logger, operation: Optional[str] = None) -> Callable:
     """装饰器：记录函数执行耗时 (DEBUG 级别)。"""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -40,12 +41,15 @@ def timed(logger: logging.Logger, operation: Optional[str] = None) -> Callable:
                 elapsed = time.perf_counter() - start
                 name = operation or f"{func.__module__}.{func.__name__}"
                 logger.debug("%s took %.3fs", name, elapsed)
+
         return wrapper
+
     return decorator
 
 
 def timed_async(logger: logging.Logger, operation: Optional[str] = None) -> Callable:
     """装饰器：记录异步函数执行耗时 (DEBUG 级别)。"""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -56,12 +60,15 @@ def timed_async(logger: logging.Logger, operation: Optional[str] = None) -> Call
                 elapsed = time.perf_counter() - start
                 name = operation or f"{func.__module__}.{func.__name__}"
                 logger.debug("%s took %.3fs", name, elapsed)
+
         return wrapper
+
     return decorator
 
 
 def mode_echo(mode: str, msg: str, rookie_msg: str = None):
     from tools.settings import settings
+
     prefix = "[Rookie]" if settings.is_rookie() else "[Veteran]"
     if settings.is_veteran() and rookie_msg:
         return
@@ -91,6 +98,7 @@ def classify_error(error: Exception) -> str:
 def safe_try(func: Callable, default: Any = None, log: bool = True) -> Any:
     """安全执行封装：捕获异常，记录错误并返回默认值。"""
     import traceback
+
     try:
         return func()
     except Exception as e:
@@ -118,15 +126,14 @@ def handle_errors(
             except Exception as e:
                 error_type = classify_error(e)
                 elapsed = time.perf_counter() - start
-                log_msg = (
-                    f"[{operation}] error: {e} "
-                    f"(type: {error_type}, elapsed: {elapsed:.2f}s)"
-                )
+                log_msg = f"[{operation}] error: {e} (type: {error_type}, elapsed: {elapsed:.2f}s)"
                 if task_id:
                     log_msg += f" [task_id: {task_id}]"
                 if session_id:
                     log_msg += f" [session_id: {session_id}]"
                 logger.error(log_msg)
                 raise
+
         return wrapper
+
     return decorator

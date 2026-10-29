@@ -29,11 +29,7 @@ class DiffSignals:
         """基线存在且出现长度/内容/状态的相对偏差。"""
         if not self.baseline_present:
             return False
-        return (
-            abs(self.length_ratio) >= 0.03
-            or self.body_changed
-            or abs(self.status_delta) != 0
-        )
+        return abs(self.length_ratio) >= 0.03 or self.body_changed or abs(self.status_delta) != 0
 
 
 class ResponseDiffer:
@@ -57,9 +53,7 @@ class ResponseDiffer:
             sig.latency_ratio = elapsed / baseline.elapsed
         sig.elapsed = elapsed
         base_text = getattr(baseline, "text", None)
-        sig.content_similarity = (
-            self._similarity(resp.text, base_text) if base_text else 1.0
-        )
+        sig.content_similarity = self._similarity(resp.text, base_text) if base_text else 1.0
         return sig
 
     def differential_weight(self, sig: DiffSignals) -> float:
@@ -90,7 +84,7 @@ class ResponseDiffer:
     def _hash(text: str) -> str:
         import hashlib
 
-        return hashlib.md5(text.encode()).hexdigest()[:16]
+        return hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:16]
 
     @staticmethod
     def _similarity(a: str, b: str) -> float:

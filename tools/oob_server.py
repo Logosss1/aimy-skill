@@ -1,6 +1,7 @@
 import http.server
 import random
 import re
+import secrets
 import socket
 import string
 import struct
@@ -8,6 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 from tools.log_utils import get_logger
 
@@ -38,6 +40,9 @@ class OOBServer:
         self._running = False
         self._callbacks: Dict[str, List[CallbackRecord]] = {}
         self._cb_lock = threading.Lock()
+        # Unguessable per-process token: a third party that can reach the
+        # listener cannot inject fake callbacks without it.
+        self._secret = secrets.token_urlsafe(12)
 
     @classmethod
     def get_instance(cls, host: str = "127.0.0.1", port: int = 0):
@@ -51,16 +56,12 @@ class OOBServer:
         if self._running:
             return True
         try:
-            self._httpd = http.server.HTTPServer(
-                (self.host, self.port), self._make_handler(self)
-            )
+            self._httpd = http.server.HTTPServer((self.host, self.port), self._make_handler(self))
             self.port = self._httpd.server_address[1]
-            self._thread = threading.Thread(
-                target=self._httpd.serve_forever, daemon=True
-            )
+            self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
             self._thread.start()
             self._running = True
-            logger.info("OOB HTTP listener on 0.0.0.0:%d", self.port)
+            logger.info("OOB HTTP listener on %s:%d", self.host, self.port)
             return True
         except OSError as e:
             logger.warning("OOB HTTP bind failed: %s", e)
@@ -127,9 +128,7 @@ class OOBServer:
                 pos += 1
                 if pos + length > len(data):
                     return None
-                labels.append(
-                    data[pos : pos + length].decode("ascii", errors="replace")
-                )
+                labels.append(data[pos : pos + length].decode("ascii", errors="replace"))
                 pos += length
             return ".".join(labels)
         except Exception:
@@ -148,7 +147,12 @@ class OOBServer:
         public_base = self._public_callback_url()
         if public_base:
             return "%s/cb/%s" % (public_base.rstrip("/"), cb_id)
-        return "http://%s:%s/cb/%s" % (self._get_lan_ip(), self.port, cb_id)
+        return "http://%s:%s/cb/%s?k=%s" % (
+            self._get_lan_ip(),
+            self.port,
+            cb_id,
+            self._secret,
+        )
 
     def get_callback_domain(self, cb_id: str) -> str:
         public_domain = self._public_domain()
@@ -161,6 +165,7 @@ class OOBServer:
     def _public_callback_url() -> Optional[str]:
         try:
             from tools.settings import settings
+
             return (settings.oob_callback_url or "").strip() or None
         except Exception:
             return None
@@ -169,6 +174,7 @@ class OOBServer:
     def _public_domain() -> Optional[str]:
         try:
             from tools.settings import settings
+
             return (settings.oob_domain or "").strip() or None
         except Exception:
             return None
@@ -206,8 +212,10 @@ class OOBServer:
     def _make_handler(server):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                match = re.match(r"^/cb/([\w-]+)", self.path)
-                if match:
+                parsed = urlparse(self.path)
+                match = re.match(r"^/cb/([\w-]+)", parsed.path)
+                token = parse_qs(parsed.query).get("k", [""])[0]
+                if match and secrets.compare_digest(token, server._secret):
                     cb_id = match.group(1)
                     rec = CallbackRecord(
                         path=self.path,
@@ -217,9 +225,12 @@ class OOBServer:
                     )
                     with server._cb_lock:
                         server._callbacks.setdefault(cb_id, []).append(rec)
-                self.send_response(200)
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"ok")
+                    return
+                self.send_response(404)
                 self.end_headers()
-                self.wfile.write(b"ok")
 
             def log_message(self, *a):
                 pass

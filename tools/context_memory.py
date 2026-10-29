@@ -10,6 +10,7 @@ Remembers discovered information and reuses it across detection modules:
 
 Memory is session-scoped and thread-safe.
 """
+
 import threading
 import time
 from collections import defaultdict
@@ -88,6 +89,20 @@ class ContextMemory:
         self._learnt_rules: Dict[str, List[Dict]] = defaultdict(list)
         self._storage = None
         self._auto_save = True
+        self._run_target = None
+
+    def begin_run(self, target: str) -> None:
+        """Clear stale context when a new target starts in the same process.
+
+        A full per-target namespace is the long-term fix; this prevents the
+        common CLI/library case where target B inherits target A's DBMS/WAF
+        fingerprints. Resume flows must skip this call.
+        """
+        with self._lock:
+            if self._run_target != target:
+                self._store.clear()
+                self._history.clear()
+                self._run_target = target
 
     def set_storage(self, storage, auto_save: bool = True):
         self._storage = storage
@@ -110,33 +125,58 @@ class ContextMemory:
                     continue
                 self._store[key] = entry
 
-    def set(self, key: str, value: Any, source: str = "unknown",
-            confidence: float = 0.80, ttl: float = 3600.0,
-            tags: Optional[List[str]] = None) -> None:
+    def set(
+        self,
+        key: str,
+        value: Any,
+        source: str = "unknown",
+        confidence: float = 0.80,
+        ttl: float = 3600.0,
+        tags: Optional[List[str]] = None,
+    ) -> None:
         with self._lock:
             entry = MemoryEntry(
-                key=key, value=value, source=source,
-                confidence=confidence, timestamp=time.time(),
-                ttl=ttl, tags=tags or [],
+                key=key,
+                value=value,
+                source=source,
+                confidence=confidence,
+                timestamp=time.time(),
+                ttl=ttl,
+                tags=tags or [],
             )
             existing = self._store.get(key)
             if existing and existing.confidence > confidence:
-                logger.debug("Memory: keeping higher confidence for %s (%.2f > %.2f)",
-                           key, existing.confidence, confidence)
+                logger.debug(
+                    "Memory: keeping higher confidence for %s (%.2f > %.2f)",
+                    key,
+                    existing.confidence,
+                    confidence,
+                )
                 return
             self._store[key] = entry
-            self._history.append({
-                "action": "set", "key": key, "source": source,
-                "confidence": confidence, "time": time.time(),
-            })
+            self._history.append(
+                {
+                    "action": "set",
+                    "key": key,
+                    "source": source,
+                    "confidence": confidence,
+                    "time": time.time(),
+                }
+            )
             self._auto_learn(key, value, source, confidence)
             if self._storage and self._auto_save:
                 try:
-                    tags = entry.tags if hasattr(entry, 'tags') else None
+                    tags = entry.tags if hasattr(entry, "tags") else None
                     self._storage.save_context(key, value, source, confidence, tags)
                 except Exception as e:
                     logger.debug("storage save: %s", e)
-            logger.debug("Memory: set %s = %s (source=%s, conf=%.2f)", key, str(value)[:80], source, confidence)
+            logger.debug(
+                "Memory: set %s = %s (source=%s, conf=%.2f)",
+                key,
+                str(value)[:80],
+                source,
+                confidence,
+            )
 
     def get(self, key: str, default: Any = None) -> Any:
         with self._lock:
@@ -181,10 +221,7 @@ class ContextMemory:
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
-            return {
-                k: v.to_dict() for k, v in self._store.items()
-                if not v.is_expired()
-            }
+            return {k: v.to_dict() for k, v in self._store.items() if not v.is_expired()}
 
     def get_suggestions(self, module_type: str) -> Dict[str, Any]:
         with self._lock:
@@ -262,25 +299,37 @@ class ContextMemory:
 
     def _auto_learn(self, key: str, value: Any, source: str, confidence: float) -> None:
         if key == "dbms" and isinstance(value, str):
-            self._learnt_rules["sqli_dialect"].append({
-                "trigger": value, "action": "use_dialect",
-                "dialect": self._dbms_to_dialect(value),
-            })
+            self._learnt_rules["sqli_dialect"].append(
+                {
+                    "trigger": value,
+                    "action": "use_dialect",
+                    "dialect": self._dbms_to_dialect(value),
+                }
+            )
         elif key == "framework" and isinstance(value, str):
-            self._learnt_rules["ssti_engine"].append({
-                "trigger": value, "action": "use_engine",
-                "engine": self._framework_to_engine(value),
-            })
+            self._learnt_rules["ssti_engine"].append(
+                {
+                    "trigger": value,
+                    "action": "use_engine",
+                    "engine": self._framework_to_engine(value),
+                }
+            )
         elif key == "waf" and isinstance(value, str):
-            self._learnt_rules["waf_bypass"].append({
-                "trigger": value, "action": "use_strategy",
-                "strategy": self._waf_to_strategy(value),
-            })
+            self._learnt_rules["waf_bypass"].append(
+                {
+                    "trigger": value,
+                    "action": "use_strategy",
+                    "strategy": self._waf_to_strategy(value),
+                }
+            )
         elif key == "os_type":
-            self._learnt_rules["os_specific"].append({
-                "trigger": value, "action": "use_os_payloads",
-                "os": value,
-            })
+            self._learnt_rules["os_specific"].append(
+                {
+                    "trigger": value,
+                    "action": "use_os_payloads",
+                    "os": value,
+                }
+            )
 
     def _dbms_to_dialect(self, dbms: str) -> str:
         dbms_lower = dbms.lower()
@@ -380,9 +429,7 @@ class ContextMemory:
                 "active_entries": len([v for v in self._store.values() if not v.is_expired()]),
                 "expired_entries": len([v for v in self._store.values() if v.is_expired()]),
                 "history_size": len(self._history),
-                "learnt_rules": {
-                    k: len(v) for k, v in self._learnt_rules.items()
-                },
+                "learnt_rules": {k: len(v) for k, v in self._learnt_rules.items()},
                 "keys": self.all_keys(),
             }
 

@@ -8,8 +8,8 @@ Plesk/FileBrowser/Nextcloud/WordPress/phpMyAdmin。
     r = fingerprint("http://target/")
     # -> {cms, version, confidence, matched_vulns[], signals{}}
 """
+
 import json
-import os
 import re
 from typing import Dict, List, Optional
 
@@ -20,7 +20,6 @@ from tools.log_utils import get_logger
 
 logger = get_logger("cms_fingerprint")
 
-_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "cms_vulns.json")
 _DB = None
 
 
@@ -28,8 +27,9 @@ def _load_db() -> Dict:
     global _DB
     if _DB is None:
         try:
-            with open(_DB_PATH, encoding="utf-8") as f:
-                _DB = json.load(f)
+            from tools.resources import read_text
+
+            _DB = json.loads(read_text("data", "cms_vulns.json"))
         except Exception:
             _DB = {}
     return _DB
@@ -47,7 +47,10 @@ _PRODUCTS: List[Dict] = [
         "body_regex": re.compile(r"SPIP[^0-9]*([0-9.]+)", re.I),
         "version_regex": r"SPIP[^0-9]*([0-9.]+)",
         "vulns": [
-            {"cve": "CVE-2023-27372", "title": "SPIP RCE (未授权, /spip.php _oups/filtre), <4.2.9/4.1.12/3.2.18 受影响"},
+            {
+                "cve": "CVE-2023-27372",
+                "title": "SPIP RCE (未授权, /spip.php _oups/filtre), <4.2.9/4.1.12/3.2.18 受影响",
+            },
             {"cve": "CVE-2019-19831", "title": "SPIP 反序列化 RCE (未授权)"},
         ],
     },
@@ -57,7 +60,10 @@ _PRODUCTS: List[Dict] = [
         "body_regex": re.compile(r"Cal\.com|Login \| Cal", re.I),
         "version_regex": r"",
         "vulns": [
-            {"cve": "N/A", "title": "Cal.com 开源预约系统: 检查 SSRF/邮件炸弹/越权 API (版本化攻击面)"},
+            {
+                "cve": "N/A",
+                "title": "Cal.com 开源预约系统: 检查 SSRF/邮件炸弹/越权 API (版本化攻击面)",
+            },
         ],
     },
     {
@@ -184,8 +190,12 @@ def _probe_product(base: str, product: Dict, sess, timeout: float) -> Optional[D
         if m:
             version = m.group(1)
     confidence = 0.9 if version else 0.6
-    return {"name": product["name"], "version": version,
-            "confidence": confidence, "signals": signals}
+    return {
+        "name": product["name"],
+        "version": version,
+        "confidence": confidence,
+        "signals": signals,
+    }
 
 
 # 74cms 专项 (兼容历史逻辑)
@@ -208,19 +218,28 @@ def _detect_74cms(base: str, sess, timeout: float) -> Optional[Dict]:
         signals[path] = None if r is None else r.status_code
     version = ""
     confidence = 0.0
-    if signals.get("/plus/ajax_user.php") == 200 and not signals.get("/index/safe/index.html") == 200:
+    if (
+        signals.get("/plus/ajax_user.php") == 200
+        and not signals.get("/index/safe/index.html") == 200
+    ):
         version, confidence = "v3.x", 0.8
     elif signals.get("/index/safe/index.html") == 200:
         version, confidence = "v5.x", 0.8
-    elif signals.get("/Application/Common/Conf/") in (200, 403) or \
-            signals.get("/Application/") in (200, 403):
+    elif signals.get("/Application/Common/Conf/") in (200, 403) or signals.get("/Application/") in (
+        200,
+        403,
+    ):
         version, confidence = "v4/v5", 0.6
     elif signals.get("/data/config.php") in (200, 403):
         version, confidence = "v4.x", 0.6
     if not confidence:
         return None
-    return {"name": "74cms", "version": version, "confidence": confidence,
-            "signals": {p: s for p, s in signals.items() if s is not None}}
+    return {
+        "name": "74cms",
+        "version": version,
+        "confidence": confidence,
+        "signals": {p: s for p, s in signals.items() if s is not None},
+    }
 
 
 def _match_vulns(name: str, version: str) -> List[Dict]:
@@ -240,26 +259,32 @@ def _match_vulns(name: str, version: str) -> List[Dict]:
     return []
 
 
-def fingerprint(url: str, sess: Optional[requests.Session] = None,
-                timeout: float = 8.0) -> Dict:
+def fingerprint(url: str, sess: Optional[requests.Session] = None, timeout: float = 8.0) -> Dict:
     """无损探测产品/版本 + 匹配已知漏洞。"""
     sess = sess or make_session()
     base = url.rstrip("/")
-    result = {"cms": "", "version": "", "confidence": 0.0,
-              "matched_vulns": [], "signals": {}}
+    result = {"cms": "", "version": "", "confidence": 0.0, "matched_vulns": [], "signals": {}}
 
     for product in _PRODUCTS:
         hit = _probe_product(base, product, sess, timeout)
         if hit:
-            result.update(cms=hit["name"], version=hit["version"],
-                          confidence=hit["confidence"], signals=hit["signals"])
+            result.update(
+                cms=hit["name"],
+                version=hit["version"],
+                confidence=hit["confidence"],
+                signals=hit["signals"],
+            )
             result["matched_vulns"] = _match_vulns(hit["name"], hit["version"])
             return result
 
     hit = _detect_74cms(base, sess, timeout)
     if hit:
-        result.update(cms=hit["name"], version=hit["version"],
-                      confidence=hit["confidence"], signals=hit["signals"])
+        result.update(
+            cms=hit["name"],
+            version=hit["version"],
+            confidence=hit["confidence"],
+            signals=hit["signals"],
+        )
         result["matched_vulns"] = _match_vulns(hit["name"], hit["version"])
 
     return result
@@ -268,6 +293,7 @@ def fingerprint(url: str, sess: Optional[requests.Session] = None,
 def check_batch(urls: List[str], timeout: float = 8.0, max_workers: int = 10) -> List[Dict]:
     """批量指纹。"""
     import concurrent.futures
+
     sess_pool = [make_session() for _ in range(max_workers)]
     results = []
 

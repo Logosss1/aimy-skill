@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from tools.log_utils import get_logger
+from tools.version import __version__
 
 logger = get_logger("reporter")
 
@@ -26,20 +27,29 @@ class SafeJSONEncoder(json.JSONEncoder):
 def to_json(data: Any, indent: int = 2) -> str:
     return json.dumps(data, cls=SafeJSONEncoder, indent=indent, ensure_ascii=False, default=str)
 
+
 USE_COLOR = os.environ.get("NO_COLOR") is None and os.environ.get("TERM") != "dumb"
 
 
 def _color(code: str, text: str) -> str:
     if not USE_COLOR:
         return text
-    colors = {"red": "\033[91m", "green": "\033[92m", "yellow": "\033[93m",
-              "blue": "\033[94m", "magenta": "\033[95m", "cyan": "\033[96m",
-              "bold": "\033[1m", "dim": "\033[2m", "reset": "\033[0m"}
+    colors = {
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "magenta": "\033[95m",
+        "cyan": "\033[96m",
+        "bold": "\033[1m",
+        "dim": "\033[2m",
+        "reset": "\033[0m",
+    }
     return "%s%s%s" % (colors.get(code, ""), text, colors["reset"])
 
 
 def save_report(report: Dict[str, Any], directory: str = "reports") -> Dict:
-    """Persist a scan report as report.json + report.html. Returns file paths."""
+    """Persist a scan report as JSON/HTML/SARIF/Markdown. Returns file paths."""
     try:
         os.makedirs(directory, exist_ok=True)
         target = (report.get("target") or "target").split("//")[-1].replace("/", "_")[:40]
@@ -47,15 +57,149 @@ def save_report(report: Dict[str, Any], directory: str = "reports") -> Dict:
         base = "%s_%s" % (target, ts)
         json_path = os.path.join(directory, base + ".json")
         html_path = os.path.join(directory, base + ".html")
+        sarif_path = os.path.join(directory, base + ".sarif")
+        md_path = os.path.join(directory, base + ".md")
         with open(json_path, "w", encoding="utf-8") as f:
             f.write(to_json(report))
-        html = generate_html(report)
         with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
-        return {"json": json_path, "html": html_path}
+            f.write(generate_html(report))
+        with open(sarif_path, "w", encoding="utf-8") as f:
+            f.write(to_json(generate_sarif(report)))
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(generate_markdown(report))
+        return {
+            "json": json_path,
+            "html": html_path,
+            "sarif": sarif_path,
+            "markdown": md_path,
+        }
     except Exception as e:
-        logger.debug("save_report failed: %s", e)
+        logger.warning("save_report failed: %s", e, exc_info=True)
         return {}
+
+
+def _iter_findings(report: Dict[str, Any]):
+    details = report.get("details") or {}
+    if isinstance(details, dict):
+        for vtype, items in details.items():
+            if isinstance(items, list):
+                for item in items:
+                    yield vtype, item
+    elif isinstance(details, list):
+        for item in details:
+            yield item.get("type", "unknown"), item
+
+
+def _sarif_level(finding: Dict[str, Any]) -> str:
+    score = finding.get("confidence_score", finding.get("confidence", 0)) or 0
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        score = 0.0
+    if score >= 0.85:
+        return "error"
+    if score >= 0.6:
+        return "warning"
+    return "note"
+
+
+def generate_sarif(report: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a SARIF 2.1.0 document for CI/code-scanning integrations."""
+    rules: Dict[str, Dict[str, Any]] = {}
+    results = []
+    for vtype, finding in _iter_findings(report):
+        rule_id = "aimy/%s" % vtype
+        rules.setdefault(
+            rule_id,
+            {
+                "id": rule_id,
+                "name": vtype,
+                "shortDescription": {"text": "aimy-skill %s finding" % vtype},
+            },
+        )
+        url = finding.get("url", report.get("target", ""))
+        param = finding.get("param", "")
+        score = finding.get("confidence_score", finding.get("confidence", 0)) or 0
+        results.append(
+            {
+                "ruleId": rule_id,
+                "level": _sarif_level(finding),
+                "message": {
+                    "text": "%s at %s%s (confidence=%s)"
+                    % (
+                        vtype,
+                        url,
+                        ("?" + param) if param else "",
+                        score,
+                    )
+                },
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": str(url)},
+                        }
+                    }
+                ],
+                "properties": {
+                    "param": param,
+                    "confidence": score,
+                    "evidence": finding.get("evidence", []),
+                },
+            }
+        )
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "aimy-skill",
+                        "version": __version__,
+                        "informationUri": "https://github.com/Prohao42/aimy-skill",
+                        "rules": list(rules.values()),
+                    }
+                },
+                "results": results,
+            }
+        ],
+    }
+
+
+def generate_markdown(report: Dict[str, Any]) -> str:
+    """Render a compact Markdown report suitable for SRC/issues/wiki."""
+    summary = report.get("summary", {}) or {}
+    lines = [
+        "# aimy-skill 扫描报告",
+        "",
+        "- 目标: `%s`" % report.get("target", "N/A"),
+        "- 时间: %s" % report.get("timestamp", ""),
+        "- 耗时: %ss" % report.get("elapsed_seconds", 0),
+        "- 漏洞数: **%s**" % summary.get("vulnerabilities", 0),
+        "- 可利用路径: %s" % summary.get("exploit_ready", 0),
+        "- 是否 critical: %s" % summary.get("critical", False),
+        "",
+        "## 漏洞明细",
+        "",
+    ]
+    rows = list(_iter_findings(report))
+    if not rows:
+        lines.append("未发现已确认漏洞。")
+    for vtype, finding in rows:
+        lines.append("### %s" % vtype.upper())
+        lines.append("")
+        lines.append("- URL: `%s`" % finding.get("url", ""))
+        lines.append("- 参数: `%s`" % finding.get("param", ""))
+        lines.append(
+            "- 置信度: %s" % finding.get("confidence_score", finding.get("confidence", "N/A"))
+        )
+        evidence = finding.get("evidence", [])
+        if evidence:
+            lines.append("- 证据:")
+            for ev in evidence[:5]:
+                lines.append("  - `%s`" % str(ev)[:300])
+        lines.append("")
+    return "\n".join(lines)
 
 
 def print_summary(report: Dict[str, Any]) -> None:
@@ -111,6 +255,18 @@ def _html_escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _format_report_time(value: Any) -> str:
+    """Accept epoch numbers and ISO strings (phase_report stores a string)."""
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
+        except (OverflowError, OSError, ValueError):
+            pass
+    if isinstance(value, str) and value.strip():
+        return value
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def generate_html(report: Dict) -> str:
     s = report.get("summary", {})
     recon = report.get("recon", {})
@@ -124,11 +280,18 @@ def generate_html(report: Dict) -> str:
     vuln_rows = ""
     for vt, count in sorted(by_type.items(), key=lambda x: -x[1]):
         color = "#dc3545" if count >= 3 else "#ffc107"
-        vuln_rows += "<tr><td>%s</td><td style='color:%s;font-weight:bold'>%d</td></tr>\n" % (vt.upper(), color, count)
+        vuln_rows += "<tr><td>%s</td><td style='color:%s;font-weight:bold'>%d</td></tr>\n" % (
+            vt.upper(),
+            color,
+            count,
+        )
 
     exploit_str = ""
     if exploit_ready:
-        exploit_str = "<p><strong>Exploit-ready:</strong> <span style='color:#dc3545'>%d</span></p>" % exploit_ready
+        exploit_str = (
+            "<p><strong>Exploit-ready:</strong> <span style='color:#dc3545'>%d</span></p>"
+            % exploit_ready
+        )
         for detail in s.get("exploit_ready_details", []):
             exploit_str += "<p style='margin-left:20px'>&#8594; %s</p>" % _html_escape(str(detail))
 
@@ -137,7 +300,10 @@ def generate_html(report: Dict) -> str:
     if ai_hunt:
         brief = ai_hunt.get("brief", "")
         if brief:
-            findings_html += "<h3>AI Intelligence Brief</h3><pre style='background:#f8f9fa;padding:10px'>%s</pre>\n" % _html_escape(brief)
+            findings_html += (
+                "<h3>AI Intelligence Brief</h3><pre style='background:#f8f9fa;padding:10px'>%s</pre>\n"
+                % _html_escape(brief)
+            )
 
     details = report.get("details", {})
     for vt, finds in details.items():
@@ -146,19 +312,29 @@ def generate_html(report: Dict) -> str:
             url = _html_escape(f.get("url", ""))
             param = _html_escape(f.get("param", ""))
             conf = f.get("confidence_score", 0)
-            findings_html += "<li><a href='%s'>%s</a>?%s (conf=%.2f)</li>\n" % (url, url, param, conf)
+            findings_html += "<li><a href='%s'>%s</a>?%s (conf=%.2f)</li>\n" % (
+                url,
+                url,
+                param,
+                conf,
+            )
         findings_html += "</ul>\n"
 
     context_mem = report.get("context_memory", {})
     ctx_html = ""
     if context_mem:
-        ctx_html = "<h3>Context Memory</h3><pre>%s</pre>\n" % _html_escape(json.dumps(context_mem, indent=2))
+        ctx_html = "<h3>Context Memory</h3><pre>%s</pre>\n" % _html_escape(
+            json.dumps(context_mem, indent=2)
+        )
 
     graph_html = ""
     if report.get("attack_graph"):
         g = report["attack_graph"]
         graph_html = "<h3>Attack Graph</h3><p>Nodes: %d | Edges: %d | Goals: %d</p>\n" % (
-            g.get("total_nodes", 0), g.get("total_edges", 0), len(g.get("goals", [])))
+            g.get("total_nodes", 0),
+            g.get("total_edges", 0),
+            len(g.get("goals", [])),
+        )
 
     return """<!DOCTYPE html>
 <html lang="en">
@@ -202,14 +378,22 @@ a{color:#007bff}
 %s
 <div class="footer">Generated by aimy-skill at %s</div>
 </body></html>""" % (
-        target, target, elapsed,
-        datetime.fromtimestamp(report.get("timestamp", time.time())).strftime("%Y-%m-%d %H:%M:%S"),
-        recon.get("pages_crawled", 0), recon.get("endpoints", 0), recon.get("params_mined", 0),
+        target,
+        target,
+        elapsed,
+        _format_report_time(report.get("timestamp")),
+        recon.get("pages_crawled", 0),
+        recon.get("endpoints", 0),
+        recon.get("params_mined", 0),
         "critical" if critical else ("warning" if vulns > 0 else "ok"),
         vulns,
         ", ".join(recon.get("technologies", [])),
         ", ".join(str(p) for p in recon.get("open_ports", [])),
-        exploit_str, vuln_rows, findings_html, ctx_html, graph_html,
+        exploit_str,
+        vuln_rows,
+        findings_html,
+        ctx_html,
+        graph_html,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
@@ -217,7 +401,9 @@ a{color:#007bff}
 def generate_html_report(report: Dict, output_path: Optional[str] = None) -> str:
     html = generate_html(report)
     if not output_path:
-        output_path = "report_%s.html" % report.get("target", "unknown").replace("://", "_").replace("/", "_")
+        output_path = "report_%s.html" % report.get("target", "unknown").replace(
+            "://", "_"
+        ).replace("/", "_")
     output_path = os.path.abspath(output_path)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)

@@ -43,8 +43,15 @@ def _orch(target="http://target.test", **kw):
 class _Hyp:
     """Lightweight hypothesis stub with explicit attributes."""
 
-    def __init__(self, priority=0, confidence=0.8, vuln_type="sqli",
-                 evidence=None, suggested_chain="", detail=None):
+    def __init__(
+        self,
+        priority=0,
+        confidence=0.8,
+        vuln_type="sqli",
+        evidence=None,
+        suggested_chain="",
+        detail=None,
+    ):
         self.priority = priority
         self.confidence = confidence
         self.vuln_type = vuln_type
@@ -80,7 +87,12 @@ class TestInitVariants:
 
     def test_opsec_wraps_session(self):
         wrapped = MagicMock()
-        with patch("tools.opsec_session.opsec_session", return_value=wrapped) as m:
+        # ``tools.opsec_session`` is shadowed by the exported function of the
+        # same name, so resolve the real submodule via sys.modules first.
+        import importlib
+
+        module = importlib.import_module("tools.opsec_session")
+        with patch.object(module, "opsec_session", return_value=wrapped) as m:
             o = Orchestrator("http://target.test", sess=_sess(), opsec=True)
         m.assert_called_once()
         assert o.sess is wrapped
@@ -162,10 +174,12 @@ class TestBuildTestPoints:
             "directories": {"interesting": [{"path": "/admin"}]},
             "technologies": {"technologies": [{"id": "php"}]},
         }
-        o.attack_plan = {"phases": [
-            {"phase": "tech_specific", "priority_modules": ["/wp-admin"]},
-            {"phase": "other", "priority_modules": ["/nope"]},
-        ]}
+        o.attack_plan = {
+            "phases": [
+                {"phase": "tech_specific", "priority_modules": ["/wp-admin"]},
+                {"phase": "other", "priority_modules": ["/nope"]},
+            ]
+        }
         o.last_hypotheses = []
         o.reasoner = MagicMock()
         o.reasoner.score_endpoint.return_value = 0.5
@@ -246,6 +260,7 @@ class TestBudget:
 class TestSelectDetectors:
     def test_hypotheses_path_fills_registry(self):
         from tools.orchestrator import ALL_DETECTOR_NAMES
+
         o = _orch()
         o.last_hypotheses = [_Hyp()]
         o.reasoner = MagicMock()
@@ -267,6 +282,7 @@ class TestSelectDetectors:
 
     def test_default_all_sorted_by_risk(self):
         from tools.orchestrator import ALL_DETECTOR_NAMES, DETECTOR_RISK_ORDER
+
         o = _orch()
         o.last_hypotheses = []
         res = o._select_detectors()
@@ -275,6 +291,7 @@ class TestSelectDetectors:
 
     def test_filter_high_value(self):
         from tools.orchestrator import HIGH_VALUE_DETECTORS, LOW_VALUE_DETECTORS
+
         o = _orch()
         o.high_value = False
         low = sorted(LOW_VALUE_DETECTORS)[0]
@@ -287,22 +304,41 @@ class TestSelectDetectors:
 class TestPhaseRecon:
     def test_recon_full_results(self):
         o = _orch()
-        with patch("tools.orchestrator.fingerprint_tech",
-                   return_value={"technologies": [{"name": "nginx"}]}), \
-             patch("tools.orchestrator.fingerprint_target", return_value={
-                 "critical_versions": [{"product": "nginx", "version": "1.0",
-                                        "cves": ["CVE-1", "CVE-2"]}],
-                 "total_versions": 3}), \
-             patch("tools.orchestrator.scan_ports", return_value={
-                 "open_count": 2,
-                 "open_ports": [{"port": 80, "service": "http", "state": "open"}]}), \
-             patch("tools.orchestrator.check_git_leak", return_value={
-                 "git_exposed": True, "sensitive_finds": [{}, {}]}), \
-             patch("tools.orchestrator.enum_subdomains", return_value={
-                 "resolved": ["a.t"], "http_reachable": ["a.t"]}), \
-             patch("tools.orchestrator.fuzz_directories", return_value={
-                 "interesting": [{"path": "/admin", "status": 200, "size": 12}]}), \
-             patch("tools.recon.subdomain.COMMON_SUBDOMAINS", ["www"]):
+        with (
+            patch(
+                "tools.orchestrator.fingerprint_tech",
+                return_value={"technologies": [{"name": "nginx"}]},
+            ),
+            patch(
+                "tools.orchestrator.fingerprint_target",
+                return_value={
+                    "critical_versions": [
+                        {"product": "nginx", "version": "1.0", "cves": ["CVE-1", "CVE-2"]}
+                    ],
+                    "total_versions": 3,
+                },
+            ),
+            patch(
+                "tools.orchestrator.scan_ports",
+                return_value={
+                    "open_count": 2,
+                    "open_ports": [{"port": 80, "service": "http", "state": "open"}],
+                },
+            ),
+            patch(
+                "tools.orchestrator.check_git_leak",
+                return_value={"git_exposed": True, "sensitive_finds": [{}, {}]},
+            ),
+            patch(
+                "tools.orchestrator.enum_subdomains",
+                return_value={"resolved": ["a.t"], "http_reachable": ["a.t"]},
+            ),
+            patch(
+                "tools.orchestrator.fuzz_directories",
+                return_value={"interesting": [{"path": "/admin", "status": 200, "size": 12}]},
+            ),
+            patch("tools.recon.subdomain.COMMON_SUBDOMAINS", ["www"]),
+        ):
             recon = o.phase_recon()
         assert recon["technologies"]["technologies"][0]["name"] == "nginx"
         assert recon["git_leak"]["git_exposed"] is True
@@ -312,12 +348,14 @@ class TestPhaseRecon:
     def test_recon_empty_and_exceptions(self):
         o = _orch()
         o.sess.get.side_effect = RuntimeError("no http")
-        with patch("tools.orchestrator.fingerprint_tech", return_value={}), \
-             patch("tools.orchestrator.fingerprint_target", side_effect=RuntimeError("x")), \
-             patch("tools.orchestrator.scan_ports", return_value={}), \
-             patch("tools.orchestrator.check_git_leak", return_value={}), \
-             patch("tools.orchestrator.enum_subdomains", side_effect=RuntimeError("x")), \
-             patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []}):
+        with (
+            patch("tools.orchestrator.fingerprint_tech", return_value={}),
+            patch("tools.orchestrator.fingerprint_target", side_effect=RuntimeError("x")),
+            patch("tools.orchestrator.scan_ports", return_value={}),
+            patch("tools.orchestrator.check_git_leak", return_value={}),
+            patch("tools.orchestrator.enum_subdomains", side_effect=RuntimeError("x")),
+            patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []}),
+        ):
             recon = o.phase_recon()
         assert recon["subdomains"] == {}
         o.vuln_ctx.update.assert_not_called()
@@ -325,14 +363,20 @@ class TestPhaseRecon:
     def test_recon_versions_without_critical_and_no_subdomains(self):
         o = _orch()
         o.sess.get.side_effect = RuntimeError("no http")
-        with patch("tools.orchestrator.fingerprint_tech", return_value={}), \
-             patch("tools.orchestrator.fingerprint_target",
-                   return_value={"total_versions": 2, "critical_versions": []}), \
-             patch("tools.orchestrator.scan_ports", return_value={}), \
-             patch("tools.orchestrator.check_git_leak", return_value={}), \
-             patch("tools.orchestrator.enum_subdomains",
-                   return_value={"resolved": [], "http_reachable": []}), \
-             patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []}):
+        with (
+            patch("tools.orchestrator.fingerprint_tech", return_value={}),
+            patch(
+                "tools.orchestrator.fingerprint_target",
+                return_value={"total_versions": 2, "critical_versions": []},
+            ),
+            patch("tools.orchestrator.scan_ports", return_value={}),
+            patch("tools.orchestrator.check_git_leak", return_value={}),
+            patch(
+                "tools.orchestrator.enum_subdomains",
+                return_value={"resolved": [], "http_reachable": []},
+            ),
+            patch("tools.orchestrator.fuzz_directories", return_value={"interesting": []}),
+        ):
             recon = o.phase_recon()
         assert recon["version_info"]["total_versions"] == 2
 
@@ -340,14 +384,19 @@ class TestPhaseRecon:
 class TestPhaseAttackPlan:
     def test_plan_with_phases(self):
         o = _orch()
-        plan = {"phases": [
-            {"phase": "tech", "risk": "high", "tech": "Spring"},
-            {"phase": "port", "risk": "med", "port": 8080, "module": "api"},
-            {"phase": "det", "risk": "low", "detectors": ["cmdi", "ssrf"]},
-        ], "risk_score": 7}
+        plan = {
+            "phases": [
+                {"phase": "tech", "risk": "high", "tech": "Spring"},
+                {"phase": "port", "risk": "med", "port": 8080, "module": "api"},
+                {"phase": "det", "risk": "low", "detectors": ["cmdi", "ssrf"]},
+            ],
+            "risk_score": 7,
+        }
         o.state["phases"]["recon"] = {
-            "technologies": {"technologies": []}, "open_ports": {"open_ports": []},
-            "git_leak": {}, "directories": {"interesting": []},
+            "technologies": {"technologies": []},
+            "open_ports": {"open_ports": []},
+            "git_leak": {},
+            "directories": {"interesting": []},
         }
         with patch("tools.orchestrator.build_attack_plan", return_value=plan):
             got = o.phase_attack_plan()
@@ -358,8 +407,9 @@ class TestPhaseAttackPlan:
     def test_plan_empty(self):
         o = _orch()
         o.state["phases"]["recon"] = {}
-        with patch("tools.orchestrator.build_attack_plan",
-                   return_value={"phases": [], "risk_score": 0}):
+        with patch(
+            "tools.orchestrator.build_attack_plan", return_value={"phases": [], "risk_score": 0}
+        ):
             got = o.phase_attack_plan()
         assert got["phases"] == []
 
@@ -368,19 +418,21 @@ class TestPhaseReason:
     def test_reason_full(self):
         o = _orch()
         o.reasoner = MagicMock()
-        h = _Hyp(detail={"cve_ids": ["CVE-2021-1", "CVE-2021-2"]},
-                 suggested_chain="sqli->rce")
+        h = _Hyp(detail={"cve_ids": ["CVE-2021-1", "CVE-2021-2"]}, suggested_chain="sqli->rce")
         o.reasoner.analyze.return_value = [h]
         o.reasoner.correlate_hypotheses.return_value = [h]
         tree = MagicMock()
         tree.nodes = [1, 2, 3]
         tree.best_paths.return_value = [
-            {"confidence": 0.9, "path_string": "n1 -> n2", "chain": "c1"}]
+            {"confidence": 0.9, "path_string": "n1 -> n2", "chain": "c1"}
+        ]
         tree.summary.return_value = {"nodes": 3}
         o.reasoner.build_attack_tree.return_value = tree
         graph = MagicMock()
         graph.summary.return_value = {
-            "total_nodes": 5, "total_edges": 4, "goals": ["g1", "g2"],
+            "total_nodes": 5,
+            "total_edges": 4,
+            "goals": ["g1", "g2"],
             "best_paths": [{"confidence": 0.6, "path_string": "x"}],
         }
         o.state["phases"]["recon"] = {"technologies": {"technologies": []}}
@@ -404,7 +456,11 @@ class TestPhaseReason:
         o.reasoner.build_attack_tree.return_value = tree
         graph = MagicMock()
         graph.summary.return_value = {
-            "total_nodes": 0, "total_edges": 0, "goals": [], "best_paths": []}
+            "total_nodes": 0,
+            "total_edges": 0,
+            "goals": [],
+            "best_paths": [],
+        }
         with patch("tools.orchestrator.build_attack_graph", return_value=graph):
             result = o.phase_reason()
         assert result == []
@@ -414,8 +470,9 @@ class TestPhaseReason:
 class TestCrawlMineAuth:
     def test_phase_crawl(self):
         o = _orch()
-        with patch("tools.orchestrator.crawler.crawl",
-                   return_value={"endpoints": {}, "parameters": []}) as m:
+        with patch(
+            "tools.orchestrator.crawler.crawl", return_value={"endpoints": {}, "parameters": []}
+        ) as m:
             r = o.phase_crawl()
         m.assert_called_once()
         assert o.state["phases"]["crawl"] is r
@@ -423,8 +480,9 @@ class TestCrawlMineAuth:
     def test_phase_mine_default_endpoints(self):
         o = _orch()
         o.state["phases"]["crawl"] = {}
-        with patch("tools.orchestrator.param_miner.mine",
-                   return_value={"/": {"all_params": ["q"]}}) as m:
+        with patch(
+            "tools.orchestrator.param_miner.mine", return_value={"/": {"all_params": ["q"]}}
+        ) as m:
             res = o.phase_mine()
         assert res == {"/": {"all_params": ["q"]}}
         endpoints_arg = m.call_args[0][1]
@@ -432,16 +490,14 @@ class TestCrawlMineAuth:
 
     def test_phase_mine_with_crawl_result(self):
         o = _orch()
-        with patch("tools.orchestrator.param_miner.mine",
-                   return_value={}) as m:
+        with patch("tools.orchestrator.param_miner.mine", return_value={}) as m:
             o.phase_mine(crawl_result={"endpoints": {"/x": {}}})
         assert m.call_args[0][1] == {"/x": {}}
         assert o.state["phases"]["param_mine"] == {}
 
     def test_phase_auth_bypass(self):
         o = _orch()
-        with patch("tools.orchestrator.auth_bypass.check",
-                   return_value={"total_bypasses": 1}):
+        with patch("tools.orchestrator.auth_bypass.check", return_value={"total_bypasses": 1}):
             r = o.phase_auth_bypass()
         assert r["total_bypasses"] == 1
         assert o.state["phases"]["auth_bypass"] is r
@@ -451,11 +507,17 @@ class TestBacktrack:
     def test_maybe_backtrack_runs_chain(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
-        fn = MagicMock(return_value={"success": True,
-                                     "credentials_extracted": ["a:b"],
-                                     "rce_available": True, "rce_method": "m"})
-        with patch("tools.orchestrator_engine.chains.by_vtype",
-                   return_value={"sqli": ("sqli_to_rce", fn)}):
+        fn = MagicMock(
+            return_value={
+                "success": True,
+                "credentials_extracted": ["a:b"],
+                "rce_available": True,
+                "rce_method": "m",
+            }
+        )
+        with patch(
+            "tools.orchestrator_engine.chains.by_vtype", return_value={"sqli": ("sqli_to_rce", fn)}
+        ):
             r = o._maybe_backtrack_chain({"type": "SQLi", "url": "u", "param": "id"})
         assert r["success"] is True
         assert o._chain_cache["sqli|u|id"] is r
@@ -464,34 +526,32 @@ class TestBacktrack:
     def test_maybe_backtrack_cached(self):
         o = _orch()
         o._chain_cache["sqli|u|id"] = {"success": False}
-        assert o._maybe_backtrack_chain(
-            {"type": "sqli", "url": "u", "param": "id"}) is None
+        assert o._maybe_backtrack_chain({"type": "sqli", "url": "u", "param": "id"}) is None
 
     def test_maybe_backtrack_no_chain_for_type(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
         with patch("tools.orchestrator_engine.chains.by_vtype", return_value={}):
-            assert o._maybe_backtrack_chain(
-                {"type": "nope", "url": "u", "param": "p"}) is None
+            assert o._maybe_backtrack_chain({"type": "nope", "url": "u", "param": "p"}) is None
 
     def test_maybe_backtrack_budget_exhausted(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=False)
         fn = MagicMock()
-        with patch("tools.orchestrator_engine.chains.by_vtype",
-                   return_value={"sqli": ("sqli_to_rce", fn)}):
-            assert o._maybe_backtrack_chain(
-                {"type": "sqli", "url": "u", "param": "p"}) is None
+        with patch(
+            "tools.orchestrator_engine.chains.by_vtype", return_value={"sqli": ("sqli_to_rce", fn)}
+        ):
+            assert o._maybe_backtrack_chain({"type": "sqli", "url": "u", "param": "p"}) is None
         fn.assert_not_called()
 
     def test_maybe_backtrack_exception(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
         fn = MagicMock(side_effect=RuntimeError("boom"))
-        with patch("tools.orchestrator_engine.chains.by_vtype",
-                   return_value={"sqli": ("sqli_to_rce", fn)}):
-            assert o._maybe_backtrack_chain(
-                {"type": "sqli", "url": "u", "param": "p"}) is None
+        with patch(
+            "tools.orchestrator_engine.chains.by_vtype", return_value={"sqli": ("sqli_to_rce", fn)}
+        ):
+            assert o._maybe_backtrack_chain({"type": "sqli", "url": "u", "param": "p"}) is None
 
     def test_loop_closure_noop(self):
         o = _orch()
@@ -502,9 +562,12 @@ class TestBacktrack:
     def test_loop_closure_credentials_rce_and_sqli(self):
         o = _orch()
         finding = {"type": "sqli", "url": "u", "param": "id"}
-        chain_result = {"success": True,
-                        "credentials_extracted": ["admin:pw", "user@host"],
-                        "rce_available": True, "rce_method": "outfile"}
+        chain_result = {
+            "success": True,
+            "credentials_extracted": ["admin:pw", "user@host"],
+            "rce_available": True,
+            "rce_method": "outfile",
+        }
         o._backtrack_loop_closure(chain_result, finding)
         assert o.state["recovered_credentials"] == ["admin:pw", "user@host"]
         assert o.state["exploits"][0]["type"] == "rce"
@@ -515,10 +578,12 @@ class TestBacktrack:
 
     def test_cross_verify_delegates(self):
         o = _orch()
-        with patch("tools.orchestrator.test_runner.cross_verify",
-                   return_value={"confirmed": True}) as m:
-            r = o._cross_verify("sqli", "u", "p", "cf", {}, {"v": 1},
-                                post_data={"p": "1"}, method="POST")
+        with patch(
+            "tools.orchestrator.test_runner.cross_verify", return_value={"confirmed": True}
+        ) as m:
+            r = o._cross_verify(
+                "sqli", "u", "p", "cf", {}, {"v": 1}, post_data={"p": "1"}, method="POST"
+            )
         assert r["confirmed"] is True
         kwargs = m.call_args[1]
         assert kwargs["oracle"] is o.oracle
@@ -528,10 +593,10 @@ class TestBacktrack:
 
     def test_run_detector_delegates(self):
         o = _orch()
-        with patch("tools.orchestrator.test_runner.run_detector",
-                   return_value={"_vtype": "cmdi"}) as m:
-            r = o._run_detector("cmdi", "u", "p", "waf", {}, 5.0,
-                                post_data=None, method="POST")
+        with patch(
+            "tools.orchestrator.test_runner.run_detector", return_value={"_vtype": "cmdi"}
+        ) as m:
+            r = o._run_detector("cmdi", "u", "p", "waf", {}, 5.0, post_data=None, method="POST")
         assert r["_vtype"] == "cmdi"
         assert m.call_args[1]["method"] == "POST"
 
@@ -539,22 +604,27 @@ class TestBacktrack:
 class TestTestSinglePointExtra:
     def _fpf_patch(self, filtered=False):
         inst = MagicMock()
-        inst.filter_single.side_effect = lambda f: dict(f, filtered=filtered,
-                                                        vulnerable=not filtered)
-        return patch("tools.false_positive_filter.FalsePositiveFilter",
-                     return_value=inst)
+        inst.filter_single.side_effect = lambda f: dict(
+            f, filtered=filtered, vulnerable=not filtered
+        )
+        return patch("tools.false_positive_filter.FalsePositiveFilter", return_value=inst)
 
     def test_skip_verify_marks_verified(self):
         o = _orch()
         o.skip_verify = True
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "cmdi", "vulnerable": True, "confidence_score": 0.6,
-            "os_type": "linux", "result": {"os_type": "linux"}, "evidence": ["e"],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "cmdi",
+                "vulnerable": True,
+                "confidence_score": 0.6,
+                "os_type": "linux",
+                "result": {"os_type": "linux"},
+                "evidence": ["e"],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
-        with patch("tools.orchestrator.suggest_additional_tests",
-                   return_value=["try"]):
+        with patch("tools.orchestrator.suggest_additional_tests", return_value=["try"]):
             res = o._test_single_point({"url": "u", "param": "p"}, ["cmdi"])
         assert len(res) == 1
         assert res[0]["result"]["verified"] is True
@@ -564,14 +634,21 @@ class TestTestSinglePointExtra:
 
     def test_fast_mode_disables_low_value(self):
         from tools.orchestrator import LOW_VALUE_DETECTORS
+
         o = _orch()
         o.skip_verify = True
         o._fast_mode = True
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "ssrf", "vulnerable": True, "confidence_score": 0.6,
-            "cloud": "aws", "result": {"cloud": "aws"}, "evidence": ["e"],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "ssrf",
+                "vulnerable": True,
+                "confidence_score": 0.6,
+                "cloud": "aws",
+                "result": {"cloud": "aws"},
+                "evidence": ["e"],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
         res = o._test_single_point({"url": "u", "param": "p"}, ["ssrf"])
         assert len(res) == 1
@@ -582,32 +659,54 @@ class TestTestSinglePointExtra:
         o = _orch()
         o.skip_verify = False
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "sqli", "vulnerable": True, "confidence_score": 0.7,
-            "result": {"payload": "'"}, "evidence": ["det"],
-        })
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True, "confidence_score": 0.9,
-            "confidence_votes": ["v"], "evidence": ["o1", "o2"],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "sqli",
+                "vulnerable": True,
+                "confidence_score": 0.7,
+                "result": {"payload": "'"},
+                "evidence": ["det"],
+            }
+        )
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.9,
+                "confidence_votes": ["v"],
+                "evidence": ["o1", "o2"],
+            }
+        )
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
-        o._maybe_backtrack_chain = MagicMock(return_value={
-            "success": True, "credentials_extracted": ["root:pw"],
-            "rce_available": True, "rce_method": "into outfile"})
-        with self._fpf_patch(filtered=False), \
-             patch("tools.orchestrator.robust_verify",
-                   return_value={"vulnerable": True, "confidence": 0.95,
-                                 "dbms": "mysql"}), \
-             patch("tools.orchestrator.run_cross_validation",
-                   return_value={"vulnerable": True, "cross_checks": {"a": 1},
-                                 "confidence": 0.92, "rce_available": True}), \
-             patch("tools.orchestrator.sqli_union_probe",
-                   return_value={"vulnerable": True, "columns": 4,
-                                 "usable_columns": [2, 3]}), \
-             patch("tools.orchestrator.binary_search_sqli_blind",
-                   return_value={"extracted": "db"}), \
-             patch("tools.orchestrator.suggest_additional_tests",
-                   return_value=["next"]):
+        o._maybe_backtrack_chain = MagicMock(
+            return_value={
+                "success": True,
+                "credentials_extracted": ["root:pw"],
+                "rce_available": True,
+                "rce_method": "into outfile",
+            }
+        )
+        with (
+            self._fpf_patch(filtered=False),
+            patch(
+                "tools.orchestrator.robust_verify",
+                return_value={"vulnerable": True, "confidence": 0.95, "dbms": "mysql"},
+            ),
+            patch(
+                "tools.orchestrator.run_cross_validation",
+                return_value={
+                    "vulnerable": True,
+                    "cross_checks": {"a": 1},
+                    "confidence": 0.92,
+                    "rce_available": True,
+                },
+            ),
+            patch(
+                "tools.orchestrator.sqli_union_probe",
+                return_value={"vulnerable": True, "columns": 4, "usable_columns": [2, 3]},
+            ),
+            patch("tools.orchestrator.binary_search_sqli_blind", return_value={"extracted": "db"}),
+            patch("tools.orchestrator.suggest_additional_tests", return_value=["next"]),
+        ):
             res = o._test_single_point({"url": "u", "param": "id"}, ["sqli"])
         assert len(res) == 1
         f = res[0]
@@ -625,14 +724,23 @@ class TestTestSinglePointExtra:
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
         o.state["filtered_findings"] = []
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "xss", "vulnerable": True, "confidence_score": 0.4,
-            "result": {}, "evidence": [],
-        })
-        o.oracle.verify = MagicMock(return_value={
-            "verified": True, "confidence_score": 0.4,
-            "confidence_votes": [], "evidence": [],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "xss",
+                "vulnerable": True,
+                "confidence_score": 0.4,
+                "result": {},
+                "evidence": [],
+            }
+        )
+        o.oracle.verify = MagicMock(
+            return_value={
+                "verified": True,
+                "confidence_score": 0.4,
+                "confidence_votes": [],
+                "evidence": [],
+            }
+        )
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         with self._fpf_patch(filtered=True):
             res = o._test_single_point({"url": "u", "param": "p"}, ["xss"])
@@ -643,12 +751,16 @@ class TestTestSinglePointExtra:
     def test_oracle_not_verified_skips(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "xss", "vulnerable": True, "confidence_score": 0.8,
-            "result": {}, "evidence": [],
-        })
-        o.oracle.verify = MagicMock(return_value={"verified": False,
-                                                  "confidence_score": 0.0})
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "xss",
+                "vulnerable": True,
+                "confidence_score": 0.8,
+                "result": {},
+                "evidence": [],
+            }
+        )
+        o.oracle.verify = MagicMock(return_value={"verified": False, "confidence_score": 0.0})
         o._cross_verify = MagicMock(side_effect=lambda *a, **k: a[5])
         res = o._test_single_point({"url": "u", "param": "p"}, ["xss"])
         assert res == []
@@ -686,10 +798,15 @@ class TestTestSinglePointExtra:
         o = _orch()
         o.skip_verify = True
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "auth-bypass", "vulnerable": False, "total_bypasses": 2,
-            "confidence_score": 0.5, "evidence": [],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "auth-bypass",
+                "vulnerable": False,
+                "total_bypasses": 2,
+                "confidence_score": 0.5,
+                "evidence": [],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
         res = o._test_single_point({"url": "u", "param": "p"}, ["auth-bypass"])
         assert len(res) == 1
@@ -703,10 +820,15 @@ class TestTestSinglePointExtra:
             return calls["n"] == 1
 
         o._budget_ok = budget
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "xss", "vulnerable": True, "confidence_score": 0.9,
-            "result": {}, "evidence": [],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "xss",
+                "vulnerable": True,
+                "confidence_score": 0.9,
+                "result": {},
+                "evidence": [],
+            }
+        )
         assert o._test_single_point({"url": "u", "param": "p"}, ["xss"]) == []
 
     def test_entry_budget_exhausted(self):
@@ -717,34 +839,45 @@ class TestTestSinglePointExtra:
     def test_result_loop_budget_break(self):
         o = _orch()
         o._budget_ok = MagicMock(side_effect=[True, True, False])
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "xss", "vulnerable": True, "confidence_score": 0.9,
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "xss",
+                "vulnerable": True,
+                "confidence_score": 0.9,
+            }
+        )
         assert o._test_single_point({"url": "u", "param": "p"}, ["xss"]) == []
 
     def test_turbo_parallel_budget_break(self):
         o = _orch(turbo=True)
         o._budget_ok = MagicMock(side_effect=[True, False])
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "a1", "vulnerable": False, "confidence_score": 0.0,
-        })
-        assert o._test_single_point({"url": "u", "param": "p"},
-                                    ["a1", "b2"]) == []
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "a1",
+                "vulnerable": False,
+                "confidence_score": 0.0,
+            }
+        )
+        assert o._test_single_point({"url": "u", "param": "p"}, ["a1", "b2"]) == []
 
     def test_sqli_extraction_exceptions_swallowed(self):
         o = _orch()
         o.skip_verify = True
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "sqli", "vulnerable": True, "confidence_score": 0.6,
-            "evidence": [],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "sqli",
+                "vulnerable": True,
+                "confidence_score": 0.6,
+                "evidence": [],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
-        with patch("tools.orchestrator.sqli_union_probe",
-                   side_effect=RuntimeError("u")), \
-             patch("tools.orchestrator.binary_search_sqli_blind",
-                   side_effect=RuntimeError("b")), \
-             patch("tools.orchestrator.suggest_additional_tests", return_value=[]):
+        with (
+            patch("tools.orchestrator.sqli_union_probe", side_effect=RuntimeError("u")),
+            patch("tools.orchestrator.binary_search_sqli_blind", side_effect=RuntimeError("b")),
+            patch("tools.orchestrator.suggest_additional_tests", return_value=[]),
+        ):
             res = o._test_single_point({"url": "u", "param": "id"}, ["sqli"])
         assert len(res) == 1
         assert "sql_columns" not in res[0]
@@ -754,13 +887,16 @@ class TestTestSinglePointExtra:
         o = _orch()
         o.skip_verify = True
         o._budget_ok = MagicMock(return_value=True)
-        o._run_detector = MagicMock(return_value={
-            "_vtype": "lfi", "vulnerable": True, "confidence_score": 0.6,
-            "evidence": [],
-        })
+        o._run_detector = MagicMock(
+            return_value={
+                "_vtype": "lfi",
+                "vulnerable": True,
+                "confidence_score": 0.6,
+                "evidence": [],
+            }
+        )
         o._maybe_backtrack_chain = MagicMock(return_value=None)
-        with patch("tools.orchestrator.suggest_additional_tests",
-                   side_effect=RuntimeError("s")):
+        with patch("tools.orchestrator.suggest_additional_tests", side_effect=RuntimeError("s")):
             res = o._test_single_point({"url": "u", "param": "p"}, ["lfi"])
         assert len(res) == 1
         assert "suggested_next_steps" not in res[0]
@@ -783,10 +919,16 @@ class TestUpdateContextMemory:
         o = _orch()
         o.state["waf"] = {"name": "cloudflare"}
         vc = SimpleNamespace(
-            dbms="mysql", cloud_provider="gcp", os_type="linux",
-            ssti_engine="jinja2", has_admin_panel=True, has_graphql=True,
-            ssrf_cloud_creds=["AKIA"], lfi_readable_paths=["/var/log/auth.log"],
-            debug_endpoints=["/actuator"], discovered_versions={"php": "8.1"},
+            dbms="mysql",
+            cloud_provider="gcp",
+            os_type="linux",
+            ssti_engine="jinja2",
+            has_admin_panel=True,
+            has_graphql=True,
+            ssrf_cloud_creds=["AKIA"],
+            lfi_readable_paths=["/var/log/auth.log"],
+            debug_endpoints=["/actuator"],
+            discovered_versions={"php": "8.1"},
         )
         vc.best_exploit_path = lambda: ["lfi_log_poison_rce"]
         findings = {
@@ -799,10 +941,26 @@ class TestUpdateContextMemory:
             "f6": {"type": "jwt", "result": {"tokens_found": [{"token": "T"}]}},
             "f7": {"type": "other", "result": {}},
         }
-        self._run(o, vc, findings, ports=[{"port": 3389}],
-                  techs=["Spring Boot", "Django", "Flask", "Laravel", "ThinkPHP",
-                         "Express", "Node.js", "WordPress", "Amazon S3",
-                         "Google Cloud", "Azure Cloud", "Aliyun OSS"])
+        self._run(
+            o,
+            vc,
+            findings,
+            ports=[{"port": 3389}],
+            techs=[
+                "Spring Boot",
+                "Django",
+                "Flask",
+                "Laravel",
+                "ThinkPHP",
+                "Express",
+                "Node.js",
+                "WordPress",
+                "Amazon S3",
+                "Google Cloud",
+                "Azure Cloud",
+                "Aliyun OSS",
+            ],
+        )
         pairs = [(c[0][0], c[0][1]) for c in o.context_memory.set.call_args_list]
         assert ("framework", "Spring Boot") in pairs
         assert ("framework", "Django") in pairs
@@ -834,13 +992,19 @@ class TestUpdateContextMemory:
         o = _orch()
         o.state["waf"] = {}
         vc = SimpleNamespace(
-            dbms=None, cloud_provider=None, os_type=None, ssti_engine=None,
-            has_admin_panel=False, has_graphql=False, ssrf_cloud_creds=[],
-            lfi_readable_paths=[], debug_endpoints=[], discovered_versions={},
+            dbms=None,
+            cloud_provider=None,
+            os_type=None,
+            ssti_engine=None,
+            has_admin_panel=False,
+            has_graphql=False,
+            ssrf_cloud_creds=[],
+            lfi_readable_paths=[],
+            debug_endpoints=[],
+            discovered_versions={},
         )
         vc.best_exploit_path = lambda: []
-        self._run(o, vc, {"f": {"type": "other", "result": {}}},
-                  ports=[{"port": 22}], techs=[])
+        self._run(o, vc, {"f": {"type": "other", "result": {}}}, ports=[{"port": 22}], techs=[])
         pairs = [(c[0][0], c[0][1]) for c in o.context_memory.set.call_args_list]
         assert ("os_type", "linux") in pairs
 
@@ -848,9 +1012,16 @@ class TestUpdateContextMemory:
         o = _orch()
         o.state["waf"] = {}
         vc = SimpleNamespace(
-            dbms=None, cloud_provider=None, os_type=None, ssti_engine=None,
-            has_admin_panel=False, has_graphql=False, ssrf_cloud_creds=[],
-            lfi_readable_paths=[], debug_endpoints=[], discovered_versions={},
+            dbms=None,
+            cloud_provider=None,
+            os_type=None,
+            ssti_engine=None,
+            has_admin_panel=False,
+            has_graphql=False,
+            ssrf_cloud_creds=[],
+            lfi_readable_paths=[],
+            debug_endpoints=[],
+            discovered_versions={},
         )
         vc.best_exploit_path = lambda: []
         self._run(o, vc, {}, ports=[{"port": 3389}], techs=[])
@@ -896,7 +1067,13 @@ class TestPhaseDetect:
         o.oob_server.pop_callbacks.return_value = []
         res = o._phase_detect_scan(
             [{"url": "u", "param": "p"}, {"url": "u2", "param": "p2"}],
-            ["cmdi"], "cf", 80.0, "cb1", "oob", "oob.test")
+            ["cmdi"],
+            "cf",
+            80.0,
+            "cb1",
+            "oob",
+            "oob.test",
+        )
         assert res["cmdi|u|p"] is finding
         assert o.state["phases"]["detect"]["test_points"] == 2
         assert o.all_findings is res
@@ -911,7 +1088,8 @@ class TestPhaseDetect:
         cb = SimpleNamespace(path="/cb", client=("1.2.3.4", 1234))
         o.oob_server.pop_callbacks.return_value = [cb]
         res = o._phase_detect_scan(
-            [{"url": "u", "param": "p"}], ["cmdi"], None, 50.0, "cb1", None, None)
+            [{"url": "u", "param": "p"}], ["cmdi"], None, 50.0, "cb1", None, None
+        )
         assert res["__oob_callbacks__"]["result"]["vulnerable"] is True
         assert res["__oob_callbacks__"]["result"]["callbacks"][0]["path"] == "/cb"
 
@@ -924,7 +1102,13 @@ class TestPhaseDetect:
         o.oob_server.pop_callbacks.return_value = []
         o._phase_detect_scan(
             [{"url": "u", "param": "p"}, {"url": "u2", "param": "p2"}],
-            ["cmdi"], None, 50.0, "cb", None, None)
+            ["cmdi"],
+            None,
+            50.0,
+            "cb",
+            None,
+            None,
+        )
 
     def test_phase_detect_scan_worker_exception(self):
         o = _orch()
@@ -933,8 +1117,7 @@ class TestPhaseDetect:
         o._run_kali_recon = MagicMock()
         o._test_single_point = MagicMock(side_effect=RuntimeError("worker"))
         o.oob_server.pop_callbacks.return_value = []
-        o._phase_detect_scan(
-            [{"url": "u", "param": "p"}], ["cmdi"], None, 50.0, "cb", None, None)
+        o._phase_detect_scan([{"url": "u", "param": "p"}], ["cmdi"], None, 50.0, "cb", None, None)
 
     def test_phase_detect_scan_sequential_budget_break(self):
         o = _orch()
@@ -943,8 +1126,7 @@ class TestPhaseDetect:
         o._run_kali_recon = MagicMock()
         o._test_single_point = MagicMock(return_value=[])
         o.oob_server.pop_callbacks.return_value = []
-        o._phase_detect_scan(
-            [{"url": "u", "param": "p"}], ["cmdi"], None, 5.0, "cb", None, None)
+        o._phase_detect_scan([{"url": "u", "param": "p"}], ["cmdi"], None, 5.0, "cb", None, None)
         o._test_single_point.assert_not_called()
 
     def test_phase_detect_semantic(self):
@@ -955,10 +1137,13 @@ class TestPhaseDetect:
             "short": {"vulnerable": True, "response_text": "tiny"},
             "f1": {"vulnerable": True, "response_text": "A" * 80},
         }
-        with patch("tools.orchestrator.analyze_single_response",
-                   side_effect=[{"baseline": True}, {"errors": ["sql error"]}]) as sem, \
-             patch("tools.orchestrator.compare_responses",
-                   return_value={"diff": 1}):
+        with (
+            patch(
+                "tools.orchestrator.analyze_single_response",
+                side_effect=[{"baseline": True}, {"errors": ["sql error"]}],
+            ) as sem,
+            patch("tools.orchestrator.compare_responses", return_value={"diff": 1}),
+        ):
             o._phase_detect_semantic(findings)
         assert findings["f1"]["semantic"] == {"errors": ["sql error"]}
         assert findings["f1"]["response_changes"] == {"diff": 1}
@@ -968,10 +1153,8 @@ class TestPhaseDetect:
     def test_phase_detect_semantic_baseline_error(self):
         o = _orch()
         o.sess.get.side_effect = RuntimeError("down")
-        with patch("tools.orchestrator.analyze_single_response",
-                   return_value={}) as sem:
-            o._phase_detect_semantic({"f": {"vulnerable": True,
-                                            "response_text": "B" * 80}})
+        with patch("tools.orchestrator.analyze_single_response", return_value={}) as sem:
+            o._phase_detect_semantic({"f": {"vulnerable": True, "response_text": "B" * 80}})
         assert sem.call_count == 1
 
     def test_phase_detect_second_order(self):
@@ -979,13 +1162,15 @@ class TestPhaseDetect:
         o.attack_graph = MagicMock()
         o.attack_graph.nodes = {"sqli_found": {}}
         o.verifier = MagicMock()
-        o.verifier.verify.return_value = {"confirmed": True, "confidence": 0.9,
-                                          "methods_succeeded": ["m1"]}
+        o.verifier.verify.return_value = {
+            "confirmed": True,
+            "confidence": 0.9,
+            "methods_succeeded": ["m1"],
+        }
         findings = {
             "__meta__": {"confidence_score": 0.9},
             "low": {"type": "xss", "confidence_score": 0.2},
-            "f1": {"type": "sqli", "url": "u", "param": "p",
-                   "confidence_score": 0.6, "result": {}},
+            "f1": {"type": "sqli", "url": "u", "param": "p", "confidence_score": 0.6, "result": {}},
         }
         o._phase_detect_second_order(findings)
         assert findings["f1"]["second_order_verified"] is True
@@ -998,17 +1183,25 @@ class TestPhaseDetect:
         o.attack_graph = None
         o.verifier = MagicMock()
         o.verifier.verify.side_effect = RuntimeError("boom")
-        findings = {"f1": {"type": "sqli", "url": "u", "param": "p",
-                           "confidence_score": 0.6, "result": {}}}
+        findings = {
+            "f1": {"type": "sqli", "url": "u", "param": "p", "confidence_score": 0.6, "result": {}}
+        }
         o._phase_detect_second_order(findings)
         assert "second_order_verified" not in findings["f1"]
 
     def test_phase_detect_type_confusion(self):
         o = _orch()
         o._budget_ok = MagicMock(return_value=True)
-        tc = SimpleNamespace(success=True, error_leak=False, vuln_type="type_confusion",
-                             evidence="ev", original_type="int", confused_type="str",
-                             status_changed=True, risk_level="medium")
+        tc = SimpleNamespace(
+            success=True,
+            error_leak=False,
+            vuln_type="type_confusion",
+            evidence="ev",
+            original_type="int",
+            confused_type="str",
+            status_changed=True,
+            risk_level="medium",
+        )
         toctou = SimpleNamespace(success=True, evidence="race")
         detector = MagicMock()
         detector.detect.return_value = [tc]
@@ -1064,8 +1257,7 @@ class TestPhaseAiHunt:
         o = _orch()
         intel = {"brief": "brief text", "anomalies_found": 2, "deep_results_count": 3}
         o.all_findings = {}
-        with patch("tools.ai_vuln_hunter.generate_target_brief",
-                   return_value=intel) as m:
+        with patch("tools.ai_vuln_hunter.generate_target_brief", return_value=intel) as m:
             res = o.phase_ai_hunt()
         assert res is intel
         assert o.state["phases"]["ai_hunt"] is intel
@@ -1073,8 +1265,7 @@ class TestPhaseAiHunt:
 
     def test_ai_hunt_exception(self):
         o = _orch()
-        with patch("tools.ai_vuln_hunter.generate_target_brief",
-                   side_effect=RuntimeError("no ai")):
+        with patch("tools.ai_vuln_hunter.generate_target_brief", side_effect=RuntimeError("no ai")):
             res = o.phase_ai_hunt()
         assert res == {"anomalies_found": 0, "scan_count": 0}
         assert "error" in o.state["phases"]["ai_hunt"]
@@ -1083,21 +1274,31 @@ class TestPhaseAiHunt:
 class TestPhasePivot:
     def test_pivot_with_suggested_chain_and_cache(self):
         o = _orch()
-        o.all_findings = {"k": {"type": "sqli", "url": "u", "param": "p",
-                                "result": {}}}
+        o.all_findings = {"k": {"type": "sqli", "url": "u", "param": "p", "result": {}}}
         o.last_hypotheses = [_Hyp()]
         o.reasoner = MagicMock()
         o.reasoner.update_with_evidence.return_value = [_Hyp()]
         o.reasoner.suggest_chains.return_value = [("sqli_to_rce", "u", "p")]
         o._chain_cache = {"sqli|u|p": {"success": True}}
-        fn = MagicMock(return_value={"success": True,
-                                     "credentials_extracted": ["c:d"],
-                                     "rce_available": True, "rce_method": "m"})
-        with patch("tools.chain_engine.ChainEngine"), \
-             patch("tools.orchestrator_engine.chains.by_name",
-                   return_value={"sqli_to_rce": ("sqli", fn)}), \
-             patch("tools.orchestrator.pivot_on_intermediate_result",
-                   return_value={"pivoted": False, "phases": []}):
+        fn = MagicMock(
+            return_value={
+                "success": True,
+                "credentials_extracted": ["c:d"],
+                "rce_available": True,
+                "rce_method": "m",
+            }
+        )
+        with (
+            patch("tools.chain_engine.ChainEngine"),
+            patch(
+                "tools.orchestrator_engine.chains.by_name",
+                return_value={"sqli_to_rce": ("sqli", fn)},
+            ),
+            patch(
+                "tools.orchestrator.pivot_on_intermediate_result",
+                return_value={"pivoted": False, "phases": []},
+            ),
+        ):
             res = o.phase_pivot()
         assert fn.call_count == 1
         assert {a["success"] for a in res["pivot_actions"]} == {True}
@@ -1105,19 +1306,25 @@ class TestPhasePivot:
 
     def test_pivot_dispatch_handlers(self):
         o = _orch()
-        o.all_findings = {"k": {"type": "auth_bypass", "url": "u", "param": "p",
-                                "result": {}}}
+        o.all_findings = {"k": {"type": "auth_bypass", "url": "u", "param": "p", "result": {}}}
         o.last_hypotheses = []
         o.state["phases"]["auth_bypass"] = {"vulnerable": True}
         chain = MagicMock()
         chain.chain_auth_to_admin.return_value = {"success": True}
-        with patch("tools.chain_engine.ChainEngine", return_value=chain), \
-             patch("tools.orchestrator.pivot_on_intermediate_result",
-                   return_value={"pivoted": True, "phases": [
-                       {"phase": "auth_pivot"},
-                       {"phase": "graphql_pivot"},
-                       {"phase": "unknown_pivot"},
-                   ]}):
+        with (
+            patch("tools.chain_engine.ChainEngine", return_value=chain),
+            patch(
+                "tools.orchestrator.pivot_on_intermediate_result",
+                return_value={
+                    "pivoted": True,
+                    "phases": [
+                        {"phase": "auth_pivot"},
+                        {"phase": "graphql_pivot"},
+                        {"phase": "unknown_pivot"},
+                    ],
+                },
+            ),
+        ):
             res = o.phase_pivot()
         chain.chain_auth_to_admin.assert_called_once_with(o.target)
         assert {"success": True} in res["pivot_actions"]
@@ -1126,10 +1333,13 @@ class TestPhasePivot:
         o = _orch()
         o.all_findings = {}
         o.last_hypotheses = []
-        with patch("tools.chain_engine.ChainEngine"), \
-             patch("tools.orchestrator_engine.chains.by_name", return_value={}), \
-             patch("tools.orchestrator.pivot_on_intermediate_result",
-                   return_value={"pivoted": False}):
+        with (
+            patch("tools.chain_engine.ChainEngine"),
+            patch("tools.orchestrator_engine.chains.by_name", return_value={}),
+            patch(
+                "tools.orchestrator.pivot_on_intermediate_result", return_value={"pivoted": False}
+            ),
+        ):
             res = o.phase_pivot()
         assert res["pivot_actions"] == []
 
@@ -1141,8 +1351,12 @@ class TestPhasePivot:
         o._pivot_run_suggested_chain("unknown", [], {}, pr, used)
         fn = MagicMock()
         o._pivot_run_suggested_chain(
-            "sqli_to_rce", [{"type": "xss", "url": "u", "param": "p"}],
-            {"sqli_to_rce": ("sqli", fn)}, pr, set())
+            "sqli_to_rce",
+            [{"type": "xss", "url": "u", "param": "p"}],
+            {"sqli_to_rce": ("sqli", fn)},
+            pr,
+            set(),
+        )
         fn.assert_not_called()
         assert pr["pivot_actions"] == []
 
@@ -1150,15 +1364,24 @@ class TestPhasePivot:
         o = _orch()
         pr = {"pivot_actions": [], "exploits": []}
         fn = MagicMock(side_effect=RuntimeError("boom"))
-        o._pivot_run_suggested_chain("sqli_to_rce",
-                                     [{"type": "sqli", "url": "u", "param": "p"}],
-                                     {"sqli_to_rce": ("sqli", fn)}, pr, set())
+        o._pivot_run_suggested_chain(
+            "sqli_to_rce",
+            [{"type": "sqli", "url": "u", "param": "p"}],
+            {"sqli_to_rce": ("sqli", fn)},
+            pr,
+            set(),
+        )
         assert pr["pivot_actions"] == []
 
     def test_pivot_handlers_table_complete(self):
         assert set(_PIVOT_HANDLERS) == {
-            "ssrf_pivot", "lfi_pivot", "sqli_pivot", "jwt_pivot",
-            "auth_pivot", "deser_pivot", "graphql_pivot",
+            "ssrf_pivot",
+            "lfi_pivot",
+            "sqli_pivot",
+            "jwt_pivot",
+            "auth_pivot",
+            "deser_pivot",
+            "graphql_pivot",
         }
 
 
@@ -1170,27 +1393,38 @@ class TestPivotHandlers:
         o = _orch()
         chain = MagicMock()
         chain.chain_ssrf_to_rce.return_value = {"success": True}
-        with patch("tools.orchestrator.ssrf_chain_attack",
-                   return_value={"rce_achieved": True, "rce_method": "redis",
-                                 "services_found": 2, "ssh_keys": ["k"]}):
-            used = o._pivot_handle_ssrf([{"type": "ssrf", "url": "u", "param": "p"}],
-                                        chain, self._pr())
+        with patch(
+            "tools.orchestrator.ssrf_chain_attack",
+            return_value={
+                "rce_achieved": True,
+                "rce_method": "redis",
+                "services_found": 2,
+                "ssh_keys": ["k"],
+            },
+        ):
+            used = o._pivot_handle_ssrf(
+                [{"type": "ssrf", "url": "u", "param": "p"}], chain, self._pr()
+            )
         assert used == {"ssrf_to_rce"}
 
     def test_handle_ssrf_exception(self):
         o = _orch()
         chain = MagicMock()
         chain.chain_ssrf_to_rce.return_value = {"success": False}
-        with patch("tools.orchestrator.ssrf_chain_attack",
-                   side_effect=RuntimeError("boom")):
-            used = o._pivot_handle_ssrf([{"type": "ssrf", "url": "u", "param": "p"}],
-                                        chain, self._pr())
+        with patch("tools.orchestrator.ssrf_chain_attack", side_effect=RuntimeError("boom")):
+            used = o._pivot_handle_ssrf(
+                [{"type": "ssrf", "url": "u", "param": "p"}], chain, self._pr()
+            )
         assert used == {"ssrf_to_rce"}
 
     def test_handle_ssrf_no_match(self):
         o = _orch()
-        assert o._pivot_handle_ssrf([{"type": "xss", "url": "u", "param": "p"}],
-                                    MagicMock(), self._pr()) == set()
+        assert (
+            o._pivot_handle_ssrf(
+                [{"type": "xss", "url": "u", "param": "p"}], MagicMock(), self._pr()
+            )
+            == set()
+        )
 
     def test_handle_lfi_and_sqli_and_deser(self):
         o = _orch()
@@ -1198,12 +1432,15 @@ class TestPivotHandlers:
         chain.chain_lfi_to_rce.return_value = {"success": True}
         chain.chain_sqli_to_rce.return_value = {"success": True}
         chain.chain_deser_to_rce.return_value = {"success": True}
-        assert o._pivot_handle_lfi([{"type": "lfi", "url": "u", "param": "p"}],
-                                   chain, self._pr()) == {"lfi_to_rce"}
-        assert o._pivot_handle_sqli([{"type": "sqli", "url": "u", "param": "p"}],
-                                    chain, self._pr()) == {"sqli_to_rce"}
-        assert o._pivot_handle_deser([{"type": "deser", "url": "u", "param": "p"}],
-                                     chain, self._pr()) == {"deser_to_rce"}
+        assert o._pivot_handle_lfi(
+            [{"type": "lfi", "url": "u", "param": "p"}], chain, self._pr()
+        ) == {"lfi_to_rce"}
+        assert o._pivot_handle_sqli(
+            [{"type": "sqli", "url": "u", "param": "p"}], chain, self._pr()
+        ) == {"sqli_to_rce"}
+        assert o._pivot_handle_deser(
+            [{"type": "deser", "url": "u", "param": "p"}], chain, self._pr()
+        ) == {"deser_to_rce"}
         assert o._pivot_handle_lfi([], chain, self._pr()) == set()
         assert o._pivot_handle_sqli([], chain, self._pr()) == set()
         assert o._pivot_handle_deser([], chain, self._pr()) == set()
@@ -1214,17 +1451,22 @@ class TestPivotHandlers:
 
     def test_handle_jwt(self):
         o = _orch()
-        with patch("tools.jwt_exploiter.check",
-                   return_value={"vulnerable": True}) as m:
-            used = o._pivot_handle_jwt([{"type": "jwt", "url": "u", "param": "p"}],
-                                       MagicMock(), self._pr())
+        with patch("tools.jwt_exploiter.check", return_value={"vulnerable": True}) as m:
+            used = o._pivot_handle_jwt(
+                [{"type": "jwt", "url": "u", "param": "p"}], MagicMock(), self._pr()
+            )
         assert used == set()
         assert m.call_args[1]["param"] == "p"
-        assert o._pivot_handle_jwt([{"type": "xss", "url": "u", "param": "p"}],
-                                   MagicMock(), self._pr()) == set()
+        assert (
+            o._pivot_handle_jwt(
+                [{"type": "xss", "url": "u", "param": "p"}], MagicMock(), self._pr()
+            )
+            == set()
+        )
         with patch("tools.jwt_exploiter.check", side_effect=RuntimeError("x")):
-            o._pivot_handle_jwt([{"type": "jwt", "url": "u", "param": "p"}],
-                                MagicMock(), self._pr())
+            o._pivot_handle_jwt(
+                [{"type": "jwt", "url": "u", "param": "p"}], MagicMock(), self._pr()
+            )
 
     def test_handle_auth_and_graphql(self):
         o = _orch()
@@ -1250,14 +1492,15 @@ class TestKaliRecon:
     def test_available_with_results(self):
         o = _orch()
         o.state["phases"]["detect"] = {"findings": {}}
-        with patch("tools.kali_executor.is_available", return_value=True), \
-             patch("tools.kali_toolset.whatweb_identify",
-                   return_value={"technologies": ["nginx"]}), \
-             patch("tools.kali_toolset.nmap_scan",
-                   return_value={"ports": [80], "count": 1}), \
-             patch("tools.kali_toolset.nuclei_scan",
-                   return_value={"findings": [{"template": "t1", "info": {}}],
-                                 "count": 1}):
+        with (
+            patch("tools.kali_executor.is_available", return_value=True),
+            patch("tools.kali_toolset.whatweb_identify", return_value={"technologies": ["nginx"]}),
+            patch("tools.kali_toolset.nmap_scan", return_value={"ports": [80], "count": 1}),
+            patch(
+                "tools.kali_toolset.nuclei_scan",
+                return_value={"findings": [{"template": "t1", "info": {}}], "count": 1},
+            ),
+        ):
             o._run_kali_recon()
         assert o.state["technologies"] == ["nginx"]
         assert o.state["open_ports"] == [80]
@@ -1266,13 +1509,12 @@ class TestKaliRecon:
 
     def test_available_exceptions_swallowed(self):
         o = _orch()
-        with patch("tools.kali_executor.is_available", return_value=True), \
-             patch("tools.kali_toolset.whatweb_identify",
-                   side_effect=RuntimeError("a")), \
-             patch("tools.kali_toolset.nmap_scan",
-                   side_effect=RuntimeError("b")), \
-             patch("tools.kali_toolset.nuclei_scan",
-                   side_effect=RuntimeError("c")):
+        with (
+            patch("tools.kali_executor.is_available", return_value=True),
+            patch("tools.kali_toolset.whatweb_identify", side_effect=RuntimeError("a")),
+            patch("tools.kali_toolset.nmap_scan", side_effect=RuntimeError("b")),
+            patch("tools.kali_toolset.nuclei_scan", side_effect=RuntimeError("c")),
+        ):
             o._run_kali_recon()
         assert "nuclei_findings" not in o.state
 
@@ -1280,17 +1522,17 @@ class TestKaliRecon:
 class TestDualSessionWeaponize:
     def test_dual_session_skipped_without_high_priv(self):
         o = _orch()
-        assert o.phase_dual_session() == {"skipped": True,
-                                          "reason": "no high_priv session"}
+        assert o.phase_dual_session() == {"skipped": True, "reason": "no high_priv session"}
 
     def test_dual_session_findings_injected(self):
         o = _orch(high_priv_sess=MagicMock())
         o.dual_session = MagicMock()
         o.dual_session.test_batch.return_value = {
-            "bola_count": 1, "info_disclosure_count": 1, "tested": 5,
+            "bola_count": 1,
+            "info_disclosure_count": 1,
+            "tested": 5,
             "bola_findings": [{"url": "u1", "param": "id", "evidence": ["e1"]}],
-            "info_disclosure_findings": [{"url": "u2", "param": "id",
-                                          "evidence": ["e2"]}],
+            "info_disclosure_findings": [{"url": "u2", "param": "id", "evidence": ["e2"]}],
         }
         o._build_test_points = MagicMock(return_value=[{"url": "u", "param": "p"}])
         o.state["phases"]["detect"] = {"findings": {}}
@@ -1302,14 +1544,18 @@ class TestDualSessionWeaponize:
 
     def test_weaponize_with_findings_and_auth(self):
         o = _orch()
-        o.state["phases"]["detect"] = {"findings": {
-            "ok": {"type": "cmdi", "url": "u", "param": "p", "result": {}},
-            "boom": {"type": "sqli", "url": "u2", "param": "p2", "result": {}},
-            "none": {"type": "other", "url": "u3", "param": "p3", "result": {}},
-        }}
+        o.state["phases"]["detect"] = {
+            "findings": {
+                "ok": {"type": "cmdi", "url": "u", "param": "p", "result": {}},
+                "boom": {"type": "sqli", "url": "u2", "param": "p2", "result": {}},
+                "none": {"type": "other", "url": "u3", "param": "p3", "result": {}},
+            }
+        }
         o.state["phases"]["auth_bypass"] = {
-            "path_bypasses": [{"path": "/admin"}], "cookie_bypasses": [],
-            "header_bypasses": []}
+            "path_bypasses": [{"path": "/admin"}],
+            "cookie_bypasses": [],
+            "header_bypasses": [],
+        }
 
         def side(finding, *a, **k):
             if finding.get("type") == "sqli":
@@ -1318,8 +1564,7 @@ class TestDualSessionWeaponize:
                 return None
             return {"exploit_ready": True}
 
-        with patch("tools.orchestrator.weaponizer.weaponize_one",
-                   side_effect=side):
+        with patch("tools.orchestrator.weaponizer.weaponize_one", side_effect=side):
             res = o.phase_weaponize()
         assert res["ok"]["exploit_ready"] is True
         assert res["auth_bypass"]["total"] == 1
@@ -1345,20 +1590,30 @@ class TestPhaseAdvanced:
             pty._run.side_effect = lambda cmd: exec_cmd(cmd)
             return pty
 
-        exploits = {"k": {"webshell": {"webshell_url": "http://ws/x"},
-                          "sqli_webshell": {}, "lfi_webshell": {}}}
-        with patch("tools.tunnel_agent.socks5_over_webshell",
-                   return_value={"success": True, "deploy_commands": ["id"]}), \
-             patch("tools.tunnel_agent.chisel_tunnel",
-                   return_value={"success": True}), \
-             patch("tools.interactive_shell.PTYShell", side_effect=make_pty), \
-             patch("tools.lateral_move.steal_ssh_keys",
-                   return_value={"success": True, "keys": ["ssh-rsa AAA"]}), \
-             patch("tools.post_exploit.webshell_persistence",
-                   return_value={"paths": ["/tmp/.x"]}), \
-             patch("tools.post_exploit.cron_persistence",
-                   return_value={"cron_line": "* * * * * id"}), \
-             patch("tools.c2_beacon.C2Server"):
+        exploits = {
+            "k": {
+                "webshell": {"webshell_url": "http://ws/x"},
+                "sqli_webshell": {},
+                "lfi_webshell": {},
+            }
+        }
+        with (
+            patch(
+                "tools.tunnel_agent.socks5_over_webshell",
+                return_value={"success": True, "deploy_commands": ["id"]},
+            ),
+            patch("tools.tunnel_agent.chisel_tunnel", return_value={"success": True}),
+            patch("tools.interactive_shell.PTYShell", side_effect=make_pty),
+            patch(
+                "tools.lateral_move.steal_ssh_keys",
+                return_value={"success": True, "keys": ["ssh-rsa AAA"]},
+            ),
+            patch("tools.post_exploit.webshell_persistence", return_value={"paths": ["/tmp/.x"]}),
+            patch(
+                "tools.post_exploit.cron_persistence", return_value={"cron_line": "* * * * * id"}
+            ),
+            patch("tools.c2_beacon.C2Server"),
+        ):
             res = o.phase_advanced(exploits)
         assert res["tunnels"][0]["success"] is True
         assert res["chisel_tunnel"]["success"] is True
@@ -1371,8 +1626,7 @@ class TestPhaseAdvanced:
 
     def test_advanced_without_webshell_c2_failure(self):
         o = _orch()
-        with patch("tools.c2_beacon.C2Server",
-                   side_effect=RuntimeError("port busy")):
+        with patch("tools.c2_beacon.C2Server", side_effect=RuntimeError("port busy")):
             res = o.phase_advanced({"k": {"result": {}}})
         assert res["tunnels"] == []
         assert res["c2_active"] is False
@@ -1387,18 +1641,18 @@ class TestPhaseAdvanced:
             pty._run.side_effect = lambda cmd: exec_cmd(cmd)
             return pty
 
-        with patch("tools.tunnel_agent.socks5_over_webshell",
-                   return_value={"success": True, "deploy_commands": ["id"]}), \
-             patch("tools.tunnel_agent.chisel_tunnel",
-                   return_value={"success": False}), \
-             patch("tools.interactive_shell.PTYShell", side_effect=make_pty), \
-             patch("tools.lateral_move.steal_ssh_keys",
-                   return_value={"success": False}), \
-             patch("tools.post_exploit.webshell_persistence",
-                   return_value={"paths": []}), \
-             patch("tools.post_exploit.cron_persistence",
-                   return_value={"cron_line": "x"}), \
-             patch("tools.c2_beacon.C2Server"):
+        with (
+            patch(
+                "tools.tunnel_agent.socks5_over_webshell",
+                return_value={"success": True, "deploy_commands": ["id"]},
+            ),
+            patch("tools.tunnel_agent.chisel_tunnel", return_value={"success": False}),
+            patch("tools.interactive_shell.PTYShell", side_effect=make_pty),
+            patch("tools.lateral_move.steal_ssh_keys", return_value={"success": False}),
+            patch("tools.post_exploit.webshell_persistence", return_value={"paths": []}),
+            patch("tools.post_exploit.cron_persistence", return_value={"cron_line": "x"}),
+            patch("tools.c2_beacon.C2Server"),
+        ):
             res = o.phase_advanced({"k": {"webshell": {"webshell_url": "http://ws/x"}}})
         assert res["tunnels"][0]["success"] is True
         assert "pty_upgrade" not in res
@@ -1410,13 +1664,14 @@ class TestPipeline:
     def test_phase_pipeline(self):
         o = _orch()
         pr = {
-            "asset_graph": {"total_nodes": 3, "total_edges": 2,
-                            "connected_components": 1},
+            "asset_graph": {"total_nodes": 3, "total_edges": 2, "connected_components": 1},
             "crown_jewels": ["db", "admin"],
             "attack_chains": [{"score": 0.9, "target": "db", "hops": 2}],
-            "differential": {"confirmed_on_high_value": 1,
-                             "expected_high_value": 2,
-                             "crown_jewel_reached": ["db"]},
+            "differential": {
+                "confirmed_on_high_value": 1,
+                "expected_high_value": 2,
+                "crown_jewel_reached": ["db"],
+            },
         }
         with patch("tools.pipeline.run_pipeline", return_value=pr) as m:
             res = o.phase_pipeline()
@@ -1433,9 +1688,15 @@ class TestRunOrchestration:
         o.phase_reason = MagicMock(return_value=[])
         o.phase_crawl = MagicMock(return_value={"summary": {}, "endpoints": {}})
         o.phase_mine = MagicMock(return_value={})
-        o.phase_auth_bypass = MagicMock(return_value={
-            "total_bypasses": ab_total, "path_bypasses": [], "cookie_bypasses": [],
-            "header_bypasses": [], "method_bypasses": []})
+        o.phase_auth_bypass = MagicMock(
+            return_value={
+                "total_bypasses": ab_total,
+                "path_bypasses": [],
+                "cookie_bypasses": [],
+                "header_bypasses": [],
+                "method_bypasses": [],
+            }
+        )
         o.phase_detect = MagicMock(return_value=findings if findings is not None else {})
         o.phase_ai_hunt = MagicMock(return_value={})
         o.phase_pivot = MagicMock(return_value={"pivot_actions": [{"success": True}]})
@@ -1447,10 +1708,18 @@ class TestRunOrchestration:
 
     def test_run_full_path_with_exploits(self):
         o = _orch()
-        self._prep(o, findings={"k": {"type": "sqli"}}, ab_total=1,
-                   weaponize={"k": {"exploit_ready": True}})
-        o.phase_advanced.return_value = {"tunnels": [1], "c2_active": True,
-                                         "ssh_keys": ["k"], "post_exploit": True}
+        self._prep(
+            o,
+            findings={"k": {"type": "sqli"}},
+            ab_total=1,
+            weaponize={"k": {"exploit_ready": True}},
+        )
+        o.phase_advanced.return_value = {
+            "tunnels": [1],
+            "c2_active": True,
+            "ssh_keys": ["k"],
+            "post_exploit": True,
+        }
         o.high_priv_sess = MagicMock()
         with patch("tools.orchestrator.PlaywrightEngine") as pw:
             pw.is_available.return_value = False
@@ -1480,15 +1749,22 @@ class TestRunOrchestration:
     def test_run_spa_crawl_and_empty_weaponize(self):
         o = _orch()
         self._prep(o, findings={}, ab_total=1, weaponize={})
-        crawl = {"summary": {"is_spa": True, "js_api_discovered": 2,
-                             "pages_crawled": 1, "endpoints_found": 0,
-                             "unique_params": 0},
-                 "endpoints": {}}
+        crawl = {
+            "summary": {
+                "is_spa": True,
+                "js_api_discovered": 2,
+                "pages_crawled": 1,
+                "endpoints_found": 0,
+                "unique_params": 0,
+            },
+            "endpoints": {},
+        }
         o.phase_crawl = MagicMock(return_value=crawl)
         spa = {"api_routes": ["/api/a"], "js_api_routes": ["/r"]}
-        with patch("tools.orchestrator.PlaywrightEngine.is_available",
-                   return_value=True), \
-             patch("tools.orchestrator.crawl_spa", return_value=spa):
+        with (
+            patch("tools.orchestrator.PlaywrightEngine.is_available", return_value=True),
+            patch("tools.orchestrator.crawl_spa", return_value=spa),
+        ):
             report = o.run()
         assert crawl["spa_crawl"] is spa
         assert crawl["endpoints"]["/api/a"]["spa_api"] is True
@@ -1498,6 +1774,7 @@ class TestRunOrchestration:
 
     def test_module_level_run_delegates(self):
         from tools.orchestrator import run as orch_run
+
         with patch("tools.orchestrator.Orchestrator") as mock_o:
             mock_o.return_value.run.return_value = {"ok": True}
             assert orch_run("http://t.test", sess=MagicMock()) == {"ok": True}
@@ -1510,14 +1787,10 @@ class TestRunOrchestration:
         o.phase_pivot = MagicMock(return_value={"pivot_actions": []})
         crawl = {"summary": {"is_spa": True}, "endpoints": {}}
         o.phase_crawl = MagicMock(return_value=crawl)
-        with patch("tools.orchestrator.PlaywrightEngine.is_available",
-                   return_value=True), \
-             patch("tools.orchestrator.crawl_spa",
-                   side_effect=RuntimeError("browser down")):
+        with (
+            patch("tools.orchestrator.PlaywrightEngine.is_available", return_value=True),
+            patch("tools.orchestrator.crawl_spa", side_effect=RuntimeError("browser down")),
+        ):
             report = o.run()
         assert "spa_crawl" not in crawl
         assert "elapsed_seconds" in report
-
-
-
-

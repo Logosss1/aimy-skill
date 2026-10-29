@@ -3,28 +3,66 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  lint:
+  quality:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.11"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
       - run: pip install ".[dev]"
-      - run: ruff check tools/ main.py
+      - name: Lint (whole repo)
+        run: ruff check .
+      - name: Format check
+        run: ruff format --check .
+      - name: Type check
+        run: mypy tools/ engine/ cli/ main.py
+      - name: Security scan (high severity)
+        run: bandit -r tools/ engine/ cli/ main.py -c pyproject.toml -q -lll
 
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.11"]
+        python-version: ["3.9", "3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install ".[dev]"
-      - run: python -m pytest tests/ -v --timeout=30 -x
+      - run: python -m pytest tests/ -v --timeout=30
+
+  bench-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ".[dev]"
+      - name: Lab benchmark smoke (2 TP + 2 TN)
+        run: |
+          python lab_server.py &
+          LAB=$!
+          sleep 1
+          python bench/run_bench.py --profile lab --only sqli_error,xss_reflect,clean_sqli,clean_xss --case-timeout 30 --fail-on-fp
+          kill $LAB
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install build
+      - run: python -m build --wheel
+      - name: Install wheel into a clean environment
+        run: |
+          python -m venv /tmp/aimy-wheel
+          /tmp/aimy-wheel/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/aimy-wheel/bin/python -c "from tools.payload_engine import _load_yaml_overrides; assert len(_load_yaml_overrides()) >= 7, 'payload seeds missing from wheel'"
+          /tmp/aimy-wheel/bin/aimy --json list > /tmp/aimy-list.json
+          /tmp/aimy-wheel/bin/python -c "import json; d=json.load(open('/tmp/aimy-list.json')); assert d, 'cli produced no tools'"

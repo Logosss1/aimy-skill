@@ -25,8 +25,9 @@ for _name in ALL_DETECTOR_NAMES:
 _signature_cache: Dict[Callable, Optional[set]] = {}
 
 
-def _detector_kwargs(fn: Callable, waf_name: str, oob_opts: dict,
-                       post_data: Optional[dict], method: str) -> Dict:
+def _detector_kwargs(
+    fn: Callable, waf_name: str, oob_opts: dict, post_data: Optional[dict], method: str
+) -> Dict:
     """计算检测器调用 kwargs (缓存)。"""
     params = _signature_cache.get(fn)
     if params is None:
@@ -55,11 +56,17 @@ def _detector_kwargs(fn: Callable, waf_name: str, oob_opts: dict,
     return kwargs
 
 
-def _run_detector_by_name(vtype: str, url: str, param: str,
-                             sess, timeout: float, waf_name: str = "",
-                             oob_opts: dict = None,
-                             post_data: Optional[dict] = None,
-                             method: str = "GET") -> Dict:
+def _run_detector_by_name(
+    vtype: str,
+    url: str,
+    param: str,
+    sess,
+    timeout: float,
+    waf_name: str = "",
+    oob_opts: dict = None,
+    post_data: Optional[dict] = None,
+    method: str = "GET",
+) -> Dict:
     fn = ALL_DETECTORS.get(vtype)
     if not fn:
         fn = get(vtype)
@@ -69,13 +76,21 @@ def _run_detector_by_name(vtype: str, url: str, param: str,
         return {"vulnerable": False, "error": f"no detector: {vtype}"}
     try:
         kwargs = _detector_kwargs(fn, waf_name, oob_opts, post_data, method)
+        # Bind before calling so a TypeError raised *inside* a detector is not
+        # mistaken for a signature mismatch (old behaviour silently retried
+        # with positional args and lost the real error).
         try:
-            result = fn(url=url, param=param, sess=sess, timeout=timeout, **kwargs)
+            bound = inspect.signature(fn).bind(
+                url=url, param=param, sess=sess, timeout=timeout, **kwargs
+            )
         except TypeError:
             result = fn(url, param, sess, timeout, waf_name, oob_opts or {})
+        else:
+            result = fn(*bound.args, **bound.kwargs)
         return result if isinstance(result, dict) else {"vulnerable": False, "raw": str(result)}
     except Exception as e:
         from tools.log_utils import get_logger
+
         logger = get_logger("orchestrator")
         logger.debug("run_detector %s: %s", vtype, e)
         return {"vulnerable": False, "error": str(e)}

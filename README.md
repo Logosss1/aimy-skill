@@ -1,6 +1,6 @@
 <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00FF88&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+87+CLI+Commands">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00A67E&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+87+CLI+Commands" alt="aimy-skill typing banner">
+    <source media="(prefers-color-scheme: light)" srcset="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00FF88&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+88+CLI+Commands">
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=36&pause=1000&color=00A67E&center=true&vCenter=true&width=700&lines=aimy-skill+v3.7.5;AI-Ready+Penetration+Test+Kit;149+Modules+%C2%B7+88+CLI+Commands" alt="aimy-skill typing banner">
   </picture>
 
 <h1 align="center">🚀 aimy-skill</h1>
@@ -10,13 +10,9 @@
     <br>
     <i>Next-generation AI-native penetration testing toolkit</i>
   </p>
-<p><strong>公告：关于 aimy-skill 停止推送更新</strong></p>
+<p><strong>维护状态：持续维护中</strong></p>
 
-<p>因不可抗力，aimy-skill 自 2026年10月19日 起停止推送更新。已发布版本仍可正常使用，现有代码与文档保留在本项目地址。</p>
-
-<p>感谢大家一直以来的关注与支持。</p>
-
-<p>炸炸酥<br>2026年10月19日</p>
+<p>当前版本 v3.7.5：已补齐 wheel 资源打包、离线测试、CI 质量门禁、SARIF/Markdown 报告与 <code>--json</code> 机器可读输出。欢迎提交 Issue / PR。</p>
 <div align="center">
     <a href="https://aimy-skill.netlify.app/"><b>🌐 官网</b></a> •
     <a href="#-核心优势"><b>✨ 优势</b></a> •
@@ -30,11 +26,11 @@
 
 <div align="center">
     <img src="https://img.shields.io/badge/version-3.7.5-00A67E?style=for-the-badge&logo=semver&logoColor=white" alt="version">
-    <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="python">
+    <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="python">
     <img src="https://img.shields.io/badge/modules-149-orange?style=for-the-badge" alt="modules">
     <img src="https://img.shields.io/badge/skills-103-8B5CF6?style=for-the-badge" alt="skills">
     <img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge" alt="license">
-    <img src="https://img.shields.io/badge/tests-2833-22C55E?style=for-the-badge" alt="tests">
+    <img src="https://img.shields.io/badge/tests-2844-22C55E?style=for-the-badge" alt="tests">
     <img src="https://img.shields.io/badge/OS-Windows%20%7C%20Linux%20%7C%20macOS-64748B?style=for-the-badge" alt="os">
   </div>
 
@@ -93,7 +89,17 @@ result = checker.check(
 
 ### 1️⃣ 安装
 
-让AI智能体给你安装技能
+```bash
+python -m venv .venv
+.venv/bin/pip install -e ".[dev]"   # Windows: .venv\Scripts\pip install -e ".[dev]"
+```
+
+也可以直接构建并安装 wheel（payload 种子与 CMS 漏洞库会随包发布）：
+
+```bash
+python -m build --wheel
+pip install dist/aimy_skill-3.7.5-py3-none-any.whl
+```
 
 ### 2️⃣ 安装 AI Agent 提示词
 
@@ -112,7 +118,7 @@ https://github.com/Prohao42/aimy-skill  完整安装项目
 
 | 依赖                             | 说明                      |
 | -------------------------------- | ------------------------- |
-| **Python 3.8+**            | 核心运行环境              |
+| **Python 3.9+**            | 核心运行环境              |
 | **OS**                     | Windows / Linux / macOS   |
 | **Playwright** *(可选)*  | SPA 爬虫 & XSS 浏览器验证 |
 | **Kali 工具集** *(可选)* | 扩展高级功能              |
@@ -204,6 +210,8 @@ capture         数据包捕获
 fuzz            模糊测试
 payload-mutate  Payload 变异
 list            列出所有工具
+manifest        机器可读的命令/参数清单 (Claude / Agent 集成)
+wordgen         弱口令字典生成/合并（仅授权测试）
 ```
 
 ### 👤 模式选择
@@ -230,6 +238,8 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
 --timeout SEC       请求超时（默认: 10s）
 --delay SEC         请求间隔
 --mode MODE         输出模式: rookie / veteran
+--json              仅输出 JSON（进度走 stderr，适合 AI Agent / CI）
+--quiet             静默进度输出
 --skip-verify       跳过所有验证层（极速模式）
 --auth-type TYPE    认证类型: form / api / basic
 --auth-url URL      认证地址
@@ -250,7 +260,7 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
                     └──────┬───────┘
                            │
                     ┌──────▼───────┐
-                    │   CLI 入口    │   ← 87 命令 · 数据驱动分发
+                    │   CLI 入口    │   ← 88 命令 · 数据驱动分发
                     │  (main.py)   │
                     └──────┬───────┘
                            │
@@ -324,7 +334,7 @@ aimy-skill 提供两种输出模式，可通过 `--mode` 参数或环境变量 `
 
 | 角色                      | 价值                                       |
 | ------------------------- | ------------------------------------------ |
-| **渗透测试工程师**  | 87 命令覆盖全攻击链，自动化报告           |
+| **渗透测试工程师**  | 88 命令覆盖全攻击链，自动化报告           |
 | **AI Agent 开发者** | 统一接口 + JSON 输出 + 103 Skill，即插即用 |
 | **安全研究员**      | 深度武器化模块 + WAF 绕过引擎              |
 | **CTF 选手**        | 全链路工具包，快速验证漏洞                 |

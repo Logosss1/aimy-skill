@@ -15,6 +15,7 @@ import urllib.parse as _urlparse
 from typing import Optional
 
 from tools.log_utils import get_logger
+from tools.version import __version__
 
 logger = get_logger("arg_parsers")
 
@@ -61,6 +62,58 @@ def _add_url_arg(
             p.add_argument(*args_spec[0], **args_spec[1])
 
 
+def _action_to_manifest(action):
+    """Serialize one argparse action for the Claude/Agent tool manifest."""
+    if isinstance(action, argparse._SubParsersAction) or action.dest == "help":
+        return None
+    item = {"dest": action.dest}
+    if action.option_strings:
+        item["options"] = list(action.option_strings)
+        item["required"] = bool(getattr(action, "required", False))
+    else:
+        item["required"] = action.nargs not in ("?", "*")
+    if action.nargs is not None:
+        item["nargs"] = action.nargs
+    if action.choices:
+        item["choices"] = [str(choice) for choice in action.choices]
+    if isinstance(action.type, type):
+        item["type"] = action.type.__name__
+    if action.default is not None and action.default != "":
+        item["default"] = action.default
+    if action.help:
+        item["help"] = action.help
+    return item
+
+
+def build_manifest(parser: argparse.ArgumentParser) -> dict:
+    """Build a machine-readable command/argument manifest for agent tool use."""
+    sub = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None,
+    )
+    commands = {}
+    if sub:
+        helps = {a.dest: a.help for a in sub._choices_actions}
+        for name, subparser in sub.choices.items():
+            commands[name] = {
+                "help": helps.get(name, subparser.description or ""),
+                "arguments": [
+                    item
+                    for action in subparser._actions
+                    if (item := _action_to_manifest(action)) is not None
+                ],
+            }
+    return {
+        "name": "aimy-skill",
+        "version": __version__,
+        "command_count": len(commands),
+        "global_arguments": [
+            item for action in parser._actions if (item := _action_to_manifest(action)) is not None
+        ],
+        "commands": commands,
+    }
+
+
 def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
     """Build the full CLI argument parser.
 
@@ -90,6 +143,7 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
         cmd_leak_scan,
         cmd_list,
         cmd_login,
+        cmd_manifest,
         cmd_mobile_scan,
         cmd_param_mine,
         cmd_payload_mutate,
@@ -100,6 +154,7 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
         cmd_smuggler,
         cmd_unauth,
         cmd_webshell,
+        cmd_wordgen,
         cmd_workflow,
     )
 
@@ -115,7 +170,7 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
     parser.add_argument("--auth-url", default="", help="认证URL")
     parser.add_argument("--auth-user", default="", help="认证用户名")
     parser.add_argument("--auth-pass", default="", help="认证密码")
-    parser.add_argument("--session-file", default="", help="会话文件路径(.pkl)")
+    parser.add_argument("--session-file", default="", help="会话文件路径(.json)")
     parser.add_argument(
         "--mode",
         choices=["rookie", "veteran"],
@@ -123,6 +178,12 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
         help="输出模式: rookie(详细说明) / veteran(简洁高价值)，默认由 AIMY_MODE 环境变量决定",
     )
     parser.add_argument("--delay", type=float, default=0.0, help="请求间延迟秒数")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="仅输出 JSON；进度/日志走 stderr，适合 AI Agent 与 CI",
+    )
+    parser.add_argument("--quiet", action="store_true", help="静默进度输出")
     parser.add_argument("--kali-host", default="", help="Kali Linux SSH 主机地址")
     parser.add_argument("--kali-port", type=int, default=22, help="Kali SSH 端口")
     parser.add_argument("--kali-user", default="root", help="Kali SSH 用户名")
@@ -604,6 +665,30 @@ def build_parser(dispatchers: dict) -> argparse.ArgumentParser:
     # ---- List / unauth / leak / weakpass / batch ----
     p = sub.add_parser("list", help="列出所有可用工具")
     p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("manifest", help="输出机器可读的命令/参数清单 (Claude/Agent 集成)")
+    p.set_defaults(func=cmd_manifest)
+
+    p = sub.add_parser("wordgen", help="生成/合并弱口令与定制字典（仅授权测试用）")
+    p.add_argument("--keywords", default="", help="种子词，逗号分隔（公司/产品/用户名/拼音）")
+    p.add_argument(
+        "--years",
+        action="append",
+        default=[],
+        help="年份（可多次指定，如 --years 2024 --years 2025）",
+    )
+    p.add_argument("--max-suffix", type=int, default=99, help="数字后缀上限（0-N，默认 99）")
+    p.add_argument("--no-leet", action="store_true", help="不生成 leet 变体（@ $ 3 1 0 ...）")
+    p.add_argument("--domains", default="", help="企业邮箱域名，逗号分隔，生成 user@domain")
+    p.add_argument(
+        "--bundled",
+        default="",
+        help="合并内置字典，逗号分隔（top_users/top_passwords/top_passwords_cn）",
+    )
+    p.add_argument("--list-bundled", action="store_true", help="列出内置字典及总条数")
+    p.add_argument("--merge", default="", help="合并去重多个文件，逗号分隔")
+    p.add_argument("--out", default="", help="输出文件路径（可选）")
+    p.set_defaults(func=cmd_wordgen)
 
     p = sub.add_parser("unauth", help="未授权中间件检测(Redis/ES/Mongo/MySQL/Postgres)")
     p.add_argument("--host", default="", help="单目标 host 或 host:port")

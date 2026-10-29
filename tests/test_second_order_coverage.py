@@ -3,6 +3,7 @@
 All HTTP is mocked (no network), time.time/time.sleep are patched, and
 socket.getaddrinfo is patched so DNS callbacks never touch the resolver.
 """
+
 import base64
 import re
 import socket
@@ -35,19 +36,22 @@ def _payload_of(url, data):
 def _handler(fn):
     def wrapped(url, method="GET", data=None, headers=None, cookies=None):
         return fn(_payload_of(url, data), url, method, data)
+
     return wrapped
 
 
 def _run(handler, vuln_type, sess=None, evidence=None, **kwargs):
     sess = sess if sess is not None else MagicMock()
-    with patch.object(SecondOrderVerifier, "_make_request",
-                      MagicMock(side_effect=handler)), \
-            patch("tools.second_order_verifier.time", MagicMock()):
+    with (
+        patch.object(SecondOrderVerifier, "_make_request", MagicMock(side_effect=handler)),
+        patch("tools.second_order_verifier.time", MagicMock()),
+    ):
         verifier = SecondOrderVerifier(sess=sess, timeout=5.0)
         return verifier.verify("http://t.local/page", "p", vuln_type, evidence, **kwargs)
 
 
 # ---------------------------------------------------------------- SQLi
+
 
 def _sqli_success(payload, url, method, data):
     if "SLEEP" in payload or "WAITFOR" in payload or "pg_sleep" in payload:
@@ -70,8 +74,7 @@ class TestSqli:
     def test_all_three_methods_confirm(self):
         result = _run(_handler(_sqli_success), "sqli", evidence={"dbms": "mysql"})
         assert result.confirmed is True
-        assert set(result.methods_succeeded) == {
-            "boolean_based", "time_based", "error_based"}
+        assert set(result.methods_succeeded) == {"boolean_based", "time_based", "error_based"}
         assert result.confidence == 0.99
         assert len(result.evidence) == 3
 
@@ -80,8 +83,13 @@ class TestSqli:
         assert "time_based" in result.methods_succeeded
 
     def test_post_request_branch(self):
-        result = _run(_handler(_sqli_success), "sqli", evidence={"dbms": "mysql"},
-                      is_post=True, data={"other": "1"})
+        result = _run(
+            _handler(_sqli_success),
+            "sqli",
+            evidence={"dbms": "mysql"},
+            is_post=True,
+            data={"other": "1"},
+        )
         assert result.confirmed is True
 
     def test_no_method_succeeds(self):
@@ -112,6 +120,7 @@ class TestSqli:
 
 # ---------------------------------------------------------------- SSRF
 
+
 def _ssrf_success(payload, url, method, data):
     if "169.254.169.254" in payload:
         return (200, "ami-id: i-123 instance-id: i-abc", 0.02)
@@ -130,7 +139,8 @@ class TestSsrf:
         assert set(result.methods_succeeded) == {"response_diff", "blind_oob"}
         assert result.confidence == 0.95
 
-    def test_dns_callback_resolved(self):
+    def test_dns_callback_resolved(self, monkeypatch):
+        monkeypatch.setenv("AIMY_OOB_DOMAIN", "oast.fun")
         resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.2.3.4", 80))]
         with patch("socket.getaddrinfo", return_value=resolved):
             result = _run(_handler(_ssrf_success), "ssrf")
@@ -146,8 +156,7 @@ class TestSsrf:
 
     def test_post_request_branch(self):
         with patch("socket.getaddrinfo", side_effect=socket.gaierror):
-            result = _run(_handler(_ssrf_success), "ssrf",
-                          is_post=True, data={"other": "1"})
+            result = _run(_handler(_ssrf_success), "ssrf", is_post=True, data={"other": "1"})
         assert result.confirmed is True
 
     def test_single_success_gives_low_confidence(self):
@@ -165,6 +174,7 @@ class TestSsrf:
 
 # ---------------------------------------------------------------- XSS
 
+
 def _xss_success(payload, url, method, data):
     return (200, "page:%s <aimy123> tail" % payload, 0.01)
 
@@ -178,7 +188,10 @@ class TestXss:
         result = _run(_handler(_xss_success), "xss")
         assert result.confirmed is True
         assert set(result.methods_succeeded) == {
-            "reflected_marker", "html_context", "event_handler"}
+            "reflected_marker",
+            "html_context",
+            "event_handler",
+        }
         assert result.confidence == 0.95
 
     def test_html_context_reflection_confirms(self):
@@ -186,7 +199,10 @@ class TestXss:
         assert re.search(r"<aimy_xss_[0-9]+>", "<aimy_xss_123>") is not None
         result = _run(_handler(_xss_echo), "xss")
         assert set(result.methods_succeeded) == {
-            "reflected_marker", "html_context", "event_handler"}
+            "reflected_marker",
+            "html_context",
+            "event_handler",
+        }
         assert result.confirmed is True
 
     def test_one_method_only_is_not_confirmed(self):
@@ -194,6 +210,7 @@ class TestXss:
             if payload.startswith("aimy_"):
                 return (200, "reflected:%s" % payload, 0.01)
             return (200, "nothing", 0.01)
+
         result = _run(_handler(handler), "xss")
         assert result.methods_succeeded == ["reflected_marker"]
         assert result.confirmed is False
@@ -203,10 +220,14 @@ class TestXss:
         result = _run(_handler(_xss_success), "xss", is_post=True, data={"other": "1"})
         assert result.confirmed is True
         assert set(result.methods_succeeded) == {
-            "reflected_marker", "html_context", "event_handler"}
+            "reflected_marker",
+            "html_context",
+            "event_handler",
+        }
 
 
 # ---------------------------------------------------------------- SSTI
+
 
 def _ssti_success(payload, url, method, data):
     math_match = re.search(r"(\d+)\*(\d+)", payload)
@@ -225,8 +246,7 @@ class TestSsti:
     def test_math_string_and_file_read_confirm(self):
         result = _run(_handler(_ssti_success), "ssti")
         assert result.confirmed is True
-        assert set(result.methods_succeeded) == {
-            "math_eval", "string_output", "file_read"}
+        assert set(result.methods_succeeded) == {"math_eval", "string_output", "file_read"}
         assert result.confidence == 0.99
 
     def test_no_method_succeeds(self):
@@ -253,11 +273,12 @@ class TestSsti:
 
 # ---------------------------------------------------------------- CMDI
 
+
 def _cmdi_success(payload, url, method, data):
     if "sleep" in payload:
         return (200, "slept", 9.0)
     if payload.startswith("echo CMDI"):
-        return (200, payload[len("echo "):], 0.01)
+        return (200, payload[len("echo ") :], 0.01)
     if payload.startswith("touch"):
         return (200, "touched", 0.01)
     if payload.startswith("cat "):
@@ -269,8 +290,7 @@ class TestCmdi:
     def test_time_output_blind_confirm(self):
         result = _run(_handler(_cmdi_success), "cmdi")
         assert result.confirmed is True
-        assert set(result.methods_succeeded) == {
-            "time_based", "output_based", "blind_file"}
+        assert set(result.methods_succeeded) == {"time_based", "output_based", "blind_file"}
         assert result.confidence == 0.99
 
     def test_blind_file_failure_marker(self):
@@ -278,6 +298,7 @@ class TestCmdi:
             if payload.startswith("cat "):
                 return (200, "AIMY_BLIND_FAIL", 0.01)
             return (200, "", 0.01)
+
         result = _run(_handler(handler), "cmdi")
         assert result.methods_succeeded == []
         assert result.confirmed is False
@@ -285,13 +306,12 @@ class TestCmdi:
     def test_post_request_branch(self):
         result = _run(_handler(_cmdi_success), "cmdi", is_post=True, data={"other": "1"})
         assert result.confirmed is True
-        assert set(result.methods_succeeded) == {
-            "time_based", "output_based", "blind_file"}
+        assert set(result.methods_succeeded) == {"time_based", "output_based", "blind_file"}
 
     def test_single_success_gives_low_confidence(self):
         def handler(payload, url, method, data):
             if payload.startswith("echo CMDI"):
-                return (200, payload[len("echo "):], 0.01)
+                return (200, payload[len("echo ") :], 0.01)
             if payload.startswith("cat "):
                 return (200, "AIMY_BLIND_FAIL", 0.01)
             return (200, "", 0.01)
@@ -303,6 +323,7 @@ class TestCmdi:
 
 
 # ---------------------------------------------------------------- LFI
+
 
 class TestLfi:
     def test_known_file_wrapper_and_log_poisoning(self):
@@ -329,22 +350,20 @@ class TestLfi:
 
         result = _run(_handler(handler), "lfi", sess=sess)
         assert result.confirmed is True
-        assert set(result.methods_succeeded) == {
-            "known_file", "wrapper", "log_poisoning"}
+        assert set(result.methods_succeeded) == {"known_file", "wrapper", "log_poisoning"}
         assert result.confidence == 0.99
 
     def test_generic_nonempty_body_is_not_known_file(self):
         # known_file 现在带负对照: payload 响应与"不存在文件"的响应相同 (站点
         # 兜底页) 时不记成功, 修复 "任意非空 body 即 known_file" 的假阳性.
-        result = _run(_handler(lambda payload, url, method, data: (200, "hello", 0.01)),
-                      "lfi")
+        result = _run(_handler(lambda payload, url, method, data: (200, "hello", 0.01)), "lfi")
         assert "known_file" not in result.methods_succeeded
 
     def test_reflected_payload_is_not_known_file(self):
         # payload 原样回显说明是反射, 不是文件读取 → 不记 known_file.
         result = _run(
-            _handler(lambda payload, url, method, data: (200, "echo:%s" % payload, 0.01)),
-            "lfi")
+            _handler(lambda payload, url, method, data: (200, "echo:%s" % payload, 0.01)), "lfi"
+        )
         assert "known_file" not in result.methods_succeeded
 
     def test_single_method_gives_low_confidence(self):
@@ -361,6 +380,7 @@ class TestLfi:
     def test_all_methods_fail(self):
         def handler(payload, url, method, data):
             return (200, "", 0.01)
+
         result = _run(_handler(handler), "lfi")
         assert result.methods_succeeded == []
         assert result.confirmed is False
@@ -386,13 +406,13 @@ class TestLfi:
                 return (200, "log " + state.get("poison", ""), 0.01)
             return (200, "", 0.01)
 
-        result = _run(_handler(handler), "lfi", sess=sess,
-                      is_post=True, data={"other": "1"})
+        result = _run(_handler(handler), "lfi", sess=sess, is_post=True, data={"other": "1"})
         assert "wrapper" in result.methods_succeeded
         assert "log_poisoning" in result.methods_succeeded
 
 
 # ---------------------------------------------------------------- NoSQLi
+
 
 def _nosqli_success(payload, url, method, data):
     if "$ne" in payload or "$gt" in payload or "$regex" in payload:
@@ -414,8 +434,7 @@ class TestNosqli:
         assert result.confidence == pytest.approx(0.90)
 
     def test_post_operator_and_boolean_confirm(self):
-        result = _run(_handler(_nosqli_success), "nosqli",
-                      is_post=True, data={"other": "1"})
+        result = _run(_handler(_nosqli_success), "nosqli", is_post=True, data={"other": "1"})
         assert result.confirmed is True
 
     def test_no_signal(self):
@@ -436,6 +455,7 @@ class TestNosqli:
 
 # ---------------------------------------------------------------- XXE
 
+
 def _xxe_success(payload, url, method, data):
     if "etc/passwd" in payload:
         return (200, "root:x:0:0:root:/root:/bin/bash", 0.02)
@@ -452,7 +472,8 @@ class TestXxe:
         assert set(result.methods_succeeded) == {"file_read", "error_based"}
         assert result.confidence == pytest.approx(0.90)
 
-    def test_oob_resolved(self):
+    def test_oob_resolved(self, monkeypatch):
+        monkeypatch.setenv("AIMY_OOB_DOMAIN", "oast.fun")
         resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.2.3.4", 80))]
         with patch("socket.getaddrinfo", return_value=resolved):
             result = _run(_handler(_xxe_success), "xxe")
@@ -474,6 +495,7 @@ class TestXxe:
 
 # ---------------------------------------------------------------- dispatch / helpers
 
+
 class TestDispatchAndHelpers:
     def test_unsupported_vuln_type(self):
         verifier = SecondOrderVerifier(sess=MagicMock())
@@ -487,11 +509,13 @@ class TestDispatchAndHelpers:
             raise RuntimeError("offline")
 
         for vuln_type in ("sqli", "ssrf", "xss", "ssti", "cmdi", "lfi", "nosqli", "xxe"):
-            with patch.object(SecondOrderVerifier, "_make_request",
-                              MagicMock(side_effect=boom)), \
-                    patch("tools.second_order_verifier.time", MagicMock()):
+            with (
+                patch.object(SecondOrderVerifier, "_make_request", MagicMock(side_effect=boom)),
+                patch("tools.second_order_verifier.time", MagicMock()),
+            ):
                 result = SecondOrderVerifier(sess=MagicMock(), timeout=5.0).verify(
-                    "http://t.local/page", "p", vuln_type, {})
+                    "http://t.local/page", "p", vuln_type, {}
+                )
             assert result.confirmed is False
             assert result.methods_succeeded == []
 
@@ -514,7 +538,8 @@ class TestDispatchAndHelpers:
         with patch("tools.second_order_verifier.time", fake_time):
             verb = SecondOrderVerifier(sess=sess, timeout=5.0)
             status, body, elapsed = verb._make_request(
-                "http://t.local/page", method="POST", data={"a": 1})
+                "http://t.local/page", method="POST", data={"a": 1}
+            )
         assert (status, body) == (201, "created")
         assert elapsed == 0.5
         sess.post.assert_called_once()
@@ -549,9 +574,12 @@ class TestDispatchAndHelpers:
         assert data["vuln_type"] == "sqli"
 
     def test_check_helper(self):
-        with patch.object(SecondOrderVerifier, "_make_request",
-                          MagicMock(side_effect=_handler(_xss_success))), \
-                patch("tools.second_order_verifier.time", MagicMock()):
+        with (
+            patch.object(
+                SecondOrderVerifier, "_make_request", MagicMock(side_effect=_handler(_xss_success))
+            ),
+            patch("tools.second_order_verifier.time", MagicMock()),
+        ):
             data = check("http://t.local/page", "p", "xss", sess=MagicMock(), timeout=5.0)
         assert data["confirmed"] is True
         assert data["vuln_type"] == "xss"

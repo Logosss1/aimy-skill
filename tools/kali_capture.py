@@ -12,8 +12,7 @@ logger = get_logger("kali_capture")
 def resolve_interface() -> str:
     try:
         r = subprocess.run(
-            ["ip", "-4", "route", "show", "default"],
-            capture_output=True, text=True, timeout=5
+            ["ip", "-4", "route", "show", "default"], capture_output=True, text=True, timeout=5
         )
         parts = r.stdout.strip().split()
         if "dev" in parts:
@@ -22,8 +21,7 @@ def resolve_interface() -> str:
         pass
     try:
         r = subprocess.run(
-            ["route", "-n", "get", "default"],
-            capture_output=True, text=True, timeout=5
+            ["route", "-n", "get", "default"], capture_output=True, text=True, timeout=5
         )
         for line in r.stdout.splitlines():
             if "interface" in line:
@@ -35,9 +33,7 @@ def resolve_interface() -> str:
 
 def _install_tshark_json_deps(kali, local: bool) -> bool:
     if local:
-        r = subprocess.run(
-            ["which", "tshark"], capture_output=True, text=True, timeout=5
-        )
+        r = subprocess.run(["which", "tshark"], capture_output=True, text=True, timeout=5)
         if r.returncode != 0:
             logger.warning("tshark not found, try: apt install -y tshark")
             return False
@@ -55,9 +51,14 @@ class KaliCapture:
         self.kali = get_kali()
         self._tag = uuid.uuid4().hex[:8]
 
-    def capture(self, interface: str = "", count: int = 1000,
-                bpf_filter: str = "", timeout: int = 60,
-                output: str = "") -> Dict:
+    def capture(
+        self,
+        interface: str = "",
+        count: int = 1000,
+        bpf_filter: str = "",
+        timeout: int = 60,
+        output: str = "",
+    ) -> Dict:
         if not interface:
             interface = resolve_interface()
         if not output:
@@ -66,12 +67,10 @@ class KaliCapture:
         if not _install_tshark_json_deps(self.kali, self.local):
             return {"success": False, "error": "tshark not available on Kali"}
 
-        logger.info("Capture: iface=%s count=%d timeout=%s",
-                     interface, count, output)
+        logger.info("Capture: iface=%s count=%d timeout=%s", interface, count, output)
 
         cap_cmd = (
-            f"timeout {timeout} tcpdump -i {interface} -c {count} "
-            f"-w {output} -Z root 2>/dev/null"
+            f"timeout {timeout} tcpdump -i {interface} -c {count} -w {output} -Z root 2>/dev/null"
         )
         if bpf_filter:
             cap_cmd += f" {bpf_filter}"
@@ -104,8 +103,7 @@ class KaliCapture:
             "packets": packets[:200],
         }
 
-    def capture_http(self, interface: str = "", count: int = 500,
-                     timeout: int = 60) -> Dict:
+    def capture_http(self, interface: str = "", count: int = 500, timeout: int = 60) -> Dict:
         return self.capture(
             interface=interface,
             count=count,
@@ -113,8 +111,7 @@ class KaliCapture:
             timeout=timeout,
         )
 
-    def capture_https(self, interface: str = "", count: int = 500,
-                      timeout: int = 60) -> Dict:
+    def capture_https(self, interface: str = "", count: int = 500, timeout: int = 60) -> Dict:
         return self.capture(
             interface=interface,
             count=count,
@@ -122,8 +119,9 @@ class KaliCapture:
             timeout=timeout,
         )
 
-    def live_http(self, interface: str = "", max_packets: int = 100,
-                  timeout: int = 30) -> List[Dict]:
+    def live_http(
+        self, interface: str = "", max_packets: int = 100, timeout: int = 30
+    ) -> List[Dict]:
         if not interface:
             interface = resolve_interface()
         if not _install_tshark_json_deps(self.kali, self.local):
@@ -204,8 +202,9 @@ class KaliCapture:
     def _parse_pdml(self, raw: str) -> List[Dict]:
         packets = []
         try:
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(raw)
+            from defusedxml import ElementTree
+
+            root = ElementTree.fromstring(raw)
             for i, pkt in enumerate(root.findall(".//packet")):
                 p = {"index": i}
                 for proto in pkt.findall(".//proto"):

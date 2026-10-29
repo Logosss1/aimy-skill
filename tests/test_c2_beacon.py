@@ -39,9 +39,17 @@ class TestC2Server:
         try:
             agent = BeaconAgent("agent-1", "http://127.0.0.1:%d" % port, interval=0.1)
             agent.start()
-            time.sleep(0.4)
+            # Wait for the first beacon instead of assuming a fixed schedule.
+            deadline = time.time() + 5
+            while time.time() < deadline and not srv.list_agents():
+                time.sleep(0.1)
             srv.deploy_task("agent-1", "cat /etc/passwd")
-            time.sleep(1.0)
+            deadline = time.time() + 3
+            while time.time() < deadline:
+                agents = srv.list_agents()
+                if any(a["id"] == "agent-1" for a in agents):
+                    break
+                time.sleep(0.1)
             agents = srv.list_agents()
             assert any(a["id"] == "agent-1" for a in agents)
             agent.stop()

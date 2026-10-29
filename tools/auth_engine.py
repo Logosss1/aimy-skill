@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from typing import Dict, Optional
 
@@ -52,8 +53,14 @@ class AuthSession:
         if "User-Agent" not in self.sess.headers:
             self.sess.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 
-    def login_form(self, login_url: str, username: str, password: str,
-                   user_field: str = "username", pass_field: str = "password") -> bool:
+    def login_form(
+        self,
+        login_url: str,
+        username: str,
+        password: str,
+        user_field: str = "username",
+        pass_field: str = "password",
+    ) -> bool:
         try:
             html = self.sess.get(login_url, timeout=10).text
             fields = detect_form_fields(html)
@@ -70,17 +77,26 @@ class AuthSession:
             logger.debug("login_form: %s", e)
             return False
 
-    def login_api(self, url: str, username: str, password: str,
-                  user_field: str = "username", pass_field: str = "password") -> bool:
+    def login_api(
+        self,
+        url: str,
+        username: str,
+        password: str,
+        user_field: str = "username",
+        pass_field: str = "password",
+    ) -> bool:
         try:
-            r = self.sess.post(url, json={user_field: username, pass_field: password},
-                               timeout=10)
+            r = self.sess.post(url, json={user_field: username, pass_field: password}, timeout=10)
             if r.status_code == 200:
                 body = r.text.lower()
                 if "token" in body:
                     try:
                         j = r.json()
-                        tok = j.get("token") or j.get("access_token") or j.get("data", {}).get("token", "")
+                        tok = (
+                            j.get("token")
+                            or j.get("access_token")
+                            or j.get("data", {}).get("token", "")
+                        )
                         if tok:
                             self.sess.headers["Authorization"] = "Bearer %s" % tok
                     except Exception as e:
@@ -93,9 +109,9 @@ class AuthSession:
 
     def login_basic(self, url: str, username: str, password: str) -> bool:
         from requests.auth import HTTPBasicAuth
+
         try:
-            r = self.sess.get(url, auth=HTTPBasicAuth(username, password),
-                              timeout=10)
+            r = self.sess.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
             return r.status_code < 400
         except Exception as e:
             logger.debug("login_basic: %s", e)
@@ -108,12 +124,18 @@ class AuthSession:
     def set_header_token(self, token: str, scheme: str = "Bearer") -> None:
         self.sess.headers["Authorization"] = "%s %s" % (scheme, token)
 
-    def login_browser(self, login_url: str, username: str, password: str,
-                      auth_type: str = "auto",
-                      user_field: str = "username",
-                      pass_field: str = "password") -> bool:
+    def login_browser(
+        self,
+        login_url: str,
+        username: str,
+        password: str,
+        auth_type: str = "auto",
+        user_field: str = "username",
+        pass_field: str = "password",
+    ) -> bool:
         from tools.playwright_auth import PlaywrightAuth
         from tools.playwright_engine import PlaywrightEngine
+
         if not PlaywrightAuth.is_available():
             logger.warning("Playwright not available for browser login")
             return False
@@ -122,7 +144,9 @@ class AuthSession:
             engine.start()
             auth = PlaywrightAuth(engine)
             result = auth.login(
-                login_url, username, password,
+                login_url,
+                username,
+                password,
                 auth_type=auth_type,
                 user_field=user_field,
                 pass_field=pass_field,
@@ -146,10 +170,12 @@ class AuthSession:
                 pass
 
     @staticmethod
-    def login_with_browser(login_url: str, username: str, password: str,
-                           auth_type: str = "auto") -> Optional[requests.Session]:
+    def login_with_browser(
+        login_url: str, username: str, password: str, auth_type: str = "auto"
+    ) -> Optional[requests.Session]:
         from tools.playwright_auth import PlaywrightAuth
         from tools.playwright_engine import PlaywrightEngine
+
         sess = requests.Session()
         sess.verify = settings.verify_ssl
         engine = PlaywrightEngine()
@@ -178,12 +204,17 @@ class AuthSession:
             "cookies": dict(self.sess.cookies),
             "headers": dict(self.sess.headers),
         }
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f)
+        # Session files contain cookies/auth tokens; keep them owner-only.
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
 
     def load_session(self, path: str) -> bool:
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             for k, v in data.get("cookies", {}).items():
                 self.sess.cookies.set(k, v)

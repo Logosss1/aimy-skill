@@ -46,7 +46,10 @@ class TestXXEDetector:
         )
         detector = XXEDetector(sess=sess)
         result = detector.check("http://test.com/xml", "data")
-        assert result["vulnerable"] is True
+        # Error-based signals are evidence, not proof: they are reported with
+        # confidence 0.6 and confirmed=False. OOB confirmation is opt-in.
+        assert any(f["method"] == "error_based" for f in result["findings"])
+        assert result["confidence"] == 0.60
 
     @responses.activate
     def test_no_xxe(self):

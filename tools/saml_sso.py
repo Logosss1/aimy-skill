@@ -10,9 +10,9 @@ Tests for common SAML-related vulnerabilities:
 import base64
 import zlib
 from typing import Dict, Optional
-from xml.etree import ElementTree as ET
 
 import requests
+from defusedxml import ElementTree
 
 from tools.log_utils import get_logger
 
@@ -91,7 +91,7 @@ def check(
                                 pass
                             xml_str = decoded.decode("utf-8", errors="replace")
 
-                            root = ET.fromstring(xml_str)
+                            root = ElementTree.fromstring(xml_str)
                             sig = root.find(".//ds:Signature", SAML_NAMESPACES)
                             if sig is None:
                                 finding = {
@@ -129,7 +129,7 @@ def check(
                                     result["findings"].append(finding)
                                     result["vulnerable"] = True
 
-                        except (ET.ParseError, ValueError) as e:
+                        except (ElementTree.ParseError, ValueError) as e:
                             logger.debug("saml parse: %s", e)
                         except Exception as e:
                             logger.debug("saml decode: %s", e)

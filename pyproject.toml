@@ -1,9 +1,9 @@
 [project]
 name = "aimy-skill"
-version = "3.7.5"
+dynamic = ["version"]
 description = "轻量级渗透测试辅助工具链 (AI Agent Ready)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
     { name = "yangdada863" },
@@ -14,10 +14,11 @@ classifiers = [
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security",
 ]
 
@@ -25,7 +26,9 @@ dependencies = [
     "requests>=2.28.0",
     "beautifulsoup4>=4.11.0",
     "PyJWT>=2.6.0",
-    "cryptography>=39.0.0",
+    "cryptography>=39.0.0,<49",
+    "PyYAML>=6.0",
+    "defusedxml>=0.7.1",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +43,7 @@ dev = [
     "mypy>=1.0.0",
     "bandit>=1.7.0",
     "types-requests>=2.28.0",
+    "build>=1.0.0",
 ]
 
 [project.urls]
@@ -53,7 +57,7 @@ aimy = "main:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short --cov=tools/ --cov-report=term-missing"
+addopts = "-v --tb=short --cov=tools/ --cov-report=term-missing --cov-fail-under=80"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "online: marks tests that require network access",
@@ -61,7 +65,9 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py39"
+# 第三方技能库与文档中的示例代码不参与项目格式化，避免无意义的大 diff。
+extend-exclude = ["ai-mian", "docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N"]
@@ -117,13 +123,29 @@ exclude_lines = [
 exclude_dirs = ["tests"]
 skips = ["B101", "B311", "B403", "B405"]
 
+[tool.setuptools.dynamic]
+version = { attr = "tools.version.__version__" }
+
 [tool.setuptools.packages.find]
 # cli/ 承载命令行解析与命令注册 (main.py 直接 import cli.*),必须随包安装
-include = ["tools*", "tools.*", "engine*", "engine.*", "cli*", "cli.*"]
+# payload_seeds/ 与 data/ 是运行时资源包,必须随 wheel 安装
+include = [
+    "tools*", "tools.*",
+    "engine*", "engine.*",
+    "cli*", "cli.*",
+    "payload_seeds*",
+    "data*",
+    "wordlists*",
+]
 
 [tool.setuptools]
 # 顶层模块 main.py 承载 CLI 入口 (aimy = "main:main"),必须随包安装
 py-modules = ["main"]
+
+[tool.setuptools.package-data]
+payload_seeds = ["*.yml"]
+data = ["*.json"]
+wordlists = ["*.txt", "*.rule", "*.conf"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

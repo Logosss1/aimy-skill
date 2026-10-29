@@ -8,6 +8,7 @@ traffic stays under a per-request rhythm instead of a rigid fixed delay.
 Testability: sleep_fn and a seeded RNG are injectable; with a fake sleep_fn
 the fuzzer behaves deterministically and no wall-clock delay is incurred.
 """
+
 import random
 import time
 from typing import Any, Callable, Iterable, List, Optional, Tuple, Type, Union
@@ -46,16 +47,21 @@ _RETRYABLE_EXC: Tuple[Type[BaseException], ...] = (
 class OPSECSession(requests.Session):
     """requests.Session with jittered pacing, UA rotation and retry/backoff."""
 
-    def __init__(self, jitter_range: Tuple[float, float] = (0.3, 1.5),
-                 ua_pool: Optional[Iterable[str]] = None,
-                 retries: int = 3, backoff: float = 1.5, backoff_max: float = 30.0,
-                 retry_on_status: Tuple[int, ...] = TRANSIENT_STATUS,
-                 retry_on_exc: Tuple[Type[BaseException], ...] = _RETRYABLE_EXC,
-                 verify: Optional[bool] = None,
-                 sleep_fn: Optional[Callable[[float], None]] = None,
-                 rng: Optional[random.Random] = None,
-                 proxy_pool: Optional["ProxyPool"] = None,
-                 throttle: Optional["Throttle"] = None) -> None:
+    def __init__(
+        self,
+        jitter_range: Tuple[float, float] = (0.3, 1.5),
+        ua_pool: Optional[Iterable[str]] = None,
+        retries: int = 3,
+        backoff: float = 1.5,
+        backoff_max: float = 30.0,
+        retry_on_status: Tuple[int, ...] = TRANSIENT_STATUS,
+        retry_on_exc: Tuple[Type[BaseException], ...] = _RETRYABLE_EXC,
+        verify: Optional[bool] = None,
+        sleep_fn: Optional[Callable[[float], None]] = None,
+        rng: Optional[random.Random] = None,
+        proxy_pool: Optional["ProxyPool"] = None,
+        throttle: Optional["Throttle"] = None,
+    ) -> None:
         super().__init__()
         self._jitter_range = tuple(float(x) for x in jitter_range)
         self._ua_pool = list(ua_pool or DEFAULT_USER_AGENTS)
@@ -70,12 +76,10 @@ class OPSECSession(requests.Session):
         self._ua_index = 0
         self.proxy_pool = proxy_pool
         self.throttle = throttle
-        self.stats = {"requests": 0, "retries": 0, "jitter_delay": 0.0,
-                      "proxy_used": 0}
+        self.stats = {"requests": 0, "retries": 0, "jitter_delay": 0.0, "proxy_used": 0}
 
     @classmethod
-    def wrap(cls, sess: Optional[requests.Session] = None,
-             **kwargs) -> "OPSECSession":
+    def wrap(cls, sess: Optional[requests.Session] = None, **kwargs) -> "OPSECSession":
         """Wrap an existing session (copies cookies + headers) into OPSECSession."""
         wrapped = cls(**kwargs)
         if sess is not None:
@@ -99,11 +103,16 @@ class OPSECSession(requests.Session):
         return self._rng.uniform(lo, hi)
 
     def _backoff_delay(self, attempt: int) -> float:
-        base = min(self._backoff_max, self._backoff * (2.0 ** attempt))
+        base = min(self._backoff_max, self._backoff * (2.0**attempt))
         return base * self._rng.uniform(0.5, 1.5)
 
-    def request(self, method: str, url: Union[str, bytes],
-                *args: Any, **kwargs: Any) -> requests.Response:
+    def request(  # type: ignore[override]
+        self,
+        method: str,
+        url: Union[str, bytes],
+        *args: Any,
+        **kwargs: Any,
+    ) -> requests.Response:
         delay = self._jitter()
         if delay > 0:
             self._sleep(delay)
@@ -117,8 +126,9 @@ class OPSECSession(requests.Session):
             if self.throttle is not None:
                 self.throttle.release()
 
-    def _request_inner(self, method: str, url: Union[str, bytes],
-                       *args: Any, **kwargs: Any) -> requests.Response:
+    def _request_inner(
+        self, method: str, url: Union[str, bytes], *args: Any, **kwargs: Any
+    ) -> requests.Response:
         last_resp: Optional[requests.Response] = None
         last_exc: Optional[BaseException] = None
         for attempt in range(self._retries + 1):
@@ -135,8 +145,7 @@ class OPSECSession(requests.Session):
                 self.stats["requests"] += 1
                 if proxy_url:
                     ok = getattr(last_resp, "status_code", 500) < 400
-                    self.proxy_pool.report(proxy_url, ok,
-                                           time.monotonic() - started)
+                    self.proxy_pool.report(proxy_url, ok, time.monotonic() - started)
             except self._retry_on_exc as exc:
                 last_exc = exc
                 if proxy_url:
@@ -154,8 +163,9 @@ class OPSECSession(requests.Session):
         raise last_exc  # type: ignore[misc]
 
 
-def opsec_session(sess: Optional[requests.Session] = None,
-                  enabled: bool = True, **kwargs) -> requests.Session:
+def opsec_session(
+    sess: Optional[requests.Session] = None, enabled: bool = True, **kwargs
+) -> requests.Session:
     """Return an opsec-wrapped session, or the original when disabled."""
     if not enabled:
         return sess or requests.Session()

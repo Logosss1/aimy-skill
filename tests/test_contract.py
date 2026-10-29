@@ -1,4 +1,5 @@
 """Tests for engine/contract.py - AI-Agent check() return shape validation."""
+
 import unittest
 
 from engine.contract import (
@@ -21,11 +22,13 @@ class TestCheckResult:
         assert cr.extras == {}
 
     def test_from_dict_preserves_unknown_keys_in_extras(self):
-        cr = CheckResult.from_dict({
-            "vulnerable": True,
-            "type": "xss",
-            "my_custom_field": [1, 2, 3],
-        })
+        cr = CheckResult.from_dict(
+            {
+                "vulnerable": True,
+                "type": "xss",
+                "my_custom_field": [1, 2, 3],
+            }
+        )
         assert cr.type == "xss"
         assert cr.extras == {"my_custom_field": [1, 2, 3]}
 
@@ -40,15 +43,13 @@ class TestCheckResult:
         assert cr.to_dict().get("vulnerable") is False
 
     def test_to_dict_merges_extras(self):
-        cr = CheckResult(vulnerable=True, type="sqli",
-                         extras={"dbms_hint": "mysql"})
+        cr = CheckResult(vulnerable=True, type="sqli", extras={"dbms_hint": "mysql"})
         out = cr.to_dict()
         assert out["dbms_hint"] == "mysql"
         assert out["type"] == "sqli"
 
     def test_roundtrip(self):
-        original = {"vulnerable": True, "type": "xss",
-                    "evidence": ["<script>"], "score": 0.95}
+        original = {"vulnerable": True, "type": "xss", "evidence": ["<script>"], "score": 0.95}
         cr = CheckResult.from_dict(original)
         out = cr.to_dict()
         assert out["vulnerable"] is True
@@ -57,8 +58,7 @@ class TestCheckResult:
         assert out["score"] == 0.95
 
     def test_validate_clean(self):
-        cr = CheckResult(vulnerable=True, confidence="high",
-                         confidence_score=0.9)
+        cr = CheckResult(vulnerable=True, confidence="high", confidence_score=0.9)
         assert cr.validate() == []
 
     def test_validate_warns_bad_confidence(self):
@@ -72,8 +72,7 @@ class TestCheckResult:
         assert any("confidence_score" in w for w in warnings)
 
     def test_validate_warns_both_evidence_and_findings(self):
-        cr = CheckResult(vulnerable=True,
-                         evidence=["a"], findings=[{"x": 1}])
+        cr = CheckResult(vulnerable=True, evidence=["a"], findings=[{"x": 1}])
         warnings = cr.validate()
         assert any("evidence" in w and "findings" in w for w in warnings)
 
@@ -116,19 +115,48 @@ class TestIsVulnerable:
         assert is_vulnerable({"vulnerable": "yes"}) is False
 
 
+class _FakeResponse:
+    status_code = 404
+    text = ""
+    content = b""
+    headers = {}
+    url = ""
+    cookies = []
+
+
+class _FakeSession:
+    """Network-free session for real-detector shape checks."""
+
+    def __init__(self):
+        self.verify = False
+        self.headers = {}
+        self.cookies = []
+
+    def get(self, url, **kwargs):
+        return _FakeResponse()
+
+    def post(self, url, **kwargs):
+        return _FakeResponse()
+
+    def request(self, method, url, **kwargs):
+        return _FakeResponse()
+
+
 class TestRealDetectorShapes:
-    """真实 detector 的返回 shape 至少要通过契约."""
+    """真实 detector 的返回 shape 至少要通过契约 (离线执行)."""
 
     def test_sql_injection_shape(self):
         from tools.sql_injection import check
-        result = check("http://x.test/page", "id", timeout=2)
+
+        result = check("http://x.test/page", "id", sess=_FakeSession(), timeout=2)
         warnings = check_return_shape(result)
         assert result["vulnerable"] is False
         assert warnings == []
 
     def test_leak_scanner_shape(self):
         from tools.leak_scanner import check
-        result = check("http://x.test/", timeout=2)
+
+        result = check("http://x.test/", sess=_FakeSession(), timeout=2)
         assert "vulnerable" in result
         assert isinstance(result["vulnerable"], bool)
         warnings = check_return_shape(result)
@@ -136,13 +164,15 @@ class TestRealDetectorShapes:
 
     def test_weakpass_shape(self):
         from tools.weakpass import check
-        result = check("http://x.test/login", max_attempts=0, timeout=2)
+
+        result = check("http://x.test/login", sess=_FakeSession(), max_attempts=0, timeout=2)
         assert "vulnerable" in result
         assert isinstance(result["vulnerable"], bool)
 
     def test_waf_bypass_shape(self):
         from tools.waf_bypass import check
-        result = check("http://x.test/", timeout=2)
+
+        result = check("http://x.test/", sess=_FakeSession(), timeout=2)
         assert "vulnerable" in result
         assert isinstance(result["vulnerable"], bool)
 

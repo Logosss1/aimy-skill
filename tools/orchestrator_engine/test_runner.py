@@ -12,6 +12,7 @@ _test_single_point 仍保留为 Orchestrator 的方法, 因为它紧密依赖
 self._lock / self.vuln_ctx / self._backtrack_findings / self.context_memory
 等大量状态, 完整抽出需要传 15+ 参数, 反而降低可读性.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,11 +25,17 @@ from tools.orchestrator_engine.helpers import (
 logger = logging.getLogger(__name__)
 
 
-def run_detector(vtype: str, url: str, param: str,
-                 sess: Any, waf_name: Optional[str], oob: dict,
-                 effective_timeout: float,
-                 post_data: Optional[dict] = None,
-                 method: str = "GET") -> Optional[Dict]:
+def run_detector(
+    vtype: str,
+    url: str,
+    param: str,
+    sess: Any,
+    waf_name: Optional[str],
+    oob: dict,
+    effective_timeout: float,
+    post_data: Optional[dict] = None,
+    method: str = "GET",
+) -> Optional[Dict]:
     """调用单个 detector, 返回结果 dict (附 _vtype) 或 None.
 
     Args:
@@ -51,8 +58,17 @@ def run_detector(vtype: str, url: str, param: str,
     if vtype not in ALL_DETECTOR_NAMES and vtype not in ALL_DETECTORS:
         return None
     try:
-        r = _run_detector_by_name(vtype, url, param, sess, effective_timeout,
-                                  waf_name, oob, post_data=post_data, method=method)
+        r = _run_detector_by_name(
+            vtype,
+            url,
+            param,
+            sess,
+            effective_timeout,
+            waf_name,
+            oob,
+            post_data=post_data,
+            method=method,
+        )
         if isinstance(r, dict):
             r["_vtype"] = vtype
             return r
@@ -61,11 +77,19 @@ def run_detector(vtype: str, url: str, param: str,
     return None
 
 
-def cross_verify(vtype: str, url: str, param: str,
-                 waf_name: str, oob: dict, first_result: dict,
-                 oracle: Any, sess: Any, timeout: float,
-                 post_data: Optional[dict] = None,
-                 method: str = "GET") -> dict:
+def cross_verify(
+    vtype: str,
+    url: str,
+    param: str,
+    waf_name: str,
+    oob: dict,
+    first_result: dict,
+    oracle: Any,
+    sess: Any,
+    timeout: float,
+    post_data: Optional[dict] = None,
+    method: str = "GET",
+) -> dict:
     """独立复验: 换一个编码表示重新触发 detector + oracle 确认.
 
     与首轮检测不同, 复验使用独立的 payload 表示 (WAF 编码策略),
@@ -80,23 +104,29 @@ def cross_verify(vtype: str, url: str, param: str,
     cross: List[str] = []
     payload = first_result.get("result", {}).get("payload") or param
     encoders = ["url", "double_url", "b64", "hex", "unicode"]
-    variant = encode_payload(
-        payload, encoders[hash((vtype, url, param)) % len(encoders)]
-    )
+    variant = encode_payload(payload, encoders[hash((vtype, url, param)) % len(encoders)])
 
     for attempt in (variant, None):
         if attempt is None and cross:
             break
         try:
             r2 = _run_detector_by_name(
-                vtype, url, param, sess, timeout, waf_name, oob,
-                post_data=post_data, method=method,
+                vtype,
+                url,
+                param,
+                sess,
+                timeout,
+                waf_name,
+                oob,
+                post_data=post_data,
+                method=method,
             )
-            if (isinstance(r2, dict)
-                    and not r2.get("error")
-                    and r2.get("vulnerable")):
+            if isinstance(r2, dict) and not r2.get("error") and r2.get("vulnerable"):
                 cv = oracle.verify(
-                    vtype, r2, url, param,
+                    vtype,
+                    r2,
+                    url,
+                    param,
                     sess if sess is not None else build_session(),
                     timeout,
                 )

