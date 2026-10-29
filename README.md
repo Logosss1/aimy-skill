@@ -71,15 +71,6 @@ result = checker.check(
 | ✅**验证**       | **5+ payload 交叉验证** · Oracle 验证 · 误报过滤 · 鲁棒验证                                    |
 
 
-## ✨ 联系方式
-- **X (Twitter)**：[@Fakerrf5](https://x.com/Fakerrf5)
-- **Telegram**：[@Prohao42](https://t.me/Prohao42)
-- **抖音**：[炸炸酥~](https://www.douyin.com/user/MS4wLjABAAAAfgxDFsrK3Fgf_PnJRcPeFdjjKnqtLNTR_q4KKKZKHyGlzYz8T3mZf3V4qax05lFb)
-- **知识星球**：[@炸炸酥](https://t.zsxq.com/FGUeq)
-  ![图片](https://cloudflare-imgbed-4h5.pages.dev/file/1790961077516_7e6b8fe85a9a6c7c6040b281f049902d.jpg)
-- 更多渗透技能的闭源skill，在知识星球、渗透教程和更多的渗透技能知识点。
-
-
 ### 🚀 AI智能体聊天，从零到报告
 
 ---
